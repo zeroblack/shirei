@@ -34,6 +34,9 @@ jobs:
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 
   commitlint:
+    # Only on PRs — pushes to main arrive via squash-merge (title already linted),
+    # and the root commit predates the convention.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
