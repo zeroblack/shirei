@@ -9,6 +9,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-000.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-000.svg)](#build-from-source)
 
+<p align="center">
+  <img src=".github/assets/hero.png" alt="Shirei — a keyboard-first terminal cockpit for AI coding on macOS" width="100%">
+</p>
+
 ## What is Shirei?
 
 Shirei is the inverse of an IDE. Where editors keep your files at the center and
