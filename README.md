@@ -2,6 +2,10 @@
 
 **A keyboard-first terminal cockpit for AI coding on macOS.**
 
+[![Release](https://img.shields.io/github/v/release/zeroblack/shirei?color=000&label=release)](https://github.com/zeroblack/shirei/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/zeroblack/shirei/ci.yml?branch=main&color=000&label=CI)](https://github.com/zeroblack/shirei/actions)
+[![Signed & notarized](https://img.shields.io/badge/macOS-signed%20%26%20notarized-000.svg)](#distribution-signed--notarized)
+[![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-000.svg)](#stack)
 [![License: MIT](https://img.shields.io/badge/License-MIT-000.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-000.svg)](#build-from-source)
 
