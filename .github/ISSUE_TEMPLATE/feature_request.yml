@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest an idea for Shirei
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Shirei is a CLI-first cockpit, deliberately not an IDE. Please read the
+        "fence" in the README before proposing a feature.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope acknowledgement
+      options:
+        - label: This request respects the project scope (no LSP/IntelliSense, debugger, extension marketplace, git GUI, test-runner UI, SSH, or profiles).
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

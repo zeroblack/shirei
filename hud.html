@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recording</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        -webkit-user-select: none;
+        user-select: none;
+        cursor: pointer;
+        overflow: hidden;
+      }
+      #hud {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 100%;
+        padding: 0 12px;
+        box-sizing: border-box;
+        border-radius: 10px;
+        background: rgba(10, 10, 10, 0.92);
+        color: #fff;
+        font:
+          12px / 1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      #dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #e5534b;
+        animation: blink 1s steps(2, start) infinite;
+      }
+      #time {
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.5px;
+      }
+      #stop {
+        margin-left: auto;
+        opacity: 0.85;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0.2;
+        }
+      }
+    </style>
+    <script type="module" src="/src/hud.ts" defer></script>
+  </head>
+  <body>
+    <div id="hud">
+      <span id="dot"></span>
+      <span id="time">0:00</span>
+      <span id="stop">⏹</span>
+    </div>
+  </body>
+</html>

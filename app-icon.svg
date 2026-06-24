@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3c4150" />
+      <stop offset="0.55" stop-color="#16181d" />
+      <stop offset="1" stop-color="#050506" />
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.26" />
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.05" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="16" result="b" />
+      <feMerge>
+        <feMergeNode in="b" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)" />
+  <rect x="44" y="44" width="936" height="470" rx="196" fill="url(#sheen)" />
+  <rect x="16" y="16" width="992" height="992" rx="210" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="3" />
+  <text x="512" y="512" font-family="'Hiragino Sans','PingFang SC',sans-serif" font-size="630" font-weight="600" fill="#ffffff" text-anchor="middle" dominant-baseline="central" filter="url(#glow)">指</text>
+</svg>

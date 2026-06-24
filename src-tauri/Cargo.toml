@@ -1,0 +1,63 @@
+[package]
+name = "shirei"
+version = "0.12.0"
+description = "CLI-first terminal cockpit with renameable, color-coded tabs"
+authors = ["Dionisio Fernández"]
+edition = "2024"
+license = "MIT"
+
+[lib]
+name = "shirei_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset", "macos-private-api"] }
+tauri-plugin-opener = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-window-state = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+portable-pty = "0.9.0"
+thiserror = "2.0.18"
+anyhow = "1.0.102"
+libc = "0.2"
+ignore = "0.4"
+tauri-plugin-dialog = "2.7.1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+flate2 = "1"
+sha2 = "0.10"
+notify = "6"
+libproc = "0.14"
+shirei-mux = { path = "../mux" }
+tauri-plugin-log = "2.8.0"
+log = "0.4.32"
+rusqlite = { version = "0.40.1", features = ["bundled"] }
+
+[dev-dependencies]
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+dispatch2 = "0.3"
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", features = ["NSPasteboard", "NSSharingService", "NSResponder", "NSView", "NSWindow", "NSApplication", "NSMenu", "NSMenuItem"] }
+objc2-av-foundation = { version = "0.3.2", features = ["objc2-core-media"] }
+objc2-core-foundation = { version = "0.3.2", features = ["CFDictionary", "CFNumber", "CFString", "CFURL", "CFCGTypes"] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGImage", "CGWindow", "CGAffineTransform"] }
+objc2-core-image = { version = "0.3.2", default-features = false, features = ["std", "CIImage", "CIContext", "objc2-core-graphics", "objc2-core-video", "objc2-core-foundation"] }
+objc2-core-media = "0.3.2"
+objc2-core-video = { version = "0.3.2", default-features = false, features = ["std", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVPixelBufferPool", "CVPixelFormatDescription", "CVPixelBufferIOSurface", "CVReturn", "objc2-core-graphics"] }
+objc2-foundation = { version = "0.3.2", features = ["NSString", "NSURL", "NSArray", "NSError", "NSGeometry", "NSDictionary", "NSValue", "NSBundle"] }
+objc2-image-io = { version = "0.3.2", default-features = false, features = ["std", "objc2-core-graphics", "CGImageDestination", "CGImageProperties"] }
+objc2-screen-capture-kit = "0.3.2"
+

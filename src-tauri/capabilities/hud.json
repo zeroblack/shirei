@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "hud",
+  "description": "Minimal capability for the recording HUD window: it only listens for tick events, invokes the stop command and closes itself.",
+  "windows": ["screencast-hud"],
+  "permissions": [
+    "core:app:default",
+    "core:event:default",
+    "core:webview:default",
+    "core:window:default",
+    "core:window:allow-close"
+  ]
+}

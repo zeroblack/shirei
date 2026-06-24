@@ -1,0 +1,7 @@
+# Sign the dev binary on every `cargo run` / `tauri dev` so macOS TCC (screen
+# recording, etc.) keeps its grant across rebuilds. See sign-and-run.sh.
+[target.aarch64-apple-darwin]
+runner = "./sign-and-run.sh"
+
+[target.x86_64-apple-darwin]
+runner = "./sign-and-run.sh"

@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "settings",
+  "description": "Minimal capability for the settings window: it only invokes app commands, listens for config changes and closes itself.",
+  "windows": ["settings"],
+  "permissions": [
+    "core:app:default",
+    "core:event:default",
+    "core:webview:default",
+    "core:window:default",
+    "core:window:allow-close"
+  ]
+}
