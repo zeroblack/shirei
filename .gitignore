@@ -21,6 +21,7 @@ mux/target/
 .env
 .env.*
 !.env.release.example
+*.p8
 
 # Documentación de diseño (local, fuera del repo)
 docs/
