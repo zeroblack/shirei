@@ -29,7 +29,7 @@ tauri-plugin-dialog = "2.7.1"
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
 flate2 = "1"
 sha2 = "0.10"
-notify = "6"
+notify = "8"
 libproc = "0.14"
 shirei-mux = { path = "../mux" }
 tauri-plugin-log = "2.8.0"
