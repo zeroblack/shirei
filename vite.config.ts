@@ -21,16 +21,18 @@ export default defineConfig({
     target: "esnext",
     // Keep stack traces in the crash log mapped to source instead of minified.
     sourcemap: true,
-    rollupOptions: {
+    rolldownOptions: {
       input: {
         main: "index.html",
         settings: "settings.html",
         hud: "hud.html",
       },
       output: {
-        manualChunks(id) {
-          if (id.includes("@replit/codemirror-vim")) return "codemirror-vim";
-          if (id.includes("@codemirror/")) return "codemirror";
+        codeSplitting: {
+          groups: [
+            { name: "codemirror-vim", test: /@replit\/codemirror-vim/ },
+            { name: "codemirror", test: /@codemirror\// },
+          ],
         },
       },
     },
