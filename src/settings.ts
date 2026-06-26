@@ -76,6 +76,20 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") void getCurrentWindow().close();
+    if (e.key === "Escape") {
+      void getCurrentWindow().close();
+      return;
+    }
+    if (e.key === "/") {
+      const el = document.activeElement;
+      const typing =
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        el instanceof HTMLSelectElement;
+      if (!typing) {
+        e.preventDefault();
+        handle.focusSearch();
+      }
+    }
   });
 });
