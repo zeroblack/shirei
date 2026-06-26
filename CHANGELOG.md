@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Updated the build toolchain and dependencies: Rust 1.96, Tauri 2.11.3,
+  Vite 8 (Rolldown bundler), TypeScript 6, Biome 2.5.1, reqwest 0.13 and
+  notify 8. No user-facing behavior changes.
+
 ## [0.12.0] - 2026-06-24
 
 First public release.

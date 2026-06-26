@@ -26,10 +26,10 @@ anyhow = "1.0.102"
 libc = "0.2"
 ignore = "0.4"
 tauri-plugin-dialog = "2.7.1"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
 flate2 = "1"
 sha2 = "0.10"
-notify = "6"
+notify = "8"
 libproc = "0.14"
 shirei-mux = { path = "../mux" }
 tauri-plugin-log = "2.8.0"
@@ -37,7 +37,7 @@ log = "0.4.32"
 rusqlite = { version = "0.40.1", features = ["bundled"] }
 
 [dev-dependencies]
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
 
 [profile.release]
 panic = "abort"
