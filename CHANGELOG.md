@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Keyboard navigation in Settings: arrow keys (and j/k) switch sections instantly
+  with roving focus, Home/End jump to first/last, and `/` focuses the search.
+
 ### Changed
 - Updated the build toolchain and dependencies: Rust 1.96, Tauri 2.11.3,
   Vite 8 (Rolldown bundler), TypeScript 6, Biome 2.5.1, reqwest 0.13 and

@@ -76,6 +76,40 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") void getCurrentWindow().close();
+    if (e.key === "Escape") {
+      void getCurrentWindow().close();
+      return;
+    }
+    if (e.key === "/") {
+      const el = document.activeElement;
+      const typing =
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        el instanceof HTMLSelectElement;
+      if (!typing) {
+        e.preventDefault();
+        handle.focusSearch();
+      }
+      return;
+    }
+    if (
+      e.key === "ArrowDown" ||
+      e.key === "ArrowUp" ||
+      e.key === "j" ||
+      e.key === "k"
+    ) {
+      const el = document.activeElement;
+      const settled =
+        el instanceof HTMLElement &&
+        (el.closest(".settings-nav") !== null ||
+          el.closest(".settings-content") !== null ||
+          el.tagName === "INPUT" ||
+          el.tagName === "SELECT" ||
+          el.tagName === "TEXTAREA");
+      if (!settled) {
+        e.preventDefault();
+        handle.focusActive();
+      }
+    }
   });
 });
