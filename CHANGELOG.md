@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-06-26
+
 ### Added
 - Keyboard navigation in Settings: arrow keys (and j/k) switch sections instantly
   with roving focus, Home/End jump to first/last, and `/` focuses the search.
@@ -24,5 +26,6 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/zeroblack/shirei/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/zeroblack/shirei/releases/tag/v0.12.0
