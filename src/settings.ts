@@ -90,6 +90,26 @@ window.addEventListener("DOMContentLoaded", async () => {
         e.preventDefault();
         handle.focusSearch();
       }
+      return;
+    }
+    if (
+      e.key === "ArrowDown" ||
+      e.key === "ArrowUp" ||
+      e.key === "j" ||
+      e.key === "k"
+    ) {
+      const el = document.activeElement;
+      const settled =
+        el instanceof HTMLElement &&
+        (el.closest(".settings-nav") !== null ||
+          el.closest(".settings-content") !== null ||
+          el.tagName === "INPUT" ||
+          el.tagName === "SELECT" ||
+          el.tagName === "TEXTAREA");
+      if (!settled) {
+        e.preventDefault();
+        handle.focusActive();
+      }
     }
   });
 });

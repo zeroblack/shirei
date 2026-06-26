@@ -19,6 +19,7 @@ const groupLabel = (slug: string): string =>
 export interface SettingsHandle {
   showSection: (id: string) => void;
   focusSearch: () => void;
+  focusActive: () => void;
 }
 
 export function mountSettings(
@@ -147,7 +148,6 @@ export function mountSettings(
   root.append(sidebar, content, saved);
   renderList("");
   renderContent();
-  navItems.find((it) => it.id === activeId)?.el.focus();
 
   return {
     showSection: (id) => {
@@ -155,8 +155,9 @@ export function mountSettings(
       search.value = "";
       activeId = id;
       renderList("");
-      activate(id, true);
+      activate(id, false);
     },
     focusSearch: () => search.focus(),
+    focusActive: () => navItems.find((it) => it.id === activeId)?.el.focus(),
   };
 }
