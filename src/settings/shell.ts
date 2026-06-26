@@ -1,6 +1,7 @@
 import type { Config } from "../config";
 import { type MessageKey, t } from "../i18n";
 import { navIcon } from "./nav-icons";
+import { nextSectionIndex } from "./nav-keys";
 
 export interface SettingsSection {
   id: string;
@@ -17,6 +18,7 @@ const groupLabel = (slug: string): string =>
 
 export interface SettingsHandle {
   showSection: (id: string) => void;
+  focusSearch: () => void;
 }
 
 export function mountSettings(
@@ -53,6 +55,7 @@ export function mountSettings(
   };
 
   let activeId = sections[0]?.id ?? "";
+  let navItems: { id: string; el: HTMLLIElement }[] = [];
 
   const renderContent = (): void => {
     content.replaceChildren();
@@ -60,8 +63,22 @@ export function mountSettings(
     if (sec) content.appendChild(sec.build(config, notifySave));
   };
 
+  const activate = (id: string, focus: boolean): void => {
+    activeId = id;
+    for (const it of navItems) {
+      const isActive = it.id === id;
+      it.el.classList.toggle("active", isActive);
+      it.el.tabIndex = isActive ? 0 : -1;
+      if (isActive) it.el.setAttribute("aria-current", "true");
+      else it.el.removeAttribute("aria-current");
+    }
+    renderContent();
+    if (focus) navItems.find((it) => it.id === id)?.el.focus();
+  };
+
   const renderList = (filter: string): void => {
     list.replaceChildren();
+    navItems = [];
     const q = filter.trim().toLowerCase();
     const visible = sections.filter(
       (s) =>
@@ -92,37 +109,54 @@ export function mountSettings(
       text.className = "nav-label";
       text.textContent = sectionLabel(s);
       li.append(icon, text);
-      li.tabIndex = 0;
-      li.className = s.id === activeId ? "active" : "";
-      const go = (): void => {
-        activeId = s.id;
-        renderList(filter);
-        renderContent();
-      };
-      li.addEventListener("click", go);
+      const isActive = s.id === activeId;
+      li.className = isActive ? "active" : "";
+      li.tabIndex = isActive ? 0 : -1;
+      if (isActive) li.setAttribute("aria-current", "true");
+      li.addEventListener("click", () => activate(s.id, true));
       li.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          go();
+          activate(s.id, true);
+          return;
+        }
+        const idx = navItems.findIndex((it) => it.id === activeId);
+        const next = nextSectionIndex(navItems.length, idx, e.key);
+        if (next >= 0 && next !== idx) {
+          e.preventDefault();
+          activate(navItems[next].id, true);
         }
       });
+      navItems.push({ id: s.id, el: li });
       list.appendChild(li);
     }
   };
 
   search.addEventListener("input", () => renderList(search.value));
+  search.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "Enter") {
+      const target = navItems.find((it) => it.id === activeId) ?? navItems[0];
+      if (target) {
+        e.preventDefault();
+        target.el.focus();
+      }
+    }
+  });
+  list.setAttribute("aria-label", t("settings.shell.searchPlaceholder"));
   sidebar.append(search, list);
   root.append(sidebar, content, saved);
   renderList("");
   renderContent();
+  navItems.find((it) => it.id === activeId)?.el.focus();
 
   return {
     showSection: (id) => {
       if (!sections.some((s) => s.id === id)) return;
-      activeId = id;
       search.value = "";
+      activeId = id;
       renderList("");
-      renderContent();
+      activate(id, true);
     },
+    focusSearch: () => search.focus(),
   };
 }
