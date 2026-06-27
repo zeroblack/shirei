@@ -1,0 +1,2 @@
+patchedDependencies:
+  '@xterm/addon-webgl': patches/@xterm__addon-webgl.patch
