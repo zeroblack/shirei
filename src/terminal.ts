@@ -32,6 +32,12 @@ const DPR_SETTLE_MS = 150;
 // single bulk write whose cost xterm's own scrollback then caps.
 const HIDDEN_FLUSH_BYTES = 256 * 1024;
 
+export const rgbaFrom = (hex: string, alpha: number): string => {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return `rgba(255, 255, 255, ${alpha})`;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
+};
+
 const toXtermTheme = (c: TerminalColors): ITheme => ({
   background: c.bg,
   foreground: c.fg,
@@ -53,8 +59,8 @@ const toXtermTheme = (c: TerminalColors): ITheme => ({
   brightCyan: c.brightCyan,
   brightWhite: c.brightWhite,
   cursorAccent: c.bg,
-  selectionBackground: "rgba(255, 255, 255, 0.18)",
-  selectionInactiveBackground: "rgba(255, 255, 255, 0.08)",
+  selectionBackground: rgbaFrom(c.fg, 0.25),
+  selectionInactiveBackground: rgbaFrom(c.fg, 0.12),
 });
 
 interface TermLook {
