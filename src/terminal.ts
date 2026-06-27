@@ -52,6 +52,9 @@ const toXtermTheme = (c: TerminalColors): ITheme => ({
   brightMagenta: c.brightMagenta,
   brightCyan: c.brightCyan,
   brightWhite: c.brightWhite,
+  cursorAccent: c.bg,
+  selectionBackground: "rgba(255, 255, 255, 0.18)",
+  selectionInactiveBackground: "rgba(255, 255, 255, 0.08)",
 });
 
 interface TermLook {
