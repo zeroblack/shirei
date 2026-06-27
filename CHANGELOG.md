@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Crisper terminal rendering: block elements are pixel-snapped and the WebGL
+  glyph atlas uses nearest-neighbor sampling (no bilinear blur on edges).
+- Terminal selection and cursor colors now derive from the active theme
+  (selection from the theme foreground, so it stays visible on light themes;
+  cursor text uses the background color under a block cursor).
+
 ## [0.12.1] - 2026-06-26
 
 ### Added
