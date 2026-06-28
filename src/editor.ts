@@ -11,6 +11,7 @@ import {
   type LanguageSupport,
 } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
+import { unifiedMergeView } from "@codemirror/merge";
 import {
   highlightSelectionMatches,
   search,
@@ -31,9 +32,10 @@ import {
   scrollPastEnd,
 } from "@codemirror/view";
 import { vim } from "@replit/codemirror-vim";
-import { readFile, writeFile } from "./commands";
+import { gitFileHead, readFile, writeFile } from "./commands";
 import type { Config, TerminalColors } from "./config";
 import { astro } from "./editor-astro";
+import { conflictResolver, conflictTolerant } from "./editor-conflict";
 import { livePreview } from "./editor-livepreview";
 import { markdownEditKeymap } from "./editor-mdkeys";
 import { searchPanel } from "./editor-search";
@@ -42,6 +44,7 @@ import { errorCode, errorMessage } from "./errors";
 import { t } from "./i18n";
 import { CHEVRON } from "./icons";
 import { basename, parentDir } from "./path";
+import { showToast } from "./toast";
 
 type EditorConfig = Config["editor"];
 
@@ -50,6 +53,7 @@ const themeConf = new Compartment();
 const indentConf = new Compartment();
 const featuresConf = new Compartment();
 const livePreviewConf = new Compartment();
+const diffConf = new Compartment();
 const vimConf = new Compartment();
 const readingConf = new Compartment();
 
@@ -150,9 +154,11 @@ async function languageFor(path: string): Promise<LanguageSupport | null> {
   const name = basename(path);
   const lower = name.split(".").pop()?.toLowerCase() ?? "";
   if (lower === "md" || lower === "markdown" || lower === "mdx") {
-    return markdown({ base: markdownLanguage, codeLanguages: languages });
+    return conflictTolerant(
+      markdown({ base: markdownLanguage, codeLanguages: languages }),
+    );
   }
-  if (lower === "astro") return astro();
+  if (lower === "astro") return conflictTolerant(astro());
   let desc = LanguageDescription.matchFilename(languages, name);
   if (!desc) {
     // Svelte has no CodeMirror grammar; HTML is the closest approximation.
@@ -160,7 +166,7 @@ async function languageFor(path: string): Promise<LanguageSupport | null> {
       desc = languages.find((l) => l.name === "HTML") ?? null;
     }
   }
-  return desc ? desc.load() : null;
+  return desc ? conflictTolerant(await desc.load()) : null;
 }
 
 export class EditorSession {
@@ -174,6 +180,7 @@ export class EditorSession {
   private palette: TerminalColors;
   private preset: "dark" | "light";
   private editorCfg: EditorConfig;
+  private diffOn = false;
   onDirtyChange?: (dirty: boolean) => void;
 
   constructor(
@@ -210,6 +217,28 @@ export class EditorSession {
       : [];
   }
 
+  // Toggles an inline diff of the working file against its committed (HEAD)
+  // version; chunks can be reverted in place. Git commits stay in the console.
+  async toggleDiff(): Promise<void> {
+    if (!this.view) return;
+    if (this.diffOn) {
+      this.diffOn = false;
+      this.view.dispatch({ effects: diffConf.reconfigure([]) });
+      return;
+    }
+    const head = await gitFileHead(this.path);
+    if (head == null) {
+      showToast(t("ui.editor.diff.none"));
+      return;
+    }
+    this.diffOn = true;
+    this.view.dispatch({
+      effects: diffConf.reconfigure(
+        unifiedMergeView({ original: head, mergeControls: true }),
+      ),
+    });
+  }
+
   async open(): Promise<void> {
     const file = await readFile(this.path);
     this.baseMtime = file.mtime;
@@ -229,6 +258,17 @@ export class EditorSession {
         featuresConf.of(editorFeatures(this.editorCfg)),
         indentConf.of(this.indentExt()),
         livePreviewConf.of(this.liveExt()),
+        conflictResolver(),
+        diffConf.of([]),
+        keymap.of([
+          {
+            key: "Mod-Alt-d",
+            run: () => {
+              void this.toggleDiff();
+              return true;
+            },
+          },
+        ]),
         search({
           top: true,
           createPanel: (view) => searchPanel(view, this.editorCfg),
