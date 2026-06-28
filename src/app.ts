@@ -19,6 +19,7 @@ import { attachDrag } from "./drag";
 import type { EditorSession as EditorSessionType } from "./editor";
 import { FileTree } from "./filetree";
 import { fontStack, isFontLoaded, registerFont } from "./fonts";
+import { GitHistory } from "./githistory";
 import { setLocale, t } from "./i18n";
 import { isImage, mediaKind, SEARCH, SIDEBAR } from "./icons";
 import { ImageSession } from "./image";
@@ -247,6 +248,7 @@ export class App {
     onOpenProject: (id) => void this.openProject(id),
     commands: () => this.paletteCommands(),
   });
+  private readonly gitHistory = new GitHistory();
 
   constructor(tabbarEl: HTMLElement, host: HTMLElement, config: Config) {
     this.host = host;
@@ -921,8 +923,11 @@ export class App {
         palette: this.config.theme.terminal,
         preset: this.config.theme.preset,
         editor: this.config.editor,
+        git: this.config.git,
       });
       session.onDirtyChange = (dirty) => this.setDirty(id, dirty);
+      const editorSession = session;
+      editorSession.onHistory = () => void this.openHistory(editorSession);
     }
     this.sessions.set(id, session);
 
@@ -1084,7 +1089,23 @@ export class App {
     const currentTarget = this.current()
       ? ("panel" as const)
       : ("app" as const);
+    const active = this.sessions.get(this.activeId ?? "");
+    const editorCommands = this.isEditor(active)
+      ? [
+          {
+            id: "git.history",
+            name: t("cmd.git.history"),
+            run: () => void this.openHistory(active),
+          },
+          {
+            id: "git.blame-toggle",
+            name: t("cmd.git.blame-toggle"),
+            run: () => active.toggleBlame(),
+          },
+        ]
+      : [];
     return [
+      ...editorCommands,
       {
         id: "record.panel",
         name: t("ui.cmd.recordPanel"),
@@ -1124,6 +1145,17 @@ export class App {
     s: PaneGrid | EditorSessionType | ImageSession | MediaSession | undefined,
   ): s is EditorSessionType {
     return EditorSession !== null && s instanceof EditorSession;
+  }
+
+  private async openHistory(session: EditorSessionType): Promise<void> {
+    await this.gitHistory.open(session.path, {
+      fontFamily: fontStack(this.config.font.family, this.config.fonts),
+      fontSize: this.config.font.size,
+      palette: this.config.theme.terminal,
+      preset: this.config.theme.preset,
+      editor: this.config.editor,
+      defaultView: this.config.git.history.default_view,
+    });
   }
 
   private async saveActive(): Promise<void> {
@@ -1581,6 +1613,12 @@ export class App {
         break;
       case "logs.reveal":
         void revealLogs();
+        break;
+      case "git.history":
+        if (this.isEditor(active)) void this.openHistory(active);
+        break;
+      case "git.blame-toggle":
+        if (this.isEditor(active)) active.toggleBlame();
         break;
       case "editor.vim-toggle":
         this.toggleVim();

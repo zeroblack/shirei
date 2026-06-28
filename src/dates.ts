@@ -1,3 +1,5 @@
+import { getLocale, t } from "./i18n";
+
 const WEEKDAYS = [
   "domingo",
   "lunes",
@@ -46,4 +48,43 @@ export function parseNaturalDate(input: string, now: Date): string | null {
     return iso(addDays(now, delta));
   }
   return null;
+}
+
+export function relativeTime(epochSecs: number): string {
+  const secs = Math.max(0, Math.floor(Date.now() / 1000 - epochSecs));
+  if (secs < 60) return t("ui.time.now");
+  const mins = Math.floor(secs / 60);
+  if (mins < 60)
+    return t(mins === 1 ? "ui.time.minute" : "ui.time.minutes", { n: mins });
+  const hours = Math.floor(mins / 60);
+  if (hours < 24)
+    return t(hours === 1 ? "ui.time.hour" : "ui.time.hours", { n: hours });
+  const days = Math.floor(hours / 24);
+  if (days < 30)
+    return t(days === 1 ? "ui.time.day" : "ui.time.days", { n: days });
+  const months = Math.floor(days / 30);
+  if (months < 12)
+    return t(months === 1 ? "ui.time.month" : "ui.time.months", { n: months });
+  const years = Math.floor(days / 365);
+  return t(years === 1 ? "ui.time.year" : "ui.time.years", { n: years });
+}
+
+export function compactAge(epochSecs: number): string {
+  const secs = Math.max(0, Math.floor(Date.now() / 1000 - epochSecs));
+  if (secs < 60) return t("ui.tabbar.ageNow");
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 365) return `${days}d`;
+  return `${Math.floor(days / 365)}y`;
+}
+
+export function absoluteDate(epochSecs: number): string {
+  return new Date(epochSecs * 1000).toLocaleDateString(getLocale(), {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }

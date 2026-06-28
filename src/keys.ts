@@ -219,6 +219,18 @@ export const ACTIONS: ActionDef[] = [
     defaults: [{ key: "v", meta: true, shift: true }],
   },
   {
+    id: "git.history",
+    category: "git",
+    scope: "global",
+    defaults: [{ key: "h", meta: true, shift: true }],
+  },
+  {
+    id: "git.blame-toggle",
+    category: "git",
+    scope: "global",
+    defaults: [{ key: "b", meta: true, shift: true }],
+  },
+  {
     id: "pane.split-h",
     category: "panes",
     scope: "pane",

@@ -221,13 +221,27 @@ export function editorThemeFromPalette(
       "&.cm-merge-b .cm-deletedText, & .cm-deletedChunk .cm-deletedText": {
         background: alpha(p.red, 0.26),
       },
-      ".cm-changeGutter": { width: "2px", paddingLeft: "0" },
-      "&.cm-merge-b .cm-changedLineGutter": {
-        background: alpha(p.green, 0.55),
+      ".cm-changeGutter": {
+        width: "16px",
+        paddingLeft: "0",
+        fontFamily: "var(--font-mono)",
+        fontSize: "11px",
+        fontWeight: "600",
+        textAlign: "center",
       },
-      "&.cm-merge-a .cm-changedLineGutter, & .cm-deletedLineGutter": {
-        background: alpha(p.red, 0.55),
+      "&.cm-merge-b .cm-changedLineGutter, &.cm-merge-a .cm-changedLineGutter, & .cm-deletedLineGutter":
+        {
+          background: "transparent",
+        },
+      "&.cm-merge-b .cm-changedLineGutter:before": {
+        content: '"+"',
+        color: ensureContrast(p.green, p.bg, p.fg, 55),
       },
+      "&.cm-merge-a .cm-changedLineGutter:before, & .cm-deletedLineGutter:before":
+        {
+          content: '"-"',
+          color: ensureContrast(p.red, p.bg, p.fg, 55),
+        },
       ".cm-collapsedLines": {
         fontFamily: "var(--font-mono)",
         fontSize: "11px",
@@ -260,6 +274,31 @@ export function editorThemeFromPalette(
         background: alpha(p.red, 0.16),
         color: ensureContrast(p.red, p.bg, p.fg, 60),
       },
+      ".cm-blame-annotation": {
+        paddingLeft: "2.5em",
+        fontFamily: '"Geist Mono", var(--font-mono)',
+        fontSize: "0.85em",
+        cursor: "default",
+        "--blame-author": ensureContrast(mix(p.fg, p.bg, 0.55), p.bg, p.fg, 30),
+        "--blame-age": ensureContrast(mix(p.fg, p.bg, 0.4), p.bg, p.fg, 20),
+        "--blame-sha": ensureContrast(mix(p.yellow, p.bg, 0.5), p.bg, p.fg, 26),
+        "--blame-sep": mix(p.fg, p.bg, 0.28),
+      },
+      ".cm-blame-active": {
+        "--blame-author": ensureContrast(mix(p.fg, p.bg, 0.78), p.bg, p.fg, 44),
+        "--blame-age": ensureContrast(mix(p.fg, p.bg, 0.55), p.bg, p.fg, 30),
+        "--blame-sha": ensureContrast(
+          mix(p.yellow, p.bg, 0.72),
+          p.bg,
+          p.fg,
+          40,
+        ),
+        "--blame-sep": mix(p.fg, p.bg, 0.42),
+      },
+      ".cm-blame-author": { color: "var(--blame-author)", fontWeight: "500" },
+      ".cm-blame-age": { color: "var(--blame-age)" },
+      ".cm-blame-sha": { color: "var(--blame-sha)" },
+      ".cm-blame-sep": { color: "var(--blame-sep)", padding: "0 0.5em" },
       ".cm-searchMatch": { backgroundColor: alpha(p.yellow, 0.3) },
       ".cm-searchMatch.cm-searchMatch-selected": {
         backgroundColor: alpha(p.yellow, 0.55),

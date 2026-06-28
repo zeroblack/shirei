@@ -27,6 +27,32 @@ export const revealInFinder = (path: string) =>
 export const gitFileHead = (path: string) =>
   invoke<string | null>("git_file_head", { path });
 
+export interface GitCommit {
+  sha: string;
+  shortSha: string;
+  author: string;
+  date: number;
+  summary: string;
+}
+
+export interface GitBlameLine {
+  line: number;
+  sha: string;
+  shortSha: string;
+  author: string;
+  date: number;
+  summary: string;
+}
+
+export const gitFileHistory = (path: string) =>
+  invoke<GitCommit[]>("git_file_history", { path });
+
+export const gitFileAt = (path: string, sha: string) =>
+  invoke<string | null>("git_file_at", { path, sha });
+
+export const gitBlame = (path: string) =>
+  invoke<GitBlameLine[]>("git_blame", { path });
+
 export const ptyCwd = (id: string) =>
   invoke<string | null>("session_cwd", { id });
 

@@ -32,9 +32,10 @@ import {
   scrollPastEnd,
 } from "@codemirror/view";
 import { vim } from "@replit/codemirror-vim";
-import { gitFileHead, readFile, writeFile } from "./commands";
+import { gitBlame, gitFileHead, readFile, writeFile } from "./commands";
 import type { Config, TerminalColors } from "./config";
 import { astro } from "./editor-astro";
+import { blameAnnotations } from "./editor-blame";
 import { conflictResolver, conflictTolerant } from "./editor-conflict";
 import { livePreview } from "./editor-livepreview";
 import { markdownEditKeymap } from "./editor-mdkeys";
@@ -42,11 +43,12 @@ import { searchPanel } from "./editor-search";
 import { editorIndentMarkers, editorThemeFromPalette } from "./editor-theme";
 import { errorCode, errorMessage } from "./errors";
 import { t } from "./i18n";
-import { CHEVRON, REVERT } from "./icons";
+import { BLAME, CHEVRON, HISTORY, REVERT } from "./icons";
 import { basename, parentDir } from "./path";
 import { showToast } from "./toast";
 
 type EditorConfig = Config["editor"];
+type GitConfig = Config["git"];
 
 const languageConf = new Compartment();
 const themeConf = new Compartment();
@@ -54,6 +56,7 @@ const indentConf = new Compartment();
 const featuresConf = new Compartment();
 const livePreviewConf = new Compartment();
 const diffConf = new Compartment();
+const blameConf = new Compartment();
 const vimConf = new Compartment();
 const readingConf = new Compartment();
 
@@ -150,7 +153,9 @@ function editorFeatures(cfg: EditorConfig): Extension[] {
   return ext;
 }
 
-async function languageFor(path: string): Promise<LanguageSupport | null> {
+export async function languageFor(
+  path: string,
+): Promise<LanguageSupport | null> {
   const name = basename(path);
   const lower = name.split(".").pop()?.toLowerCase() ?? "";
   if (lower === "md" || lower === "markdown" || lower === "mdx") {
@@ -206,8 +211,12 @@ export class EditorSession {
   private palette: TerminalColors;
   private preset: "dark" | "light";
   private editorCfg: EditorConfig;
+  private gitCfg: GitConfig;
   private diffOn = false;
+  private blameOn = false;
+  private blameBtn: HTMLButtonElement | null = null;
   onDirtyChange?: (dirty: boolean) => void;
+  onHistory?: () => void;
 
   constructor(
     id: string,
@@ -219,6 +228,7 @@ export class EditorSession {
       palette: TerminalColors;
       preset: "dark" | "light";
       editor: EditorConfig;
+      git: GitConfig;
     },
   ) {
     this.id = id;
@@ -229,6 +239,7 @@ export class EditorSession {
     this.palette = look.palette;
     this.preset = look.preset;
     this.editorCfg = look.editor;
+    this.gitCfg = look.git;
   }
 
   private indentExt(): Extension {
@@ -293,6 +304,7 @@ export class EditorSession {
         livePreviewConf.of(this.liveExt()),
         conflictResolver(),
         diffConf.of([]),
+        blameConf.of([]),
         keymap.of([
           {
             key: "Mod-Alt-d",
@@ -330,8 +342,66 @@ export class EditorSession {
       ],
     });
     this.view = new EditorView({ state, parent: this.container });
+    this.container.appendChild(this.chromeButtons());
     const lang = await languageFor(this.path);
     if (lang) this.view.dispatch({ effects: languageConf.reconfigure(lang) });
+    if (this.gitCfg.blame.enabled) void this.setBlame(true, false);
+  }
+
+  private chromeButtons(): HTMLElement {
+    const group = document.createElement("div");
+    group.className = "editor-chrome";
+    const history = this.chromeButton(HISTORY, t("cmd.git.history"), () =>
+      this.onHistory?.(),
+    );
+    this.blameBtn = this.chromeButton(BLAME, t("cmd.git.blame-toggle"), () =>
+      this.toggleBlame(),
+    );
+    group.append(history, this.blameBtn);
+    return group;
+  }
+
+  private chromeButton(
+    icon: string,
+    label: string,
+    onClick: () => void,
+  ): HTMLButtonElement {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "editor-chrome-btn";
+    btn.title = label;
+    btn.setAttribute("aria-label", label);
+    btn.innerHTML = icon;
+    btn.addEventListener("mousedown", (e) => e.preventDefault());
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
+
+  toggleBlame(): void {
+    void this.setBlame(!this.blameOn, true);
+  }
+
+  private async setBlame(on: boolean, explicit: boolean): Promise<void> {
+    if (!this.view) return;
+    if (!on) {
+      this.blameOn = false;
+      this.view.dispatch({ effects: blameConf.reconfigure([]) });
+      this.blameBtn?.classList.remove("active");
+      return;
+    }
+    const lines = await gitBlame(this.path);
+    if (!this.view) return;
+    if (lines.length === 0) {
+      if (explicit) showToast(t("ui.git.blame.notRepo"));
+      return;
+    }
+    this.blameOn = true;
+    this.view.dispatch({
+      effects: blameConf.reconfigure(
+        blameAnnotations(lines, { delayMs: this.gitCfg.blame.delay_ms }),
+      ),
+    });
+    this.blameBtn?.classList.add("active");
   }
 
   async save(): Promise<SaveResult> {

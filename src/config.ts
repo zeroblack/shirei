@@ -184,6 +184,10 @@ export interface Config {
     code_width: string;
     wrap_code: boolean;
   };
+  git: {
+    blame: { enabled: boolean; delay_ms: number };
+    history: { default_view: "diff" | "full" };
+  };
   logging: LoggingConfig;
   theme: {
     preset: "dark" | "light";
