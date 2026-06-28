@@ -1,5 +1,12 @@
 import { Language, LanguageSupport } from "@codemirror/language";
-import type { Extension, Range, Text } from "@codemirror/state";
+import { diff } from "@codemirror/merge";
+import {
+  type Extension,
+  type Range,
+  StateEffect,
+  StateField,
+  type Text,
+} from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -11,6 +18,7 @@ import {
 import type { Input, Parser, PartialParse, TreeFragment } from "@lezer/common";
 import { Parser as LezerParser } from "@lezer/common";
 import { t } from "./i18n";
+import { COMPARE } from "./icons";
 
 const MARKERS = ["<<<<<<<", "=======", ">>>>>>>", "|||||||"];
 
@@ -76,11 +84,44 @@ class ConflictTolerantParser extends LezerParser {
 // highlighting dies. This wraps the parser so marker lines read as blanks,
 // letting each side highlight as the real language while the markers stay on disk.
 export function conflictTolerant(support: LanguageSupport): LanguageSupport {
-  const inner = support.language;
-  const parser = new ConflictTolerantParser(inner.parser);
-  const lang = new Language(inner.data, parser, [], inner.name);
-  return new LanguageSupport(lang, support.support);
+  try {
+    const inner = support.language;
+    const parser = new ConflictTolerantParser(inner.parser);
+    const lang = new Language(inner.data, parser, [], inner.name);
+    return new LanguageSupport(lang, support.support);
+  } catch (e) {
+    console.error("conflictTolerant: falling back to base language", e);
+    return support;
+  }
 }
+
+const toggleCompare = StateEffect.define<{ pos: number; on: boolean }>();
+
+const compareField = StateField.define<Set<number>>({
+  create() {
+    return new Set();
+  },
+  update(set, tr) {
+    let next = set;
+    if (tr.docChanged) {
+      next = new Set();
+      const doc = tr.state.doc;
+      for (const pos of set) {
+        const mapped = tr.changes.mapPos(pos, 1);
+        const line = doc.lineAt(mapped);
+        if (line.from === mapped && line.text.startsWith("<<<<<<<"))
+          next.add(mapped);
+      }
+    }
+    for (const e of tr.effects) {
+      if (!e.is(toggleCompare)) continue;
+      if (next === set) next = new Set(set);
+      if (e.value.on) next.add(e.value.pos);
+      else next.delete(e.value.pos);
+    }
+    return next;
+  },
+});
 
 interface Block {
   start: number;
@@ -179,14 +220,18 @@ function actionBtn(
 }
 
 class HeaderWidget extends WidgetType {
-  constructor(readonly block: Block) {
+  constructor(
+    readonly block: Block,
+    readonly compareOn: boolean,
+  ) {
     super();
   }
   eq(other: HeaderWidget): boolean {
     return (
       other.block.start === this.block.start &&
       other.block.index === this.block.index &&
-      other.block.total === this.block.total
+      other.block.total === this.block.total &&
+      other.compareOn === this.compareOn
     );
   }
   toDOM(view: EditorView): HTMLElement {
@@ -218,7 +263,24 @@ class HeaderWidget extends WidgetType {
     const resolve = (text: string): void => {
       view.dispatch({ changes: { from: b.start, to: b.end, insert: text } });
     };
+
+    const compareBtn = document.createElement("button");
+    compareBtn.type = "button";
+    compareBtn.className = this.compareOn
+      ? "cm-conflict-compare active"
+      : "cm-conflict-compare";
+    compareBtn.title = t("ui.editor.conflict.compareHint");
+    compareBtn.setAttribute("aria-label", t("ui.editor.conflict.compare"));
+    compareBtn.innerHTML = COMPARE;
+    compareBtn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      view.dispatch({
+        effects: toggleCompare.of({ pos: b.start, on: !this.compareOn }),
+      });
+    });
+
     actions.append(
+      compareBtn,
       actionBtn(t("ui.editor.conflict.ours"), "cm-conflict-btn ours", () =>
         resolve(slice(b.oursFrom, b.oursTo)),
       ),
@@ -260,6 +322,7 @@ class LabelWidget extends WidgetType {
 
 function build(view: EditorView): DecorationSet {
   const doc = view.state.doc;
+  const compare = view.state.field(compareField, false);
   const all: Range<Decoration>[] = [];
   const lineCls = (pos: number, cls: string): void => {
     all.push(Decoration.line({ class: cls }).range(doc.lineAt(pos).from));
@@ -275,6 +338,26 @@ function build(view: EditorView): DecorationSet {
       p = line.to + 1;
     }
   };
+  const markDiff = (block: Block): void => {
+    const ours = view.state.sliceDoc(block.oursFrom, block.oursTo);
+    const theirs = view.state.sliceDoc(block.theirsFrom, block.theirsTo);
+    for (const ch of diff(ours, theirs)) {
+      if (ch.toA > ch.fromA)
+        all.push(
+          Decoration.mark({ class: "cm-conflict-diff-current" }).range(
+            block.oursFrom + ch.fromA,
+            block.oursFrom + ch.toA,
+          ),
+        );
+      if (ch.toB > ch.fromB)
+        all.push(
+          Decoration.mark({ class: "cm-conflict-diff-incoming" }).range(
+            block.theirsFrom + ch.fromB,
+            block.theirsFrom + ch.toB,
+          ),
+        );
+    }
+  };
   for (const block of parseConflicts(doc)) {
     const startLine = doc.lineAt(block.start);
     const endLine = doc.lineAt(block.end);
@@ -287,7 +370,8 @@ function build(view: EditorView): DecorationSet {
             : "";
       lineCls(doc.line(ln).from, `cm-conflict${edge}`);
     }
-    replace(startLine.from, startLine.to, new HeaderWidget(block));
+    const compareOn = compare?.has(block.start) ?? false;
+    replace(startLine.from, startLine.to, new HeaderWidget(block, compareOn));
     replace(
       block.sep[0],
       block.sep[1],
@@ -306,21 +390,31 @@ function build(view: EditorView): DecorationSet {
     if (block.baseTo > block.baseFrom) {
       tintRange(block.baseFrom, block.baseTo, "cm-conflict-base");
     }
+    if (compareOn) markDiff(block);
   }
   return Decoration.set(all, true);
 }
 
 export function conflictResolver(): Extension {
-  return ViewPlugin.fromClass(
-    class {
-      decorations: DecorationSet;
-      constructor(view: EditorView) {
-        this.decorations = build(view);
-      }
-      update(u: ViewUpdate): void {
-        if (u.docChanged || u.viewportChanged) this.decorations = build(u.view);
-      }
-    },
-    { decorations: (v) => v.decorations },
-  );
+  return [
+    compareField,
+    ViewPlugin.fromClass(
+      class {
+        decorations: DecorationSet;
+        constructor(view: EditorView) {
+          this.decorations = build(view);
+        }
+        update(u: ViewUpdate): void {
+          if (
+            u.docChanged ||
+            u.viewportChanged ||
+            u.startState.field(compareField, false) !==
+              u.state.field(compareField, false)
+          )
+            this.decorations = build(u.view);
+        }
+      },
+      { decorations: (v) => v.decorations },
+    ),
+  ];
 }

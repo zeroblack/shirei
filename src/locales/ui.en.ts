@@ -45,6 +45,9 @@ export const uiEn = {
   "ui.editor.fold.lines": "{n} lines",
   "ui.editor.fold.tasks": "{done}/{total} tasks",
   "ui.editor.diff.none": "No committed version to compare against.",
+  "ui.editor.diff.revert": "Revert hunk",
+  "ui.editor.diff.revertHint": "Restore this hunk to its committed version",
+  "ui.editor.diff.collapsed": "$ unchanged lines",
   "ui.editor.conflict.ours": "Accept current",
   "ui.editor.conflict.theirs": "Accept incoming",
   "ui.editor.conflict.both": "Accept both",
@@ -52,6 +55,8 @@ export const uiEn = {
   "ui.editor.conflict.current": "Current (ours)",
   "ui.editor.conflict.incoming": "Incoming (theirs)",
   "ui.editor.conflict.base": "Base",
+  "ui.editor.conflict.compare": "Compare",
+  "ui.editor.conflict.compareHint": "Compare current and incoming",
 
   "ui.todo.header": "TODO",
   "ui.todo.addTask": "+ add task",

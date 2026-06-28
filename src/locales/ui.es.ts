@@ -47,6 +47,9 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.editor.fold.lines": "{n} líneas",
   "ui.editor.fold.tasks": "{done}/{total} tareas",
   "ui.editor.diff.none": "No hay versión commiteada para comparar.",
+  "ui.editor.diff.revert": "Revertir bloque",
+  "ui.editor.diff.revertHint": "Restaura este bloque a su versión commiteada",
+  "ui.editor.diff.collapsed": "$ líneas sin cambios",
   "ui.editor.conflict.ours": "Aceptar actual",
   "ui.editor.conflict.theirs": "Aceptar entrante",
   "ui.editor.conflict.both": "Aceptar ambos",
@@ -54,6 +57,8 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.editor.conflict.current": "Actual (ours)",
   "ui.editor.conflict.incoming": "Entrante (theirs)",
   "ui.editor.conflict.base": "Base",
+  "ui.editor.conflict.compare": "Comparar",
+  "ui.editor.conflict.compareHint": "Comparar actual y entrante",
 
   "ui.todo.header": "TODO",
   "ui.todo.addTask": "+ agregar tarea",

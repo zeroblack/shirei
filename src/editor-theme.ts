@@ -179,6 +179,87 @@ export function editorThemeFromPalette(
         textTransform: "uppercase",
         color: mix(p.fg, p.bg, 0.62),
       },
+      ".cm-conflict-compare": {
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "22px",
+        height: "22px",
+        border: "none",
+        background: "transparent",
+        color: mix(p.fg, p.bg, 0.5),
+        borderRadius: "5px",
+        marginRight: "2px",
+        cursor: "pointer",
+      },
+      ".cm-conflict-compare:hover": {
+        background: alpha(p.fg, 0.1),
+        color: p.fg,
+      },
+      ".cm-conflict-compare.active": {
+        background: alpha(p.brightBlue, 0.18),
+        color: ensureContrast(p.brightBlue, p.bg, p.fg, 60),
+      },
+      ".cm-conflict-diff-current": {
+        background: alpha(p.green, 0.22),
+        borderRadius: "2px",
+      },
+      ".cm-conflict-diff-incoming": {
+        background: alpha(p.blue, 0.22),
+        borderRadius: "2px",
+      },
+      "&.cm-merge-b .cm-changedLine, .cm-inlineChangedLine": {
+        backgroundColor: alpha(p.green, 0.1),
+      },
+      ".cm-deletedChunk": {
+        backgroundColor: alpha(p.red, 0.1),
+        paddingLeft: "12px",
+      },
+      "&.cm-merge-b .cm-changedText": {
+        background: alpha(p.green, 0.24),
+      },
+      "&.cm-merge-b .cm-deletedText, & .cm-deletedChunk .cm-deletedText": {
+        background: alpha(p.red, 0.26),
+      },
+      ".cm-changeGutter": { width: "2px", paddingLeft: "0" },
+      "&.cm-merge-b .cm-changedLineGutter": {
+        background: alpha(p.green, 0.55),
+      },
+      "&.cm-merge-a .cm-changedLineGutter, & .cm-deletedLineGutter": {
+        background: alpha(p.red, 0.55),
+      },
+      ".cm-collapsedLines": {
+        fontFamily: "var(--font-mono)",
+        fontSize: "11px",
+        padding: "4px 12px",
+        cursor: "pointer",
+      },
+      "& .cm-collapsedLines": {
+        color: mix(p.fg, p.bg, 0.55),
+        background: `linear-gradient(transparent, ${alpha(p.fg, 0.05)} 30%, ${alpha(p.fg, 0.05)} 70%, transparent)`,
+      },
+      ".cm-collapsedLines:before, .cm-collapsedLines:after": {
+        content: '""',
+        margin: "0",
+      },
+      ".cm-deletedChunk .cm-chunkButtons": { insetInlineEnd: "8px" },
+      "&.cm-merge-b .cm-diff-revert": {
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "22px",
+        height: "22px",
+        border: "none",
+        background: "transparent",
+        color: mix(p.fg, p.bg, 0.5),
+        borderRadius: "5px",
+        margin: "0",
+        cursor: "pointer",
+      },
+      "&.cm-merge-b .cm-diff-revert:hover": {
+        background: alpha(p.red, 0.16),
+        color: ensureContrast(p.red, p.bg, p.fg, 60),
+      },
       ".cm-searchMatch": { backgroundColor: alpha(p.yellow, 0.3) },
       ".cm-searchMatch.cm-searchMatch-selected": {
         backgroundColor: alpha(p.yellow, 0.55),

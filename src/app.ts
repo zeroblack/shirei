@@ -930,7 +930,8 @@ export class App {
     this.showActive();
     try {
       await session.open();
-    } catch {
+    } catch (e) {
+      console.error("open file failed:", path, e);
       if (!silent) {
         this.notify(t("ui.app.cannotShowFile"));
       }

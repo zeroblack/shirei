@@ -42,7 +42,7 @@ import { searchPanel } from "./editor-search";
 import { editorIndentMarkers, editorThemeFromPalette } from "./editor-theme";
 import { errorCode, errorMessage } from "./errors";
 import { t } from "./i18n";
-import { CHEVRON } from "./icons";
+import { CHEVRON, REVERT } from "./icons";
 import { basename, parentDir } from "./path";
 import { showToast } from "./toast";
 
@@ -169,6 +169,32 @@ async function languageFor(path: string): Promise<LanguageSupport | null> {
   return desc ? conflictTolerant(await desc.load()) : null;
 }
 
+// The diff compares against the in-memory HEAD snapshot, which Shirei never
+// writes back. "Reject" reverts a hunk to its committed text; "accept" would
+// only dismiss the highlight without committing anything (commits live in the
+// console), so we surface revert only and swallow the misleading accept control.
+function diffControl(
+  type: "reject" | "accept",
+  action: (e: MouseEvent) => void,
+): HTMLElement {
+  if (type === "accept") {
+    const hidden = document.createElement("span");
+    hidden.style.display = "none";
+    return hidden;
+  }
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "cm-diff-revert";
+  b.title = t("ui.editor.diff.revertHint");
+  b.setAttribute("aria-label", t("ui.editor.diff.revert"));
+  b.innerHTML = REVERT;
+  b.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    action(e);
+  });
+  return b;
+}
+
 export class EditorSession {
   readonly id: string;
   readonly path: string;
@@ -233,9 +259,16 @@ export class EditorSession {
     }
     this.diffOn = true;
     this.view.dispatch({
-      effects: diffConf.reconfigure(
-        unifiedMergeView({ original: head, mergeControls: true }),
-      ),
+      effects: diffConf.reconfigure([
+        unifiedMergeView({
+          original: head,
+          mergeControls: diffControl,
+          collapseUnchanged: { margin: 3, minSize: 6 },
+        }),
+        EditorState.phrases.of({
+          "$ unchanged lines": t("ui.editor.diff.collapsed"),
+        }),
+      ]),
     });
   }
 
