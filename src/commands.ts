@@ -24,6 +24,9 @@ export const indexDir = (root: string) =>
 export const revealInFinder = (path: string) =>
   invoke<void>("reveal_in_finder", { path });
 
+export const gitFileHead = (path: string) =>
+  invoke<string | null>("git_file_head", { path });
+
 export const ptyCwd = (id: string) =>
   invoke<string | null>("session_cwd", { id });
 

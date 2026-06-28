@@ -5,6 +5,7 @@ mod dock;
 mod error;
 mod fonts;
 mod fs;
+mod git;
 mod logs;
 mod mux_client;
 mod perf;
@@ -281,6 +282,7 @@ pub fn run() {
             fs::fs_image_meta,
             fs::fs_write_file,
             fs::fs_index,
+            git::git_file_head,
             config::config_get,
             config::config_set,
             todos::todo_list,

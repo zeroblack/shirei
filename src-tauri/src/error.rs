@@ -35,6 +35,8 @@ pub enum Error {
     Screencast(String),
     #[error("todo store error: {0}")]
     Db(String),
+    #[error("git error: {0}")]
+    Git(String),
 }
 
 impl Error {
@@ -58,7 +60,14 @@ impl Error {
             Error::ScreencastUnsupported => "screencast-unsupported",
             Error::Screencast(_) => "screencast",
             Error::Db(_) => "db",
+            Error::Git(_) => "git",
         }
+    }
+}
+
+impl From<git2::Error> for Error {
+    fn from(err: git2::Error) -> Self {
+        Error::Git(err.to_string())
     }
 }
 
@@ -110,6 +119,7 @@ mod tests {
             Error::ScreencastUnsupported.code(),
             Error::Screencast(String::new()).code(),
             Error::Db(String::new()).code(),
+            Error::Git(String::new()).code(),
         ];
         let unique: std::collections::HashSet<_> = codes.iter().collect();
         assert_eq!(unique.len(), codes.len());
