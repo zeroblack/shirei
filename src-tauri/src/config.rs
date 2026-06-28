@@ -295,6 +295,43 @@ impl Default for EditorConfig {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum GitHistoryView {
+    #[default]
+    Diff,
+    Full,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct GitBlameConfig {
+    pub enabled: bool,
+    pub delay_ms: u32,
+}
+
+impl Default for GitBlameConfig {
+    fn default() -> Self {
+        GitBlameConfig {
+            enabled: false,
+            delay_ms: 380,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(default)]
+pub struct GitHistoryConfig {
+    pub default_view: GitHistoryView,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(default)]
+pub struct GitConfig {
+    pub blame: GitBlameConfig,
+    pub history: GitHistoryConfig,
+}
+
 fn default_tabs() -> Vec<String> {
     [
         "#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899",
@@ -842,6 +879,8 @@ pub struct Config {
     pub render: RenderConfig,
     pub session: SessionConfig,
     pub editor: EditorConfig,
+    #[serde(default)]
+    pub git: GitConfig,
     pub logging: LoggingConfig,
     pub limits: LimitsConfig,
     pub layout: LayoutConfig,
@@ -873,6 +912,7 @@ impl Default for Config {
             render: RenderConfig::default(),
             session: SessionConfig::default(),
             editor: EditorConfig::default(),
+            git: GitConfig::default(),
             logging: LoggingConfig::default(),
             limits: LimitsConfig::default(),
             layout: LayoutConfig::default(),
