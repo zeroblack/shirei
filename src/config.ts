@@ -168,6 +168,17 @@ export interface Config {
   session: SessionConfig;
   editor: {
     vim: boolean;
+    live_preview: boolean;
+    line_numbers: boolean;
+    active_line: boolean;
+    bracket_matching: boolean;
+    indent_guides: boolean;
+    folding: boolean;
+    close_brackets: boolean;
+    highlight_matches: boolean;
+    search_case: boolean;
+    search_regex: boolean;
+    search_whole_word: boolean;
     prose_width: string;
     wrap_prose: boolean;
     code_width: string;

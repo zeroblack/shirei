@@ -7,7 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-06-28
+
+### Added
+- Editor theming now derives from the active palette: syntax colors are built
+  from the terminal ANSI colors and clamped for contrast (APCA) so nothing turns
+  illegible on pure black or on light themes. Replaces the hardcoded one-dark
+  styling.
+- Code-editing craft: indentation guides, active line, bracket matching, drawn
+  selection, rectangular selection, and scroll-past-end.
+- Premium find/replace panel with an "N of M" match counter and case / regex /
+  whole-word toggles.
+- Code folding with a hover chevron and a summary placeholder ("N lines" or
+  "done/total tasks").
+- Inline Markdown live preview: headings, bold/italic/strikethrough, inline
+  code, links, callouts (with icons), interactive checkboxes, blockquotes,
+  fenced code blocks (language label + copy), rendered tables, images, and
+  rules. Raw syntax reveals on the cursor's line. Toggle in Settings.
+- A coherent block system shared by callouts, code blocks, quotes, and tables
+  (radius, hairline, tint, vertical rhythm) for an editorial, premium feel.
+- Markdown editing keys: bold/italic/link shortcuts and list/quote continuation
+  on Enter.
+- First-class Astro highlighting: TypeScript frontmatter, HTML template with
+  nested script (TS) and style (CSS), expressions, components, and directives.
+- New "Editor" section in Settings to toggle editor features, search defaults,
+  and prose/code width, applied live.
+
 ### Changed
+- Syntax colors aligned with modern (2026) conventions: types in cyan, escape
+  sequences and attribute values as strings, `this`/`self` italic.
 - Crisper terminal rendering: block elements are pixel-snapped and the WebGL
   glyph atlas uses nearest-neighbor sampling (no bilinear blur on edges).
 - Terminal selection and cursor colors now derive from the active theme

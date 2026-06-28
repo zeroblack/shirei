@@ -550,10 +550,9 @@ export class App {
       if (s instanceof PaneGrid) {
         s.applyLook(family, c.font.size, c.render, c.theme.terminal);
       } else if (EditorSession !== null && s instanceof EditorSession) {
-        s.applyLook(family, c.font.size, c.theme.editor.bg);
-        s.setVim(c.editor.vim);
-        s.setReading(c.editor);
-      } else {
+        s.applyLook(family, c.font.size, c.theme.terminal, c.theme.preset);
+        s.applyEditorConfig(c.editor);
+      } else if (s instanceof ImageSession || s instanceof MediaSession) {
         s.setBg(c.theme.editor.bg);
       }
     }
@@ -919,9 +918,9 @@ export class App {
       session = new ES(id, path, container, {
         fontFamily: fontStack(this.config.font.family, this.config.fonts),
         fontSize: this.config.font.size,
-        bg: this.config.theme.editor.bg,
-        vim: this.config.editor.vim,
-        reading: this.config.editor,
+        palette: this.config.theme.terminal,
+        preset: this.config.theme.preset,
+        editor: this.config.editor,
       });
       session.onDirtyChange = (dirty) => this.setDirty(id, dirty);
     }
