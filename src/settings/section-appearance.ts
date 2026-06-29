@@ -17,7 +17,6 @@ import {
   numField,
   selectField,
   swatchRow,
-  textField,
 } from "./widgets";
 
 const ansiName = (key: string): string =>
@@ -290,51 +289,6 @@ function buildAppearance(config: Config, save: () => void): HTMLElement {
           field(
             t("settings.appearance.field.ansiBright"),
             ansiRow(ANSI_BRIGHT_KEYS),
-          ),
-        ]),
-    },
-    {
-      id: "editor",
-      label: t("settings.appearance.tab.editor"),
-      render: () =>
-        fieldsGrid([
-          colorField(
-            t("settings.appearance.field.editorBg"),
-            config.theme.editor,
-            "bg",
-            save,
-          ),
-          boolField(
-            t("settings.appearance.field.vim"),
-            config.editor,
-            "vim",
-            save,
-          ),
-          boolField(
-            t("settings.appearance.field.wrapProse"),
-            config.editor,
-            "wrap_prose",
-            save,
-          ),
-          textField(
-            t("settings.appearance.field.proseWidth"),
-            config.editor,
-            "prose_width",
-            save,
-            "min(90%, 80ch)",
-          ),
-          boolField(
-            t("settings.appearance.field.wrapCode"),
-            config.editor,
-            "wrap_code",
-            save,
-          ),
-          textField(
-            t("settings.appearance.field.codeWidth"),
-            config.editor,
-            "code_width",
-            save,
-            t("settings.appearance.field.codeWidthPlaceholder"),
           ),
         ]),
     },

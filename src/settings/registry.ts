@@ -1,6 +1,8 @@
 export const SECTION_LAYOUT = [
   { id: "home", group: "workspace" },
   { id: "appearance", group: "workspace" },
+  { id: "editor", group: "workspace" },
+  { id: "git", group: "workspace" },
   { id: "projects", group: "workspace" },
   { id: "shortcuts", group: "workspace" },
   { id: "terminal", group: "terminal" },

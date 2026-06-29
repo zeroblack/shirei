@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { createOverlay } from "./overlay";
 
 export function promptText(
@@ -13,6 +14,7 @@ export function promptText(
       className: "prompt",
       label: title,
       onDismiss: () => done(null),
+      closeDurationMs: 130,
     });
 
     const label = document.createElement("div");
@@ -31,9 +33,25 @@ export function promptText(
       }
     });
 
-    box.append(label, input);
+    box.append(label, input, promptFooter());
     document.body.appendChild(overlay);
     input.focus();
     input.select();
   });
+}
+
+function promptFooter(): HTMLElement {
+  const footer = document.createElement("div");
+  footer.className = "prompt-footer";
+  const add = (key: string, text: string): void => {
+    const item = document.createElement("span");
+    item.className = "prompt-hint";
+    const kbd = document.createElement("kbd");
+    kbd.textContent = key;
+    item.append(kbd, document.createTextNode(text));
+    footer.appendChild(item);
+  };
+  add("↵", t("ui.prompt.hintConfirm"));
+  add("esc", t("ui.prompt.hintCancel"));
+  return footer;
 }

@@ -18,11 +18,43 @@ export const writeFile = (
   knownMtime: number | null,
 ) => invoke<number>("fs_write_file", { path, data, knownMtime });
 
+export const createFile = (path: string) =>
+  invoke<void>("fs_create_file", { path });
+
 export const indexDir = (root: string) =>
   invoke<FileIndex>("fs_index", { root });
 
 export const revealInFinder = (path: string) =>
   invoke<void>("reveal_in_finder", { path });
+
+export const gitFileHead = (path: string) =>
+  invoke<string | null>("git_file_head", { path });
+
+export interface GitCommit {
+  sha: string;
+  shortSha: string;
+  author: string;
+  date: number;
+  summary: string;
+}
+
+export interface GitBlameLine {
+  line: number;
+  sha: string;
+  shortSha: string;
+  author: string;
+  date: number;
+  summary: string;
+}
+
+export const gitFileHistory = (path: string) =>
+  invoke<GitCommit[]>("git_file_history", { path });
+
+export const gitFileAt = (path: string, sha: string) =>
+  invoke<string | null>("git_file_at", { path, sha });
+
+export const gitBlame = (path: string) =>
+  invoke<GitBlameLine[]>("git_blame", { path });
 
 export const ptyCwd = (id: string) =>
   invoke<string | null>("session_cwd", { id });

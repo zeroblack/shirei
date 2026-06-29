@@ -1,6 +1,8 @@
-import { readDir, revealInFinder } from "./commands";
+import { createFile, readDir, revealInFinder } from "./commands";
 import { t } from "./i18n";
-import { CHEVRON, fileIcon } from "./icons";
+import { CHEVRON, fileIcon, NEW_FILE } from "./icons";
+import { promptText } from "./prompt";
+import { showToast } from "./toast";
 import type { DirEntry } from "./types";
 
 export interface FileTreeCallbacks {
@@ -22,6 +24,7 @@ export class FileTree {
   private readonly cb: FileTreeCallbacks;
   private readonly header: HTMLElement;
   private readonly focusHintEl: HTMLElement;
+  private readonly newFileBtn: HTMLButtonElement;
   private readonly list: HTMLElement;
   private rootPath = "";
   private home = "";
@@ -40,6 +43,13 @@ export class FileTree {
     this.focusHintEl = document.createElement("kbd");
     this.focusHintEl.className = "tree-focus-hint";
     this.focusHintEl.style.display = "none";
+    this.newFileBtn = document.createElement("button");
+    this.newFileBtn.type = "button";
+    this.newFileBtn.className = "tree-new-file";
+    this.newFileBtn.title = t("ui.filetree.newFile");
+    this.newFileBtn.setAttribute("aria-label", t("ui.filetree.newFile"));
+    this.newFileBtn.innerHTML = NEW_FILE;
+    this.newFileBtn.addEventListener("click", () => void this.newFile());
     this.list = document.createElement("div");
     this.list.className = "tree-list";
     this.root.append(this.header, this.list);
@@ -182,7 +192,22 @@ export class FileTree {
     name.className = "tree-header-name";
     name.textContent = this.shortPath(path);
     this.header.title = this.fullDisplay(path);
-    this.header.replaceChildren(icon, name, this.focusHintEl);
+    this.header.replaceChildren(icon, name, this.newFileBtn, this.focusHintEl);
+  }
+
+  private async newFile(): Promise<void> {
+    if (!this.rootPath) return;
+    const name = await promptText(t("ui.filetree.newFilePrompt"));
+    if (!name) return;
+    const path = `${this.rootPath.replace(/\/+$/, "")}/${name}`;
+    try {
+      await createFile(path);
+    } catch {
+      showToast(t("ui.filetree.createFailed"));
+      return;
+    }
+    await this.refresh();
+    this.cb.onOpenFile(path);
   }
 
   setFocusHint(stroke: string): void {

@@ -251,6 +251,17 @@ impl Default for EditorTheme {
 #[serde(default)]
 pub struct EditorConfig {
     pub vim: bool,
+    pub live_preview: bool,
+    pub line_numbers: bool,
+    pub active_line: bool,
+    pub bracket_matching: bool,
+    pub indent_guides: bool,
+    pub folding: bool,
+    pub close_brackets: bool,
+    pub highlight_matches: bool,
+    pub search_case: bool,
+    pub search_regex: bool,
+    pub search_whole_word: bool,
     // Reading width caps long lines for legibility. Prose (markdown/txt) wraps to
     // a measure; code keeps no-wrap horizontal scroll. Values are CSS max-width
     // lengths, so they may be fluid: the default `min(90%, 80ch)` grows with the
@@ -265,12 +276,61 @@ impl Default for EditorConfig {
     fn default() -> Self {
         EditorConfig {
             vim: false,
+            live_preview: true,
+            line_numbers: true,
+            active_line: true,
+            bracket_matching: true,
+            indent_guides: true,
+            folding: true,
+            close_brackets: true,
+            highlight_matches: true,
+            search_case: false,
+            search_regex: false,
+            search_whole_word: false,
             prose_width: "min(90%, 80ch)".into(),
             wrap_prose: true,
             code_width: String::new(),
             wrap_code: false,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum GitHistoryView {
+    #[default]
+    Diff,
+    Working,
+    Full,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct GitBlameConfig {
+    pub enabled: bool,
+    pub delay_ms: u32,
+}
+
+impl Default for GitBlameConfig {
+    fn default() -> Self {
+        GitBlameConfig {
+            enabled: false,
+            delay_ms: 380,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(default)]
+pub struct GitHistoryConfig {
+    pub default_view: GitHistoryView,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(default)]
+pub struct GitConfig {
+    pub blame: GitBlameConfig,
+    pub history: GitHistoryConfig,
 }
 
 fn default_tabs() -> Vec<String> {
@@ -820,6 +880,8 @@ pub struct Config {
     pub render: RenderConfig,
     pub session: SessionConfig,
     pub editor: EditorConfig,
+    #[serde(default)]
+    pub git: GitConfig,
     pub logging: LoggingConfig,
     pub limits: LimitsConfig,
     pub layout: LayoutConfig,
@@ -851,6 +913,7 @@ impl Default for Config {
             render: RenderConfig::default(),
             session: SessionConfig::default(),
             editor: EditorConfig::default(),
+            git: GitConfig::default(),
             logging: LoggingConfig::default(),
             limits: LimitsConfig::default(),
             layout: LayoutConfig::default(),
