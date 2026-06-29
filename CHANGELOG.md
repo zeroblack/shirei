@@ -7,9 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.12.2] - 2026-06-28
+## [0.13.0] - 2026-06-28
 
 ### Added
+- Graphical merge-conflict resolver in the editor: current / base / incoming
+  blocks with accept current/incoming/both, a compare toggle that word-diffs the
+  two sides, and a parser that keeps syntax highlighting alive across live
+  conflict markers.
+- Inline diff against the committed version (HEAD): palette-themed additions and
+  deletions with a +/− gutter, per-hunk revert, and localized collapsed regions.
+- File history viewer: a keyboard-first overlay listing the commits that touched
+  a file, with a themed read-only diff or full-file view per commit, resizable.
+- Inline git blame: role-colored end-of-line annotations collapsed per commit
+  run, with a commit hover-card. Off by default; configurable.
+- Editor buttons for history, diff, and blame, and a Git settings section
+  (inline blame on open, hover delay, default history view).
+- Create a new file from the file-tree header, backed by a clobber-safe command.
 - Editor theming now derives from the active palette: syntax colors are built
   from the terminal ANSI colors and clamped for contrast (APCA) so nothing turns
   illegible on pure black or on light themes. Replaces the hardcoded one-dark
