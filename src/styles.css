@@ -490,12 +490,34 @@ body {
   text-overflow: ellipsis;
 }
 
-.tree-focus-hint {
+.tree-new-file {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.tree-new-file:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.tree-focus-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -525,7 +547,7 @@ body {
   color: var(--text-muted);
   font: var(--text-sm) / 1 var(--font-ui);
   white-space: nowrap;
-  cursor: default;
+  cursor: pointer;
   user-select: none;
 }
 
@@ -625,30 +647,30 @@ body {
   height: 26px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--surface-3) 85%, transparent);
-  color: var(--fg-dim);
+  background: color-mix(in srgb, var(--surface-3) 90%, transparent);
+  color: var(--fg);
   cursor: pointer;
   opacity: 0;
   transition:
     opacity 130ms ease,
-    color 130ms ease,
-    background 130ms ease;
+    background 130ms ease,
+    border-color 130ms ease;
 }
 
 .editor-host:hover .editor-chrome-btn {
-  opacity: 0.6;
+  opacity: 1;
 }
 
 .editor-chrome-btn:hover {
   opacity: 1;
-  color: var(--fg);
   background: var(--surface-3);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .editor-chrome-btn.active {
   opacity: 1;
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .cm-blame-card {
@@ -1497,38 +1519,110 @@ body {
   justify-content: center;
   align-items: flex-start;
   padding-top: 22vh;
+  background: rgba(0, 0, 0, 0);
+  transition: background var(--modal-in, 200ms) var(--ease-out, ease);
+}
+
+.prompt[data-mounted="true"] {
   background: rgba(0, 0, 0, 0.5);
 }
 
+.prompt[data-closing] {
+  background: rgba(0, 0, 0, 0);
+}
+
 .prompt-box {
-  width: min(440px, 80vw);
-  padding: 16px;
+  width: min(440px, 84vw);
   background: var(--surface-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--elev-shadow);
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    var(--elev-shadow);
+  transform-origin: top center;
+  opacity: 0;
+  transform: scale(0.99) translateY(-6px);
+  transition:
+    opacity var(--modal-in, 200ms) var(--ease-out, ease),
+    transform var(--modal-in, 200ms) var(--ease-out, ease);
+}
+
+.prompt[data-mounted="true"] .prompt-box {
+  opacity: 1;
+  transform: none;
+}
+
+.prompt[data-closing] .prompt-box {
+  opacity: 0;
+  transform: scale(0.99) translateY(-6px);
+  transition:
+    opacity var(--modal-out, 130ms) var(--ease-out, ease),
+    transform var(--modal-out, 130ms) var(--ease-out, ease);
+}
+
+@starting-style {
+  .prompt-box {
+    opacity: 0;
+    transform: scale(0.99) translateY(-6px);
+  }
 }
 
 .prompt-title {
-  margin-bottom: 10px;
-  color: var(--fg-dim);
-  font: var(--text-xs) var(--font-ui);
+  padding: 14px 16px 9px;
+  color: var(--text-muted);
+  font: var(--type-label);
+  letter-spacing: var(--tracking-snug);
 }
 
 .prompt-input {
   width: 100%;
-  padding: 10px 12px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  padding: 0 16px 13px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
   color: var(--fg);
-  font: var(--text-base) var(--font-ui);
+  font: var(--type-body);
   outline: none;
+  transition: border-color 120ms var(--ease-out, ease);
+}
+
+.prompt-input::placeholder {
+  color: var(--fg-dim);
 }
 
 .prompt-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
+  border-bottom-color: var(--border-strong);
+}
+
+.prompt-footer {
+  display: flex;
+  gap: 14px;
+  padding: 8px 16px;
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
+.prompt-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.prompt-footer kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface-1);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
 }
 
 .confirm {

@@ -281,6 +281,7 @@ pub fn run() {
             fs::fs_read_file,
             fs::fs_image_meta,
             fs::fs_write_file,
+            fs::fs_create_file,
             fs::fs_index,
             git::git_file_head,
             git::git_file_history,

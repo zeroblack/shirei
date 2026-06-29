@@ -189,6 +189,18 @@ pub fn fs_write_file(
     write_atomic(Path::new(&path), data.as_bytes()).map_err(Error::Io)
 }
 
+/// Creates an empty file, failing if one already exists at `path` so a new file
+/// never clobbers existing content.
+#[tauri::command]
+pub fn fs_create_file(path: String) -> Result<()> {
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map(|_| ())
+        .map_err(Error::Io)
+}
+
 #[tauri::command]
 pub fn fs_index(root: String, config: State<'_, ConfigManager>) -> Result<FileIndex> {
     let root_path = Path::new(&root);

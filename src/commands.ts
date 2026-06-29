@@ -18,6 +18,9 @@ export const writeFile = (
   knownMtime: number | null,
 ) => invoke<number>("fs_write_file", { path, data, knownMtime });
 
+export const createFile = (path: string) =>
+  invoke<void>("fs_create_file", { path });
+
 export const indexDir = (root: string) =>
   invoke<FileIndex>("fs_index", { root });
 

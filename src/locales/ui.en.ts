@@ -45,6 +45,7 @@ export const uiEn = {
   "ui.editor.fold.lines": "{n} lines",
   "ui.editor.fold.tasks": "{done}/{total} tasks",
   "ui.editor.diff.none": "No committed version to compare against.",
+  "ui.editor.diff.toggle": "Toggle diff against HEAD",
   "ui.editor.diff.revert": "Revert hunk",
   "ui.editor.diff.revertHint": "Restore this hunk to its committed version",
   "ui.editor.diff.collapsed": "$ unchanged lines",
@@ -130,6 +131,12 @@ export const uiEn = {
 
   "ui.filetree.truncated": "… folder truncated (too many files)",
   "ui.filetree.openInFinder": "Open in Finder",
+  "ui.filetree.newFile": "New file",
+  "ui.filetree.newFilePrompt": "New file name",
+  "ui.filetree.createFailed":
+    "Couldn't create the file (it may already exist).",
+  "ui.prompt.hintConfirm": "confirm",
+  "ui.prompt.hintCancel": "cancel",
 
   "ui.screencast.noFocusedPane": "No focused pane",
   "ui.screencast.recordingNoIndicator":

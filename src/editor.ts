@@ -43,7 +43,7 @@ import { searchPanel } from "./editor-search";
 import { editorIndentMarkers, editorThemeFromPalette } from "./editor-theme";
 import { errorCode, errorMessage } from "./errors";
 import { t } from "./i18n";
-import { BLAME, CHEVRON, HISTORY, REVERT } from "./icons";
+import { BLAME, CHEVRON, DIFF, HISTORY, REVERT } from "./icons";
 import { basename, parentDir } from "./path";
 import { showToast } from "./toast";
 
@@ -214,6 +214,7 @@ export class EditorSession {
   private gitCfg: GitConfig;
   private diffOn = false;
   private blameOn = false;
+  private diffBtn: HTMLButtonElement | null = null;
   private blameBtn: HTMLButtonElement | null = null;
   onDirtyChange?: (dirty: boolean) => void;
   onHistory?: () => void;
@@ -260,6 +261,7 @@ export class EditorSession {
     if (!this.view) return;
     if (this.diffOn) {
       this.diffOn = false;
+      this.diffBtn?.classList.remove("active");
       this.view.dispatch({ effects: diffConf.reconfigure([]) });
       return;
     }
@@ -269,6 +271,7 @@ export class EditorSession {
       return;
     }
     this.diffOn = true;
+    this.diffBtn?.classList.add("active");
     this.view.dispatch({
       effects: diffConf.reconfigure([
         unifiedMergeView({
@@ -354,10 +357,15 @@ export class EditorSession {
     const history = this.chromeButton(HISTORY, t("cmd.git.history"), () =>
       this.onHistory?.(),
     );
+    this.diffBtn = this.chromeButton(
+      DIFF,
+      t("ui.editor.diff.toggle"),
+      () => void this.toggleDiff(),
+    );
     this.blameBtn = this.chromeButton(BLAME, t("cmd.git.blame-toggle"), () =>
       this.toggleBlame(),
     );
-    group.append(history, this.blameBtn);
+    group.append(history, this.diffBtn, this.blameBtn);
     return group;
   }
 
