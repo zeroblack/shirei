@@ -73,7 +73,12 @@ class ConflictTolerantParser extends LezerParser {
     fragments: readonly TreeFragment[],
     ranges: readonly { from: number; to: number }[],
   ): PartialParse {
-    const blanks = markerLineRanges(input.read(0, input.length));
+    // Scan only the ranges this parse pass covers, not the whole document, so a
+    // marker-free file keeps incremental parsing cheap on every keystroke.
+    const blanks: [number, number][] = [];
+    for (const { from, to } of ranges)
+      for (const [a, b] of markerLineRanges(input.read(from, to)))
+        blanks.push([a + from, b + from]);
     const wrapped = blanks.length ? new BlankingInput(input, blanks) : input;
     return this.inner.createParse(wrapped, fragments, ranges);
   }
@@ -123,7 +128,7 @@ const compareField = StateField.define<Set<number>>({
   },
 });
 
-interface Block {
+export interface Block {
   start: number;
   end: number;
   index: number;
@@ -149,7 +154,7 @@ function lineSpan(
   return [doc.line(fromLine).from, doc.line(toLine).to];
 }
 
-function parseConflicts(doc: Text): Block[] {
+export function parseConflicts(doc: Text): Block[] {
   const blocks: Block[] = [];
   const n = doc.lines;
   let i = 1;
@@ -405,9 +410,10 @@ export function conflictResolver(): Extension {
           this.decorations = build(view);
         }
         update(u: ViewUpdate): void {
+          // Conflict decorations span the whole doc, not the viewport, so they
+          // only change on edits or a compare toggle — never on scroll.
           if (
             u.docChanged ||
-            u.viewportChanged ||
             u.startState.field(compareField, false) !==
               u.state.field(compareField, false)
           )

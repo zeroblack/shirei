@@ -53,6 +53,7 @@ export class GitHistory {
   private mode: "diff" | "full" = "diff";
   private path = "";
   private working = "";
+  private workingOk = true;
   private theme: Extension = [];
   private lang: Extension = [];
   private size: { w: number; h: number } | null = null;
@@ -69,12 +70,15 @@ export class GitHistory {
       look.fontFamily,
     );
     this.lang = (await languageFor(path)) ?? [];
-    const [history, file] = await Promise.all([
+    const [history, content] = await Promise.all([
       gitFileHistory(path),
-      readFile(path).catch(() => ({ content: "", mtime: 0 })),
+      readFile(path)
+        .then((f) => f.content)
+        .catch(() => null),
     ]);
     this.commits = history;
-    this.working = file.content;
+    this.workingOk = content !== null;
+    this.working = content ?? "";
     this.selected = 0;
     this.render();
     if (this.commits.length) void this.showCommit(0);
@@ -196,14 +200,20 @@ export class GitHistory {
     const commit = this.commits[index];
     if (!commit) return;
     this.renderBar(commit);
+    const cached = this.cache.get(commit.sha);
+    if (cached !== undefined) {
+      this.applyContent(cached);
+      return;
+    }
     this.setDetailMessage(t("ui.git.history.loading"));
     const content = await this.contentAt(commit.sha);
     if (!this.overlay || this.selected !== index) return;
-    if (content == null) {
-      this.setDetailMessage(t("ui.git.history.binary"));
-      return;
-    }
-    this.mountDetail(content);
+    this.applyContent(content);
+  }
+
+  private applyContent(content: string | null): void {
+    if (content == null) this.setDetailMessage(t("ui.git.history.binary"));
+    else this.mountDetail(content);
   }
 
   private renderBar(commit: GitCommit): void {
@@ -271,29 +281,38 @@ export class GitHistory {
     return content;
   }
 
-  private mountDetail(content: string): void {
-    this.detailView?.destroy();
-    this.detailMain.replaceChildren();
+  private detailState(content: string): EditorState {
     const base: Extension[] = [
       EditorView.editable.of(false),
       EditorState.readOnly.of(true),
       this.theme,
       this.lang,
     ];
-    const state =
-      this.mode === "diff"
-        ? EditorState.create({
-            doc: this.working,
-            extensions: [
-              ...base,
-              unifiedMergeView({
-                original: content,
-                mergeControls: hiddenControl,
-                collapseUnchanged: { margin: 3, minSize: 6 },
-              }),
-            ],
-          })
-        : EditorState.create({ doc: content, extensions: base });
+    // Without a readable working copy a diff would render as an all-deleted
+    // file, so fall back to showing the committed version as-is.
+    if (this.mode !== "diff" || !this.workingOk) {
+      return EditorState.create({ doc: content, extensions: base });
+    }
+    return EditorState.create({
+      doc: this.working,
+      extensions: [
+        ...base,
+        unifiedMergeView({
+          original: content,
+          mergeControls: hiddenControl,
+          collapseUnchanged: { margin: 3, minSize: 6 },
+        }),
+      ],
+    });
+  }
+
+  private mountDetail(content: string): void {
+    const state = this.detailState(content);
+    if (this.detailView) {
+      this.detailView.setState(state);
+      return;
+    }
+    this.detailMain.replaceChildren();
     this.detailView = new EditorView({ state, parent: this.detailMain });
   }
 

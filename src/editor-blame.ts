@@ -71,7 +71,8 @@ class BlameWidget extends WidgetType {
     return (
       other.info.sha === this.info.sha &&
       other.info.line === this.info.line &&
-      other.active === this.active
+      other.active === this.active &&
+      other.delayMs === this.delayMs
     );
   }
   toDOM(): HTMLElement {
@@ -94,6 +95,7 @@ class BlameWidget extends WidgetType {
       field("cm-blame-sha", this.info.shortSha),
     );
     el.addEventListener("mouseenter", () => {
+      if (cardTimer) clearTimeout(cardTimer);
       cardTimer = setTimeout(() => showCard(el, this.info), this.delayMs);
     });
     el.addEventListener("mouseleave", hideCard);
@@ -117,12 +119,19 @@ export function blameAnnotations(
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
+      cursorLine = -1;
       constructor(view: EditorView) {
+        this.cursorLine = view.state.doc.lineAt(
+          view.state.selection.main.head,
+        ).number;
         this.decorations = this.build(view);
       }
       update(u: ViewUpdate): void {
-        if (u.docChanged || u.viewportChanged || u.selectionSet)
+        const line = u.state.doc.lineAt(u.state.selection.main.head).number;
+        if (u.docChanged || u.viewportChanged || line !== this.cursorLine) {
+          this.cursorLine = line;
           this.decorations = this.build(u.view);
+        }
       }
       destroy(): void {
         hideCard();
