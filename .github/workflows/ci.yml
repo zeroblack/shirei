@@ -32,7 +32,12 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
-          workspaces: src-tauri
+          workspaces: |
+            src-tauri
+            mux
+      # tauri-build validates the externalBin sidecar at compile time, so the
+      # daemon must be staged before clippy can check the Tauri crate.
+      - run: node scripts/build-mux.mjs
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 

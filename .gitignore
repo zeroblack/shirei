@@ -15,6 +15,7 @@ dist-ssr
 # Build artifacts
 src-tauri/target/
 mux/target/
+src-tauri/binaries/
 *.dmg
 
 # Environment

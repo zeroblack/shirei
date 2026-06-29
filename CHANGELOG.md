@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-06-29
+
+### Fixed
+- Keep-alive sessions now work in release builds. The session daemon ships with
+  the app instead of being missing, so panes no longer open black when the
+  feature is enabled. If the daemon can't be reached, panes fall back to
+  in-process terminals instead of hanging.
+
 ## [0.13.1] - 2026-06-29
 
 ### Changed

@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Shirei",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "identifier": "dev.dioni.shirei",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm build:mux && pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm build:mux && pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -47,6 +47,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": ["binaries/shirei-mux"],
     "copyright": "© 2026 Dionisio Fernández. MIT License.",
     "icon": [
       "icons/32x32.png",
