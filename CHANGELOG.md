@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-06-29
+
+### Changed
+- File history now defaults to showing each commit's own change — the diff
+  against the previous version of the file, matching `git log -p` — instead of
+  the diff against the working tree. Adds a "Working tree" view for the old
+  behavior and a "File" view, cycled with `d` and selectable in Settings.
+
 ## [0.13.0] - 2026-06-28
 
 ### Added
