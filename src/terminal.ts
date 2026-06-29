@@ -18,6 +18,13 @@ import { webglPool } from "./webgl-pool";
 
 const KITTY_PREFIXES = ["?", ">", "<", "="];
 
+// Best-effort IPC for high-frequency writes/resizes. A rejection here is a
+// benign transient (a pane mid-transition, a daemon momentarily unreachable);
+// swallowing it keeps those from surfacing as unhandled promise rejections.
+const fireForget = (cmd: string, args: Record<string, unknown>): void => {
+  void invoke(cmd, args).catch(() => {});
+};
+
 // Focus in/out reports the terminal emits on its own under DECSET 1004, not
 // user input. They must still reach the PTY, but counting them as activity
 // would reset a tab's idle age every time you merely pass through it.
@@ -284,12 +291,12 @@ export class TerminalSession {
       return;
     }
     if (this.command) {
-      void invoke("pty_write", { id: this.id, data: `${this.command}\n` });
+      fireForget("pty_write", { id: this.id, data: `${this.command}\n` });
     }
   }
 
   private writeInput(data: string): void {
-    void invoke(this.useDaemon ? "mux_write" : "pty_write", {
+    fireForget(this.useDaemon ? "mux_write" : "pty_write", {
       id: this.id,
       data,
     });
@@ -541,7 +548,7 @@ export class TerminalSession {
 
   fitAndResize(): void {
     this.fit.fit();
-    void invoke(this.useDaemon ? "mux_resize" : "pty_resize", {
+    fireForget(this.useDaemon ? "mux_resize" : "pty_resize", {
       id: this.id,
       cols: this.term.cols,
       rows: this.term.rows,

@@ -20,6 +20,7 @@ use crate::config::ConfigManager;
 use crate::error::{Error, Result};
 
 const PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
+const SPAWN_TIMEOUT: Duration = Duration::from_millis(2000);
 const DAEMON_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const DAEMON_CONNECT_RETRY: Duration = Duration::from_millis(50);
 const MAX_PROBE_WAITERS: usize = 64;
@@ -98,6 +99,7 @@ struct Conn {
     write: Mutex<UnixStream>,
     routes: Mutex<HashMap<String, Channel<Response>>>,
     probe_waiters: Mutex<HashMap<String, VecDeque<Sender<ProbeReply>>>>,
+    spawn_waiters: Mutex<HashMap<String, VecDeque<Sender<Option<u32>>>>>,
 }
 
 #[derive(Default)]
@@ -122,6 +124,7 @@ impl MuxClient {
             write: Mutex::new(write),
             routes: Mutex::new(HashMap::new()),
             probe_waiters: Mutex::new(HashMap::new()),
+            spawn_waiters: Mutex::new(HashMap::new()),
         });
         spawn_reader(read, Arc::clone(&conn), app.clone());
         *guard = Some(Arc::clone(&conn));
@@ -196,7 +199,15 @@ fn spawn_reader(mut read: UnixStream, conn: Arc<Conn>, app: AppHandle) {
                         let _ = waiter.send((cwd, command));
                     }
                 }
-                ServerMsg::Spawned { .. } | ServerMsg::Sessions { .. } => {}
+                ServerMsg::Spawned { id, pid } => {
+                    let mut waiters = conn.spawn_waiters.lock_ignore_poison();
+                    if let Some(queue) = waiters.get_mut(&id)
+                        && let Some(waiter) = queue.pop_front()
+                    {
+                        let _ = waiter.send(pid);
+                    }
+                }
+                ServerMsg::Sessions { .. } => {}
             }
         }
         app.state::<MuxClient>().invalidate(&conn);
@@ -214,11 +225,17 @@ fn send(conn: &Arc<Conn>, msg: &ClientMsg) -> Result<()> {
 // The flat signature mirrors the frontend invoke payload (one-word parameter
 // names per project convention); grouping them into a struct would only move
 // the noise to the JS side.
+//
+// Returning before the daemon confirms the spawn would leave a black, unrouted
+// pane whenever the socket connects but the daemon can't serve it (a stale
+// socket, a daemon that dies mid-handshake, a hung daemon). Blocking on the
+// `Spawned` ack lets a failure surface as `Err` so the frontend degrades to an
+// in-process PTY instead. The wait runs on the blocking pool so the IPC thread
+// stays free for other panes' keystrokes while a slow daemon answers.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
-pub fn mux_spawn(
+pub async fn mux_spawn(
     app: AppHandle,
-    client: State<'_, MuxClient>,
     id: String,
     cols: u16,
     rows: u16,
@@ -226,25 +243,51 @@ pub fn mux_spawn(
     command: Option<String>,
     on_data: Channel<Response>,
 ) -> Result<()> {
-    let conn = client.ensure(&app)?;
-    // The route must exist before the daemon can emit the first output frame.
-    conn.routes.lock_ignore_poison().insert(id.clone(), on_data);
-    if let Err(err) = send(
-        &conn,
-        &ClientMsg::Spawn {
-            id: id.clone(),
-            cols,
-            rows,
-            cwd,
-            command,
-        },
-    ) {
-        // The daemon never learned about this session: drop the orphaned route
-        // so its Channel (and the webview callback it pins) can be collected.
-        conn.routes.lock_ignore_poison().remove(&id);
-        return Err(err);
-    }
-    Ok(())
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = app.state::<MuxClient>().ensure(&app)?;
+        let (tx, rx) = channel::<Option<u32>>();
+        {
+            let mut waiters = conn.spawn_waiters.lock_ignore_poison();
+            let queue = waiters.entry(id.clone()).or_default();
+            while queue.len() >= MAX_PROBE_WAITERS {
+                queue.pop_front();
+            }
+            queue.push_back(tx);
+        }
+        // The route must exist before the daemon can emit the first output frame.
+        conn.routes.lock_ignore_poison().insert(id.clone(), on_data);
+        if let Err(err) = send(
+            &conn,
+            &ClientMsg::Spawn {
+                id: id.clone(),
+                cols,
+                rows,
+                cwd,
+                command,
+            },
+        ) {
+            // The daemon never learned about this session: drop the orphaned
+            // route so its Channel (and the webview callback it pins) can be
+            // collected, and retract the pending ack waiter.
+            conn.routes.lock_ignore_poison().remove(&id);
+            conn.spawn_waiters
+                .lock_ignore_poison()
+                .get_mut(&id)
+                .and_then(VecDeque::pop_back);
+            return Err(err);
+        }
+        match rx.recv_timeout(SPAWN_TIMEOUT) {
+            Ok(Some(_pid)) => Ok(()),
+            _ => {
+                conn.routes.lock_ignore_poison().remove(&id);
+                Err(Error::Pty(
+                    "the shirei-mux daemon did not confirm the session".into(),
+                ))
+            }
+        }
+    })
+    .await
+    .map_err(|e| Error::Os(e.to_string()))?
 }
 
 #[tauri::command]

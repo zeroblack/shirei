@@ -1,6 +1,6 @@
 [package]
 name = "shirei"
-version = "0.13.1"
+version = "0.13.2"
 description = "CLI-first terminal cockpit with renameable, color-coded tabs"
 authors = ["Dionisio Fernández"]
 edition = "2024"
