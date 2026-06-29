@@ -20,6 +20,21 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.editor.desc": "Cómo se comportan el código y la prosa al escribir.",
   "settings.editor.search":
     "editor código prosa vim plegado indentación brackets búsqueda líneas",
+  "settings.git.label": "Git",
+  "settings.git.title": "Git",
+  "settings.git.desc": "Diff, historial y blame dentro del editor.",
+  "settings.git.search": "git blame historial diff commit autor anotar gutter",
+  "settings.git.blameEnabled": "Blame en línea al abrir",
+  "settings.git.blameEnabledDesc":
+    "Muestra la autoría por línea al abrir un archivo. Se alterna cuando quieras con el botón del editor o su atajo.",
+  "settings.git.blameDelay": "Retardo del hover de blame (ms)",
+  "settings.git.blameDelayDesc":
+    "Cuánto hay que posar el cursor sobre una anotación antes de que aparezca la tarjeta del commit.",
+  "settings.git.historyView": "El historial abre en",
+  "settings.git.historyViewDesc":
+    "Si el panel de historial parte en el diff contra el árbol de trabajo o en el archivo completo.",
+  "settings.git.historyViewDiff": "Diff",
+  "settings.git.historyViewFull": "Archivo",
   "settings.editor.group.markdown": "Markdown",
   "settings.editor.group.editing": "Edición",
   "settings.editor.group.prose": "Prosa y código",

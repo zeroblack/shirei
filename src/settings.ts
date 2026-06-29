@@ -13,6 +13,7 @@ import { aboutSection } from "./settings/section-about";
 import { advancedSection } from "./settings/section-advanced";
 import { appearanceSection } from "./settings/section-appearance";
 import { editorSection } from "./settings/section-editor";
+import { gitSection } from "./settings/section-git";
 import { homeSection } from "./settings/section-home";
 import { performanceSection } from "./settings/section-performance";
 import { projectsSection } from "./settings/section-projects";
@@ -27,6 +28,7 @@ const BY_ID: Record<SectionId, SettingsSection> = {
   home: homeSection,
   appearance: appearanceSection,
   editor: editorSection,
+  git: gitSection,
   projects: projectsSection,
   shortcuts: shortcutsSection,
   terminal: terminalSection,

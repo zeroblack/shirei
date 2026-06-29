@@ -18,6 +18,21 @@ export const settingsEn = {
   "settings.editor.desc": "How code and prose behave while you write.",
   "settings.editor.search":
     "editor code prose vim fold indent bracket search line numbers",
+  "settings.git.label": "Git",
+  "settings.git.title": "Git",
+  "settings.git.desc": "Diff, history, and blame inside the editor.",
+  "settings.git.search": "git blame history diff commit author annotate gutter",
+  "settings.git.blameEnabled": "Inline blame on open",
+  "settings.git.blameEnabledDesc":
+    "Show per-line authorship when a file opens. Toggle anytime with the editor button or its shortcut.",
+  "settings.git.blameDelay": "Blame hover delay (ms)",
+  "settings.git.blameDelayDesc":
+    "How long to hover a blame annotation before its commit card appears.",
+  "settings.git.historyView": "History opens in",
+  "settings.git.historyViewDesc":
+    "Whether the file history panel starts on the diff against the working tree or the full file.",
+  "settings.git.historyViewDiff": "Diff",
+  "settings.git.historyViewFull": "File",
   "settings.editor.group.markdown": "Markdown",
   "settings.editor.group.editing": "Editing",
   "settings.editor.group.prose": "Prose & code",
