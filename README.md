@@ -59,11 +59,38 @@ through Shirei, and no lock-in.
 
 - **File tree (`Cmd+B`).** The active terminal's directory, with type icons, fully
   keyboard-navigable.
-- **Open files in tabs.** A light editor (CodeMirror — syntax highlighting, save with
-  `Cmd+S`, a readable line width for prose), an image viewer, and a video/audio player.
-  File tabs reopen on restart.
+- **Open files in tabs.** The editor (below), an image viewer, and a video/audio
+  player. File tabs reopen on restart.
 - **Command palette (`Cmd+P`).** Launch a project or jump to a file in the active
   directory, without cluttering the screen with pinned tabs.
+
+#### The editor, for specs and review &nbsp;<sub>· new in this release</sub>
+
+- **Palette-derived theming.** Syntax colors are built from your terminal palette and
+  contrast-clamped (APCA), so code stays legible on pure black or any theme — no
+  separate editor theme to keep in sync.
+- **Markdown live preview.** Headings, callouts, checkboxes, code blocks, tables and
+  more render inline as you write, with raw syntax revealed on the cursor's line — built
+  for writing the specs a session will act on.
+- **Code craft.** Find and replace (`Cmd+F`) with match counts and case/regex/whole-word
+  toggles, code folding, indentation guides, and a readable measure for prose.
+- **Broad language support**, with first-class Astro (frontmatter, template, expressions).
+
+#### Git, where the console falls short &nbsp;<sub>· new in this release</sub>
+
+The session runs git in the console; the editor adds the views a console does poorly, so
+you read changes without leaving the cockpit. No commit GUI — diffs, conflicts, history,
+and blame.
+
+- **Inline diff against HEAD (`Cmd+Alt+D`).** Your uncommitted changes in place, with a
+  `+`/`−` gutter and per-hunk revert.
+- **Graphical conflict resolution.** Merge conflicts render as blocks — current, base,
+  incoming — with one-key accept, a compare view, and highlighting that survives the
+  conflict markers.
+- **File history (`Cmd+Shift+H`).** A keyboard-first overlay of every commit that touched
+  the file, each shown as the change it introduced or against your working copy.
+- **Inline blame (`Cmd+Shift+B`).** Per-line authorship, folded by commit, with a hover
+  card. Off by default.
 
 #### Built for the long haul
 
@@ -99,6 +126,13 @@ through Shirei, and no lock-in.
 | Record screen | `Ctrl+Cmd+R` |
 | Settings | `Cmd+,` |
 
+| Editor and git | |
+| --- | --- |
+| Find / replace | `Cmd+F` |
+| Inline diff vs HEAD | `Cmd+Alt+D` |
+| File history | `Cmd+Shift+H` |
+| Toggle blame | `Cmd+Shift+B` |
+
 ## Download
 
 **[→ Download the latest release](https://github.com/zeroblack/shirei/releases/latest)** —
@@ -118,25 +152,6 @@ pnpm tauri dev      # run the app
 pnpm tauri build    # produce a release bundle
 ```
 
-<details>
-<summary>Distribution (signed + notarized)</summary>
-
-<br>
-
-For a `.dmg` that opens on any Mac without Gatekeeper warnings, the bundle must be
-notarized with Apple. Copy `.env.release.example` to `.env.release`, fill in your App
-Store Connect API key credentials, and run:
-
-```bash
-pnpm release
-```
-
-The script validates the credentials and delegates to `pnpm tauri build`, which signs
-with your Developer ID, notarizes, and staples the ticket to the bundle. `.env.release`
-is gitignored and the `.p8` stays outside the repo.
-
-</details>
-
 ## Stack
 
 Tauri 2 · Rust · TypeScript + Vite · xterm.js (WebGL) · CodeMirror. The system WebView —
@@ -144,10 +159,11 @@ no bundled Chromium.
 
 ## Scope
 
-A personal tool, macOS-only. A terminal with panels, projects, a file explorer and a
-light editor, built to host external AI CLIs. No LSP, debugger, extension marketplace,
-git GUI, SSH, or built-in AI. The editor exists to read and touch what the session
-produces, not to write features by hand.
+A personal tool, macOS-only. A terminal with panels, projects, a file explorer and an
+editor, built to host external AI CLIs. No LSP, debugger, extension marketplace, SSH, or
+built-in AI. Git stays in the console; the editor only adds the visual layer a console
+does poorly (diffs, conflict resolution, history, blame), not a commit GUI. The editor
+exists to read, review, and shape what the session produces, not to write features by hand.
 
 ## Sponsor
 
