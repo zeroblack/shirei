@@ -67,10 +67,11 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.git.history.binary": "Esta versión no se puede mostrar (binaria).",
   "ui.git.history.loading": "Cargando…",
   "ui.git.history.viewDiff": "Diff",
+  "ui.git.history.viewWorking": "Trabajo",
   "ui.git.history.viewFull": "Archivo",
   "ui.git.history.shaCopied": "SHA copiado",
   "ui.git.history.hintNavigate": "Navegar",
-  "ui.git.history.hintView": "Diff / archivo",
+  "ui.git.history.hintView": "Cambiar vista",
   "ui.git.history.hintCopySha": "Copiar SHA",
   "ui.git.history.hintClose": "Cerrar",
 

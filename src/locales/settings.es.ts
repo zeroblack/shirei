@@ -32,8 +32,9 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
     "Cuánto hay que posar el cursor sobre una anotación antes de que aparezca la tarjeta del commit.",
   "settings.git.historyView": "El historial abre en",
   "settings.git.historyViewDesc":
-    "Si el panel de historial parte en el diff contra el árbol de trabajo o en el archivo completo.",
-  "settings.git.historyViewDiff": "Diff",
+    "Vista por defecto del historial: el cambio del commit (diff contra la versión anterior), el diff contra tu copia de trabajo, o el archivo completo.",
+  "settings.git.historyViewDiff": "Diff (cambio del commit)",
+  "settings.git.historyViewWorking": "Árbol de trabajo",
   "settings.git.historyViewFull": "Archivo",
   "settings.editor.group.markdown": "Markdown",
   "settings.editor.group.editing": "Edición",

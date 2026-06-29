@@ -65,10 +65,11 @@ export const uiEn = {
   "ui.git.history.binary": "This version can't be shown (binary).",
   "ui.git.history.loading": "Loading…",
   "ui.git.history.viewDiff": "Diff",
+  "ui.git.history.viewWorking": "Working",
   "ui.git.history.viewFull": "File",
   "ui.git.history.shaCopied": "SHA copied",
   "ui.git.history.hintNavigate": "Navigate",
-  "ui.git.history.hintView": "Diff / file",
+  "ui.git.history.hintView": "Cycle view",
   "ui.git.history.hintCopySha": "Copy SHA",
   "ui.git.history.hintClose": "Close",
 

@@ -34,6 +34,7 @@ export const gitSection: SettingsSection = {
           t("settings.git.historyView"),
           [
             ["diff", t("settings.git.historyViewDiff")],
+            ["working", t("settings.git.historyViewWorking")],
             ["full", t("settings.git.historyViewFull")],
           ],
           g.history,

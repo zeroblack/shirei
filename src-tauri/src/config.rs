@@ -300,6 +300,7 @@ impl Default for EditorConfig {
 pub enum GitHistoryView {
     #[default]
     Diff,
+    Working,
     Full,
 }
 

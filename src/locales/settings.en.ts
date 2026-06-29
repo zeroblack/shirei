@@ -30,8 +30,9 @@ export const settingsEn = {
     "How long to hover a blame annotation before its commit card appears.",
   "settings.git.historyView": "History opens in",
   "settings.git.historyViewDesc":
-    "Whether the file history panel starts on the diff against the working tree or the full file.",
-  "settings.git.historyViewDiff": "Diff",
+    "Default view in the file history panel: the commit's change (diff against the previous version), the diff against your working copy, or the full file.",
+  "settings.git.historyViewDiff": "Diff (commit change)",
+  "settings.git.historyViewWorking": "Working tree",
   "settings.git.historyViewFull": "File",
   "settings.editor.group.markdown": "Markdown",
   "settings.editor.group.editing": "Editing",

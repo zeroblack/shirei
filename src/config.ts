@@ -186,7 +186,7 @@ export interface Config {
   };
   git: {
     blame: { enabled: boolean; delay_ms: number };
-    history: { default_view: "diff" | "full" };
+    history: { default_view: "diff" | "working" | "full" };
   };
   logging: LoggingConfig;
   theme: {

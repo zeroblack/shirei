@@ -25,8 +25,11 @@ export interface HistoryLook {
   palette: TerminalColors;
   preset: "dark" | "light";
   editor: EditorConfig;
-  defaultView: "diff" | "full";
+  defaultView: HistoryView;
 }
+
+type HistoryView = "diff" | "working" | "full";
+const VIEW_ORDER: HistoryView[] = ["diff", "working", "full"];
 
 function hiddenControl(): HTMLElement {
   const s = document.createElement("span");
@@ -50,7 +53,7 @@ export class GitHistory {
   private detailView: EditorView | null = null;
   private commits: GitCommit[] = [];
   private selected = 0;
-  private mode: "diff" | "full" = "diff";
+  private mode: HistoryView = "diff";
   private path = "";
   private working = "";
   private workingOk = true;
@@ -200,20 +203,29 @@ export class GitHistory {
     const commit = this.commits[index];
     if (!commit) return;
     this.renderBar(commit);
-    const cached = this.cache.get(commit.sha);
-    if (cached !== undefined) {
-      this.applyContent(cached);
-      return;
+    if (this.cache.get(commit.sha) === undefined) {
+      this.setDetailMessage(t("ui.git.history.loading"));
     }
-    this.setDetailMessage(t("ui.git.history.loading"));
     const content = await this.contentAt(commit.sha);
     if (!this.overlay || this.selected !== index) return;
-    this.applyContent(content);
-  }
+    if (content == null) {
+      this.setDetailMessage(t("ui.git.history.binary"));
+      return;
+    }
 
-  private applyContent(content: string | null): void {
-    if (content == null) this.setDetailMessage(t("ui.git.history.binary"));
-    else this.mountDetail(content);
+    let doc = content;
+    let original: string | null = null;
+    if (this.mode === "diff") {
+      // The file's "before" is the previous commit that touched it, which mirrors
+      // `git log -p <file>`: this commit's change to the file.
+      const prev = this.commits[index + 1];
+      original = prev ? ((await this.contentAt(prev.sha)) ?? "") : "";
+      if (!this.overlay || this.selected !== index) return;
+    } else if (this.mode === "working" && this.workingOk) {
+      doc = this.working;
+      original = content;
+    }
+    this.mountDetail(doc, original);
   }
 
   private renderBar(commit: GitCommit): void {
@@ -239,6 +251,7 @@ export class GitHistory {
     seg.className = "githist-seg";
     seg.append(
       this.segButton("diff", t("ui.git.history.viewDiff")),
+      this.segButton("working", t("ui.git.history.viewWorking")),
       this.segButton("full", t("ui.git.history.viewFull")),
     );
 
@@ -252,7 +265,7 @@ export class GitHistory {
     this.detailBar.append(meta, right);
   }
 
-  private segButton(mode: "diff" | "full", label: string): HTMLButtonElement {
+  private segButton(mode: HistoryView, label: string): HTMLButtonElement {
     const b = document.createElement("button");
     b.type = "button";
     b.className =
@@ -262,7 +275,7 @@ export class GitHistory {
     return b;
   }
 
-  private setMode(mode: "diff" | "full"): void {
+  private setMode(mode: HistoryView): void {
     if (this.mode === mode) return;
     this.mode = mode;
     void this.showCommit(this.selected);
@@ -281,24 +294,22 @@ export class GitHistory {
     return content;
   }
 
-  private detailState(content: string): EditorState {
+  private detailState(doc: string, original: string | null): EditorState {
     const base: Extension[] = [
       EditorView.editable.of(false),
       EditorState.readOnly.of(true),
       this.theme,
       this.lang,
     ];
-    // Without a readable working copy a diff would render as an all-deleted
-    // file, so fall back to showing the committed version as-is.
-    if (this.mode !== "diff" || !this.workingOk) {
-      return EditorState.create({ doc: content, extensions: base });
+    if (original === null) {
+      return EditorState.create({ doc, extensions: base });
     }
     return EditorState.create({
-      doc: this.working,
+      doc,
       extensions: [
         ...base,
         unifiedMergeView({
-          original: content,
+          original,
           mergeControls: hiddenControl,
           collapseUnchanged: { margin: 3, minSize: 6 },
         }),
@@ -306,8 +317,8 @@ export class GitHistory {
     });
   }
 
-  private mountDetail(content: string): void {
-    const state = this.detailState(content);
+  private mountDetail(doc: string, original: string | null): void {
+    const state = this.detailState(doc, original);
     if (this.detailView) {
       this.detailView.setState(state);
       return;
@@ -351,7 +362,8 @@ export class GitHistory {
     } else if (e.key.toLowerCase() === "d") {
       e.preventDefault();
       e.stopPropagation();
-      this.setMode(this.mode === "diff" ? "full" : "diff");
+      const next = VIEW_ORDER[(VIEW_ORDER.indexOf(this.mode) + 1) % 3];
+      this.setMode(next);
     } else if (e.key.toLowerCase() === "y") {
       e.preventDefault();
       e.stopPropagation();
