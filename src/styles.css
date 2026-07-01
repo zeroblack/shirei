@@ -1200,7 +1200,7 @@ body {
 .qo-scope[data-scope="home"] {
   color: var(--accent);
   border-color: var(--accent-soft);
-  background: rgba(94, 139, 255, 0.1);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .qo-scope-glyph {
