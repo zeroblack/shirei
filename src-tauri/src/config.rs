@@ -137,6 +137,19 @@ pub enum CursorStyle {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
 #[serde(rename_all = "lowercase")]
+pub enum CursorInactiveStyle {
+    // Unfocused panes draw no cursor: in a multi-pane cockpit a TUI that drops
+    // its hide-cursor mode would otherwise leave a stray block on every idle pane.
+    #[default]
+    None,
+    Outline,
+    Block,
+    Bar,
+    Underline,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
 pub enum FontSmoothing {
     #[default]
     Antialiased,
@@ -154,6 +167,7 @@ pub struct RenderConfig {
     pub min_contrast: f32,
     pub scrollback: u32,
     pub cursor_style: CursorStyle,
+    pub cursor_inactive_style: CursorInactiveStyle,
     pub cursor_blink: bool,
     pub font_smoothing: FontSmoothing,
     pub padding: u16,
@@ -172,6 +186,7 @@ impl Default for RenderConfig {
             min_contrast: 1.0,
             scrollback: 5000,
             cursor_style: CursorStyle::default(),
+            cursor_inactive_style: CursorInactiveStyle::default(),
             cursor_blink: true,
             font_smoothing: FontSmoothing::default(),
             padding: 8,

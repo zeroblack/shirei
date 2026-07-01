@@ -597,7 +597,7 @@ export class App {
         active
           .leafIds()
           .map((id) =>
-            invoke<number | null>("pty_pid", { id }).catch(() => null),
+            invoke<number | null>("session_pid", { id }).catch(() => null),
           ),
       )
     ).filter((p): p is number => p !== null);

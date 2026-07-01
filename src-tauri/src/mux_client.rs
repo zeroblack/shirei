@@ -91,7 +91,7 @@ pub fn autostart(app: &AppHandle) {
     }
 }
 
-type ProbeReply = (Option<String>, Option<String>);
+type ProbeReply = (Option<String>, Option<String>, Option<u32>);
 
 /// One live connection to the daemon. Each concern has its own lock so the
 /// reader thread routing output never contends with command writes.
@@ -140,7 +140,7 @@ impl MuxClient {
         }
     }
 
-    pub fn probe(&self, app: &AppHandle, id: &str) -> Result<Option<Snapshot>> {
+    pub fn probe(&self, app: &AppHandle, id: &str) -> Result<Option<(Snapshot, Option<u32>)>> {
         let conn = self.ensure(app)?;
         let (tx, rx) = channel::<ProbeReply>();
         {
@@ -165,8 +165,8 @@ impl MuxClient {
         // id, so removing it would misroute a late reply to the next caller.
         // The late reply lands on this dropped receiver and dies silently.
         match rx.recv_timeout(PROBE_TIMEOUT) {
-            Ok((cwd, command)) if cwd.is_some() || command.is_some() => {
-                Ok(Some(Snapshot { cwd, command }))
+            Ok((cwd, command, pid)) if cwd.is_some() || command.is_some() || pid.is_some() => {
+                Ok(Some((Snapshot { cwd, command }, pid)))
             }
             Ok(_) => Ok(None),
             Err(_) => Ok(None),
@@ -191,12 +191,17 @@ fn spawn_reader(mut read: UnixStream, conn: Arc<Conn>, app: AppHandle) {
                     let _ = app.emit(&format!("pty-exit-{id}"), ());
                     conn.routes.lock_ignore_poison().remove(&id);
                 }
-                ServerMsg::Probe { id, cwd, command } => {
+                ServerMsg::Probe {
+                    id,
+                    cwd,
+                    command,
+                    pid,
+                } => {
                     let mut waiters = conn.probe_waiters.lock_ignore_poison();
                     if let Some(queue) = waiters.get_mut(&id)
                         && let Some(waiter) = queue.pop_front()
                     {
-                        let _ = waiter.send((cwd, command));
+                        let _ = waiter.send((cwd, command, pid));
                     }
                 }
                 ServerMsg::Spawned { id, pid } => {

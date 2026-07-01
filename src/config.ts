@@ -21,6 +21,12 @@ export interface FontsConfig {
 }
 
 export type CursorStyle = "block" | "bar" | "underline";
+export type CursorInactiveStyle =
+  | "none"
+  | "outline"
+  | "block"
+  | "bar"
+  | "underline";
 export type FontSmoothing = "antialiased" | "subpixel";
 
 export interface RenderConfig {
@@ -32,6 +38,7 @@ export interface RenderConfig {
   min_contrast: number;
   scrollback: number;
   cursor_style: CursorStyle;
+  cursor_inactive_style: CursorInactiveStyle;
   cursor_blink: boolean;
   font_smoothing: FontSmoothing;
   padding: number;

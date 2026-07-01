@@ -1,4 +1,8 @@
-import type { CursorStyle, FontSmoothing } from "../config";
+import type {
+  CursorInactiveStyle,
+  CursorStyle,
+  FontSmoothing,
+} from "../config";
 import { t } from "../i18n";
 import type { SettingsSection } from "./shell";
 import {
@@ -15,6 +19,14 @@ const SMOOTHING_OPTIONS = (): [FontSmoothing, string][] => [
 ];
 
 const CURSOR_OPTIONS = (): [CursorStyle, string][] => [
+  ["block", t("settings.terminal.cursor.block")],
+  ["bar", t("settings.terminal.cursor.bar")],
+  ["underline", t("settings.terminal.cursor.underline")],
+];
+
+const CURSOR_INACTIVE_OPTIONS = (): [CursorInactiveStyle, string][] => [
+  ["none", t("settings.terminal.cursor.none")],
+  ["outline", t("settings.terminal.cursor.outline")],
   ["block", t("settings.terminal.cursor.block")],
   ["bar", t("settings.terminal.cursor.bar")],
   ["underline", t("settings.terminal.cursor.underline")],
@@ -75,6 +87,13 @@ export const terminalSection: SettingsSection = {
           CURSOR_OPTIONS(),
           render,
           "cursor_style",
+          save,
+        ),
+        selectField(
+          t("settings.terminal.cursorInactiveStyle"),
+          CURSOR_INACTIVE_OPTIONS(),
+          render,
+          "cursor_inactive_style",
           save,
         ),
         boolField(

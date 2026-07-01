@@ -154,6 +154,7 @@ export class TerminalSession {
       letterSpacing: look.render.letter_spacing,
       cursorBlink: false,
       cursorStyle: look.render.cursor_style,
+      cursorInactiveStyle: look.render.cursor_inactive_style,
       scrollback: look.render.scrollback,
       minimumContrastRatio: look.render.min_contrast,
       rescaleOverlappingGlyphs: true,
@@ -574,6 +575,7 @@ export class TerminalSession {
     this.term.options.letterSpacing = render.letter_spacing;
     this.wantCursorBlink = render.cursor_blink;
     this.term.options.cursorStyle = render.cursor_style;
+    this.term.options.cursorInactiveStyle = render.cursor_inactive_style;
     this.term.options.scrollback = render.scrollback;
     this.term.options.minimumContrastRatio = render.min_contrast;
     this.term.options.theme = toXtermTheme(theme);
