@@ -268,6 +268,8 @@ export class QuickOpen {
           if (s !== null) yield { e, s };
         }
       })(this.entries);
+      // Higher score first; ties break on shorter, then alphabetical paths so
+      // equally-scored results never reorder between keystrokes.
       files = topK(
         scored,
         this.limit,

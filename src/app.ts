@@ -1398,7 +1398,6 @@ export class App {
       (await this.activeLiveCwd()) ?? this.activeLeafCwd() ?? null;
     const home = await homeDir();
     const root = resolveSearchRoot({ projectPath, openedFrom, shellCwd, home });
-    this.lastRoot = root;
     return root;
   }
 
