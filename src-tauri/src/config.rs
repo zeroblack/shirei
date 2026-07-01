@@ -585,6 +585,22 @@ fn default_exclude_dirs() -> Vec<String> {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]
+pub struct QuickOpenConfig {
+    pub default_scope: String,
+    pub toggle_scope: String,
+}
+
+impl Default for QuickOpenConfig {
+    fn default() -> Self {
+        QuickOpenConfig {
+            default_scope: "project".to_string(),
+            toggle_scope: "Tab".to_string(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
 pub struct FilesConfig {
     pub exclude_dirs: Vec<String>,
     pub respect_gitignore: bool,
@@ -905,6 +921,7 @@ pub struct Config {
     pub chrome: ChromeConfig,
     pub performance: PerformanceConfig,
     pub files: FilesConfig,
+    pub quickopen: QuickOpenConfig,
     pub recorder: RecorderConfig,
     #[serde(default)]
     pub projects: Vec<serde_json::Value>,
@@ -937,6 +954,7 @@ impl Default for Config {
             chrome: ChromeConfig::default(),
             performance: PerformanceConfig::default(),
             files: FilesConfig::default(),
+            quickopen: QuickOpenConfig::default(),
             recorder: RecorderConfig::default(),
             projects: Vec::new(),
             templates: default_templates(),
