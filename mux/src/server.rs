@@ -257,14 +257,21 @@ fn handle_msg(
             }
         }
         ClientMsg::Probe { id } => {
-            let snap = {
+            let (cwd, command, pid) = {
                 let sessions = reg.lock_ignore_poison();
-                sessions.get(&id).map(|s| s.probe()).unwrap_or_default()
+                match sessions.get(&id) {
+                    Some(s) => {
+                        let snap = s.probe();
+                        (snap.cwd, snap.command, s.pid())
+                    }
+                    None => (None, None, None),
+                }
             };
             let _ = tx.send(ServerMsg::Probe {
                 id,
-                cwd: snap.cwd,
-                command: snap.command,
+                cwd,
+                command,
+                pid,
             });
         }
         ClientMsg::List => {

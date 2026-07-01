@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use portable_pty::{Child, MasterPty};
 
 use crate::lock::MutexExt;
+use crate::modes::ModeTracker;
 use crate::proc::{Snapshot, snapshot_of};
 use crate::protocol::ServerMsg;
 use crate::ring::Ring;
@@ -29,6 +30,7 @@ struct Inner {
     master: Box<dyn MasterPty + Send>,
     child: Box<dyn Child + Send + Sync>,
     ring: Ring,
+    modes: ModeTracker,
     subs: Vec<Sub>,
     alive: bool,
     persist: Option<PathBuf>,
@@ -133,6 +135,7 @@ impl Session {
             master,
             child,
             ring,
+            modes: ModeTracker::default(),
             subs: Vec::new(),
             alive: true,
             persist,
@@ -150,6 +153,7 @@ impl Session {
                         let dump = {
                             let mut g = reader_inner.lock_ignore_poison();
                             g.ring.push(&buf[..n]);
+                            g.modes.feed(&buf[..n]);
                             g.broadcast(ServerMsg::Output {
                                 id: id.clone(),
                                 data: buf[..n].to_vec(),
@@ -190,6 +194,20 @@ impl Session {
         {
             // The client's queue is already saturated; without the snapshot its
             // view would be corrupt, so let it reconnect instead.
+            return;
+        }
+        // Re-assert the sticky DEC private modes the ring replay can't rebuild
+        // (cursor visibility, mouse, bracketed paste), so a reattaching TUI does
+        // not surface a stray cursor or lose mouse input.
+        let restore = g.modes.restore_seq();
+        if !restore.is_empty()
+            && sub
+                .try_send(ServerMsg::Output {
+                    id: id.to_string(),
+                    data: restore,
+                })
+                .is_err()
+        {
             return;
         }
         if g.alive {

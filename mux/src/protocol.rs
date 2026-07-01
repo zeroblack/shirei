@@ -59,6 +59,7 @@ pub enum ServerMsg {
         id: String,
         cwd: Option<String>,
         command: Option<String>,
+        pid: Option<u32>,
     },
 }
 

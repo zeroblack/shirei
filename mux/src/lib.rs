@@ -1,4 +1,5 @@
 pub mod lock;
+pub mod modes;
 pub mod paths;
 pub mod proc;
 pub mod protocol;

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.4] - 2026-06-30
+
+### Fixed
+- Keep-alive sessions no longer leave a stray cursor flashing across full-screen
+  TUIs (Yagura, the AI CLI, vim). The daemon now re-asserts the terminal modes a
+  reattach can't rebuild from the raw scrollback — cursor visibility, mouse
+  reporting, bracketed paste — so a reconnected TUI stays clean.
+- The status bar's per-tab CPU/memory/disk again reports usage for keep-alive
+  tabs. Process resolution is unified across in-process and daemon sessions, so
+  a tab's footprint is found whether or not persistence is on.
+
+### Added
+- `render.cursor_inactive_style` (Settings → Terminal): the cursor shape on
+  unfocused panes, defaulting to none so idle panes never show a stray cursor.
+
 ## [0.13.2] - 2026-06-29
 
 ### Fixed

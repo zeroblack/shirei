@@ -46,11 +46,6 @@ impl PtyManager {
 }
 
 #[tauri::command]
-pub fn pty_pid(id: String, manager: State<'_, PtyManager>) -> Option<i32> {
-    manager.pid_of(&id)
-}
-
-#[tauri::command]
 pub fn pty_spawn(
     app: AppHandle,
     manager: State<'_, PtyManager>,

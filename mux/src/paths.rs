@@ -4,7 +4,7 @@ use std::path::PathBuf;
 /// self-describing and a daemon from a previous app version can outlive an
 /// update. Embedding the version in the socket name keeps incompatible peers
 /// from ever exchanging frames.
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 /// App-support dir shared by app and daemon; mirrors the bundle `identifier`
 /// in tauri.conf.json. Falls back to /tmp when HOME is unset.
