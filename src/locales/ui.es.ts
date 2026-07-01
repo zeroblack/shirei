@@ -28,6 +28,18 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.quickopen.hintNavigate": "navegar",
   "ui.quickopen.hintOpen": "abrir",
   "ui.quickopen.hintClose": "cerrar",
+  "ui.quickopen.scopeHome": "home",
+  "ui.quickopen.indexing": "Indexando home…",
+  "ui.quickopen.truncatedHome":
+    "Mostrando los primeros resultados. Afina para acotar.",
+  "ui.quickopen.empty": "Sin coincidencias",
+  "ui.quickopen.hintScopeHome": "buscar home",
+  "ui.quickopen.hintScopeProject": "volver al proyecto",
+  "ui.quickopen.nudgeHome": "buscar Home ~",
+  "ui.quickopen.nudgeProject": "volver al proyecto",
+  "ui.quickopen.announceProject": "Alcance: proyecto",
+  "ui.quickopen.announceHome": "Alcance: home",
+  "ui.quickopen.scopeAria": "Cambiar alcance de búsqueda",
 
   "ui.editor.find.placeholder": "Buscar…",
   "ui.editor.find.replacePlaceholder": "Reemplazar…",
