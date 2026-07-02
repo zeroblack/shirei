@@ -356,6 +356,11 @@ export class PaneGrid {
     this.refreshActiveState();
   }
 
+  applyContentLook(apply: (session: PaneContentSession) => void): void {
+    for (const pane of this.panes.values())
+      for (const c of pane.contents) apply(c.session);
+  }
+
   setAccent(color: string | null): void {
     if (color) this.host.style.setProperty("--tab-color", color);
     else this.host.style.removeProperty("--tab-color");

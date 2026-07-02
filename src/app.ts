@@ -35,6 +35,7 @@ import {
   instantiate,
   leaves,
   type PaneNode,
+  readLeafContents,
   resolveDefaultTemplate,
 } from "./panetree";
 import { basename, parentDir } from "./path";
@@ -555,6 +556,22 @@ export class App {
     for (const s of this.sessions.values()) {
       if (s instanceof PaneGrid) {
         s.applyLook(family, c.font.size, c.render, c.theme.terminal);
+        s.applyContentLook((session) => {
+          if (EditorSession !== null && session instanceof EditorSession) {
+            session.applyLook(
+              family,
+              c.font.size,
+              c.theme.terminal,
+              c.theme.preset,
+            );
+            session.applyEditorConfig(c.editor);
+          } else if (
+            session instanceof ImageSession ||
+            session instanceof MediaSession
+          ) {
+            session.setBg(c.theme.editor.bg);
+          }
+        });
       } else if (EditorSession !== null && s instanceof EditorSession) {
         s.applyLook(family, c.font.size, c.theme.terminal, c.theme.preset);
         s.applyEditorConfig(c.editor);
@@ -750,6 +767,18 @@ export class App {
     );
   }
 
+  private async restorePaneContents(
+    grid: PaneGrid,
+    tree: PaneNode,
+  ): Promise<void> {
+    for (const leaf of leaves(tree)) {
+      for (const c of readLeafContents(leaf)) {
+        await this.switchPaneToFile(grid, leaf.id, c.path, true);
+      }
+      if (leaf.activeContent === 0) grid.switchContentIn(leaf.id, 0);
+    }
+  }
+
   private async openTerminalTab(
     tree: PaneNode,
     title?: string,
@@ -812,6 +841,7 @@ export class App {
     this.activeId = id;
     this.showActive();
     await grid.open();
+    await this.restorePaneContents(grid, tree);
     this.renderTabs();
     grid.focus();
     this.persist();
@@ -904,7 +934,7 @@ export class App {
     if (routeGrid instanceof PaneGrid) {
       const target = pickFileTarget(routeGrid.contentCandidates());
       if (target) {
-        await this.switchPaneToFile(routeGrid, target, path);
+        await this.switchPaneToFile(routeGrid, target, path, silent);
         return;
       }
     }
@@ -1018,6 +1048,7 @@ export class App {
     grid: PaneGrid,
     paneId: string,
     path?: string,
+    silent = false,
   ): Promise<void> {
     if (!path) {
       const container = document.createElement("div");
@@ -1040,7 +1071,8 @@ export class App {
       await handle.session.open();
     } catch (e) {
       console.error("open file in pane failed:", path, e);
-      this.notify(t("ui.app.cannotShowFile"));
+      if (!silent) this.notify(t("ui.app.cannotShowFile"));
+      void handle.session.dispose();
       handle.container.remove();
       return;
     }
