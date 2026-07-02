@@ -413,7 +413,12 @@ export class PaneGrid {
   private activate(pane: Pane, index: number): void {
     pane.activeIndex = index;
     this.applyContentVisibility(pane);
-    if (index === 0) pane.terminal.fitAndResize();
+    if (index === 0) {
+      pane.terminal.fitAndResize();
+      // The terminal was display:none behind the file content, so its renderer
+      // can strand blank; force a repaint now that it is shown again.
+      void pane.terminal.recover(false);
+    }
     this.activeSession(pane).focus();
     this.notifyContent();
     this.refreshCluster(pane);
