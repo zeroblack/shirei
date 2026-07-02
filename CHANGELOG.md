@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- New panes no longer open black after updating the app with keep-alive sessions
+  on. A session daemon left over from a previous build could keep owning the
+  socket and fail to start any new session; the app now verifies the daemon's
+  build identity when it connects and replaces a stale one before spawning.
+- Killing a keep-alive session now removes its persisted scrollback buffer from
+  disk instead of leaving the file behind.
+
 ## [0.13.4] - 2026-06-30
 
 ### Fixed

@@ -5,6 +5,7 @@ fn main() -> anyhow::Result<()> {
         .nth(1)
         .map(PathBuf::from)
         .unwrap_or_else(shirei_mux::paths::socket_path);
+    let build_id = std::env::var("SHIREI_BUILD_ID").unwrap_or_default();
     eprintln!("shirei-mux: listening on {path:?}");
-    shirei_mux::server::run(&path)
+    shirei_mux::server::run(&path, build_id)
 }

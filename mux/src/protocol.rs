@@ -33,6 +33,10 @@ pub enum ClientMsg {
         id: String,
     },
     List,
+    Hello {
+        build_id: String,
+    },
+    Shutdown,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -60,6 +64,10 @@ pub enum ServerMsg {
         cwd: Option<String>,
         command: Option<String>,
         pid: Option<u32>,
+    },
+    Welcome {
+        build_id: String,
+        pid: u32,
     },
 }
 
@@ -133,6 +141,26 @@ mod tests {
         let body = read_frame(&mut cursor).unwrap().expect("frame");
         let back: ServerMsg = decode(&body).unwrap();
         assert_eq!(msg, back);
+    }
+
+    #[test]
+    fn hello_and_welcome_round_trip() {
+        let hello = ClientMsg::Hello {
+            build_id: "1720000000-4096".into(),
+        };
+        let body = read_frame(&mut std::io::Cursor::new(encode(&hello).unwrap()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(decode::<ClientMsg>(&body).unwrap(), hello);
+
+        let welcome = ServerMsg::Welcome {
+            build_id: "1720000000-4096".into(),
+            pid: 4321,
+        };
+        let body = read_frame(&mut std::io::Cursor::new(encode(&welcome).unwrap()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(decode::<ServerMsg>(&body).unwrap(), welcome);
     }
 
     #[test]
