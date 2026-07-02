@@ -1,5 +1,6 @@
 import type { RenderConfig, TerminalColors } from "./config";
 import { attachDrag } from "./drag";
+import { PaneCluster } from "./panecluster";
 import {
   canAdd,
   type FileTargetCandidate,
@@ -57,6 +58,7 @@ interface Pane {
   contents: PaneStackEntry[];
   activeIndex: number;
   lastActiveSeq: number;
+  cluster: PaneCluster;
 }
 
 export class PaneGrid {
@@ -100,6 +102,16 @@ export class PaneGrid {
     session.onExit = () => this.closePane(leaf.id);
     el.addEventListener("mousedown", () => this.setActive(leaf.id), true);
     session.setVisible(this.visible);
+    const cluster = new PaneCluster(el, {
+      onSelect: (index) => {
+        this.setActive(leaf.id);
+        this.switchContent(index);
+      },
+      onPick: () => {
+        this.setActive(leaf.id);
+        this.cb.onPickContent?.(leaf.id);
+      },
+    });
     this.panes.set(leaf.id, {
       el,
       terminal: session,
@@ -107,6 +119,7 @@ export class PaneGrid {
       contents: [],
       activeIndex: 0,
       lastActiveSeq: 0,
+      cluster,
     });
   }
 
@@ -184,6 +197,7 @@ export class PaneGrid {
     const pane = this.panes.get(target);
     if (pane) {
       for (const c of pane.contents) void c.session.dispose();
+      pane.cluster.dispose();
       void pane.terminal.dispose();
       this.panes.delete(target);
     }
@@ -246,6 +260,7 @@ export class PaneGrid {
     this.activeSeq += 1;
     pane.lastActiveSeq = this.activeSeq;
     this.highlightActive();
+    this.refreshCluster(pane);
     this.refreshActiveState();
     if (pane.activeIndex === 0) pane.terminal.fitAndResize();
     this.activeSession(pane).focus();
@@ -381,12 +396,22 @@ export class PaneGrid {
     this.cb.onContentChange?.();
   }
 
+  private idOf(pane: Pane): string {
+    for (const [id, p] of this.panes) if (p === pane) return id;
+    return this.activeLeafId;
+  }
+
+  private refreshCluster(pane: Pane): void {
+    pane.cluster.render(this.descriptorsOf(this.idOf(pane)));
+  }
+
   private activate(pane: Pane, index: number): void {
     pane.activeIndex = index;
     this.applyContentVisibility(pane);
     if (index === 0) pane.terminal.fitAndResize();
     this.activeSession(pane).focus();
     this.notifyContent();
+    this.refreshCluster(pane);
   }
 
   addFileContent(
