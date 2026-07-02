@@ -225,6 +225,7 @@ export interface Config {
     todo_collapsed: boolean;
     default_template: string;
     new_tab_dir: string;
+    pane_content_cap: number;
   };
   motion: MotionConfig;
   tabs: TabsConfig;
