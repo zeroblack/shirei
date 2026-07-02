@@ -1818,6 +1818,24 @@ export class App {
       case "pane.zoom":
         if (pane) pane.toggleZoom();
         break;
+      case "pane.content.pick":
+        if (pane) this.openPaneContentPicker(pane, pane.activePaneId());
+        break;
+      case "pane.content.cycle":
+        if (pane) pane.cycleContent(1);
+        break;
+      case "pane.content.close":
+        if (pane) pane.closeActiveContent();
+        break;
+      case "pane.content.slot-1":
+        if (pane) pane.switchContent(0);
+        break;
+      case "pane.content.slot-2":
+        if (pane) pane.switchContent(1);
+        break;
+      case "pane.content.slot-3":
+        if (pane) pane.switchContent(2);
+        break;
       case "focus.left":
         this.navigateFocus("left", active);
         break;
