@@ -26,6 +26,9 @@ import { ImageSession } from "./image";
 import { Keymap } from "./keymap";
 import { eventToKeystroke, formatKeystroke, resolveBindings } from "./keys";
 import { MediaSession } from "./media";
+import { createOverlay } from "./overlay";
+import { pickFileTarget } from "./panecontent";
+import { PaneFileChooser } from "./panefilechooser";
 import { type FocusDir, type LeafSpawn, PaneGrid } from "./panegrid";
 import {
   declaredCommands,
@@ -799,6 +802,10 @@ export class App {
         this.refreshTreeIfVisible();
         this.persist();
       },
+      onPickContent: (paneId) => {
+        const g = this.sessions.get(id);
+        if (g instanceof PaneGrid) this.openPaneContentPicker(g, paneId);
+      },
     });
     grid.setAccent(color);
     this.sessions.set(id, grid);
@@ -893,6 +900,14 @@ export class App {
       this.activate(existing.id);
       return;
     }
+    const routeGrid = this.sessions.get(this.activeId ?? "");
+    if (routeGrid instanceof PaneGrid) {
+      const target = pickFileTarget(routeGrid.contentCandidates());
+      if (target) {
+        await this.switchPaneToFile(routeGrid, target, path);
+        return;
+      }
+    }
     const id = nextId();
     const name = basename(path);
     const openerId = this.activeId ?? undefined;
@@ -954,6 +969,118 @@ export class App {
     this.persist();
     if (this.panelVisible) void this.openWorkspaceTree();
     this.setActiveProject(null);
+  }
+
+  private async makeFileContent(
+    grid: PaneGrid,
+    paneId: string,
+    path: string,
+  ): Promise<{
+    session: EditorSessionType | ImageSession | MediaSession;
+    container: HTMLElement;
+    path: string;
+    title: string;
+  }> {
+    const name = basename(path);
+    const container = document.createElement("div");
+    container.className = "terminal-host editor-host pane-content";
+    let session: EditorSessionType | ImageSession | MediaSession;
+    if (isImage(name)) {
+      session = new ImageSession(paneId, path, container);
+    } else if (mediaKind(name)) {
+      session = new MediaSession(paneId, path, container);
+    } else {
+      const ES = await loadEditor();
+      session = new ES(paneId, path, container, {
+        fontFamily: fontStack(this.config.font.family, this.config.fonts),
+        fontSize: this.config.font.size,
+        palette: this.config.theme.terminal,
+        preset: this.config.theme.preset,
+        editor: this.config.editor,
+        git: this.config.git,
+      });
+      session.onDirtyChange = (dirty) => grid.setContentDirty(paneId, dirty);
+      const editorSession = session;
+      editorSession.onHistory = () => void this.openHistory(editorSession);
+    }
+    return { session, container, path, title: name };
+  }
+
+  private paneRecents(): { rel: string; abs: string }[] {
+    return this.tabs
+      .filter((tab): tab is EditorTab => tab.kind === "editor")
+      .slice(-5)
+      .reverse()
+      .map((tab) => ({ rel: basename(tab.path), abs: tab.path }));
+  }
+
+  private async switchPaneToFile(
+    grid: PaneGrid,
+    paneId: string,
+    path?: string,
+  ): Promise<void> {
+    if (!path) {
+      const container = document.createElement("div");
+      const chooser = new PaneFileChooser(container, {
+        recents: () => this.paneRecents(),
+        onOpen: (abs) => void this.switchPaneToFile(grid, paneId, abs),
+        onFind: () => this.openQuickOpen(),
+        onBackToTerminal: () => grid.closeActiveContent(),
+      });
+      const added = grid.addFileContent(paneId, {
+        session: chooser,
+        container,
+        title: t("ui.pane.fileTab"),
+      });
+      if (added) await chooser.open();
+      return;
+    }
+    const handle = await this.makeFileContent(grid, paneId, path);
+    try {
+      await handle.session.open();
+    } catch (e) {
+      console.error("open file in pane failed:", path, e);
+      this.notify(t("ui.app.cannotShowFile"));
+      handle.container.remove();
+      return;
+    }
+    if (grid.activeContentIsFile(paneId)) {
+      grid.replaceActiveFile(paneId, handle);
+    } else {
+      grid.addFileContent(paneId, handle);
+    }
+  }
+
+  private openPaneContentPicker(grid: PaneGrid, paneId: string): void {
+    const { box, close } = createOverlay({
+      className: "pane-picker",
+      label: t("ui.pane.pickerTitle"),
+      onDismiss: () => void close(),
+    });
+    const row = (label: string, hint: string, onClick?: () => void) => {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "pane-picker-row";
+      el.disabled = !onClick;
+      const name = document.createElement("span");
+      name.textContent = label;
+      const tag = document.createElement("span");
+      tag.className = "pane-picker-hint";
+      tag.textContent = hint;
+      el.append(name, tag);
+      if (onClick)
+        el.addEventListener("click", () => {
+          void close();
+          onClick();
+        });
+      return el;
+    };
+    box.append(
+      row(t("ui.pane.addFile"), "⌘⌥T", () => {
+        void this.switchPaneToFile(grid, paneId);
+      }),
+      row(t("ui.pane.addBrowser"), t("ui.pane.soon")),
+    );
   }
 
   activate(id: string): void {
