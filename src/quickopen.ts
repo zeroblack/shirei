@@ -4,6 +4,12 @@ import { fuzzyMatch, fuzzyPositions, topK } from "./fuzzy";
 import { t } from "./i18n";
 import { fileIcon } from "./icons";
 import { createOverlay } from "./overlay";
+import {
+  cycleScope,
+  rootForScope,
+  type Scope,
+  type ScopeRoots,
+} from "./searchscope";
 import type { IndexEntry } from "./types";
 
 const FILTER_DEBOUNCE_MS = 40;
@@ -21,6 +27,11 @@ export interface QuickOpenCallbacks {
   commands?: () => PaletteCommand[];
 }
 
+interface OpenOpts {
+  defaultScope: Scope;
+  toggleKey: string;
+}
+
 type Item =
   | { kind: "project"; id: string; name: string; color: string }
   | { kind: "command"; id: string; name: string; run: () => void }
@@ -31,9 +42,24 @@ export class QuickOpen {
   private overlay: HTMLElement | null = null;
   private input!: HTMLInputElement;
   private list!: HTMLElement;
-  private root = "";
+  private scopeChip!: HTMLButtonElement;
+  private statusEl!: HTMLElement;
+  private roots: ScopeRoots = {
+    project: null,
+    home: "",
+    projectLabel: "",
+    projectColor: null,
+  };
+  private scope: Scope = "project";
+  private toggleKey = "Tab";
   private projects: Project[] = [];
   private entries: IndexEntry[] = [];
+  private readonly cache = new Map<
+    Scope,
+    { entries: IndexEntry[]; truncated: boolean }
+  >();
+  private generation = 0;
+  private loading = false;
   private matches: Item[] = [];
   private query = "";
   private selected = 0;
@@ -54,24 +80,81 @@ export class QuickOpen {
   }
 
   async open(
-    root: string | null,
+    roots: ScopeRoots,
     projects: Project[],
     limit: number,
+    opts: OpenOpts,
   ): Promise<void> {
-    this.root = root ?? "";
+    this.roots = roots;
     this.projects = projects;
     this.limit = limit;
+    this.toggleKey = opts.toggleKey || "Tab";
+    this.scope = opts.defaultScope;
+    this.cache.clear();
+    this.generation = 0;
     this.entries = [];
     this.truncated = false;
+    this.loading = false;
     this.render();
+    this.renderScopeChip();
     this.filter("");
-    if (root) {
-      const index = await indexDir(root);
-      if (!this.overlay) return;
-      this.entries = index.entries;
-      this.truncated = index.truncated;
-      this.filter(this.input.value);
+    await this.ensureIndex(this.scope);
+  }
+
+  private async ensureIndex(scope: Scope): Promise<void> {
+    const cached = this.cache.get(scope);
+    if (cached) {
+      this.entries = cached.entries;
+      this.truncated = cached.truncated;
+      this.setLoading(false);
+      this.filter(this.query);
+      return;
     }
+    const root = rootForScope(scope, this.roots);
+    if (!root) {
+      this.entries = [];
+      this.truncated = false;
+      this.setLoading(false);
+      this.filter(this.query);
+      return;
+    }
+    const gen = ++this.generation;
+    this.setLoading(true);
+    let index: { entries: IndexEntry[]; truncated: boolean };
+    try {
+      index = await indexDir(root);
+    } catch {
+      index = { entries: [], truncated: false };
+    }
+    // Discard a walk that finished after the user switched scope or closed the
+    // palette: without this, a slow $HOME walk dumps home files into the
+    // project view a second later.
+    if (gen !== this.generation || !this.overlay || this.scope !== scope)
+      return;
+    this.cache.set(scope, index);
+    this.entries = index.entries;
+    this.truncated = index.truncated;
+    this.setLoading(false);
+    this.filter(this.query);
+  }
+
+  private toggleScope(dir: 1 | -1): void {
+    this.scope = cycleScope(this.scope, dir);
+    this.generation += 1;
+    const cached = this.cache.get(this.scope);
+    if (!cached) {
+      this.entries = [];
+      this.truncated = false;
+    }
+    this.renderScopeChip();
+    this.announceScope();
+    void this.ensureIndex(this.scope);
+  }
+
+  private setLoading(loading: boolean): void {
+    this.loading = loading;
+    this.renderScopeChip();
+    this.renderList();
   }
 
   private render(): void {
@@ -82,21 +165,106 @@ export class QuickOpen {
       onDismiss: () => this.close(),
     });
 
+    const row = document.createElement("div");
+    row.className = "qo-input-row";
+
     this.input = document.createElement("input");
     this.input.className = "quickopen-input";
-    this.input.placeholder = t("ui.quickopen.placeholder");
     this.input.addEventListener("input", () =>
       this.scheduleFilter(this.input.value),
     );
     this.input.addEventListener("keydown", (e) => this.onKey(e));
 
+    this.scopeChip = document.createElement("button");
+    this.scopeChip.type = "button";
+    this.scopeChip.className = "qo-scope";
+    this.scopeChip.tabIndex = -1;
+    this.scopeChip.addEventListener("click", (e) => {
+      e.preventDefault();
+      this.toggleScope(1);
+      this.input.focus();
+    });
+    row.append(this.input, this.scopeChip);
+
+    this.statusEl = document.createElement("div");
+    this.statusEl.className = "qo-status";
+    this.statusEl.setAttribute("aria-live", "polite");
+
     this.list = document.createElement("div");
     this.list.className = "quickopen-list";
 
-    box.append(this.input, this.list, hintFooter());
+    box.append(
+      row,
+      this.list,
+      this.statusEl,
+      hintFooter(this.scope, this.toggleKey),
+    );
     document.body.appendChild(overlay);
     this.overlay = overlay;
     this.input.focus();
+  }
+
+  private renderScopeChip(): void {
+    if (!this.scopeChip) return;
+    this.input.placeholder =
+      this.scope === "home"
+        ? t("ui.quickopen.placeholderHome")
+        : t("ui.quickopen.placeholderProject");
+    this.scopeChip.dataset.scope = this.scope;
+    const other = cycleScope(this.scope, 1);
+    this.scopeChip.setAttribute(
+      "aria-label",
+      this.scope === "home"
+        ? t("ui.quickopen.scopeAriaHome")
+        : t("ui.quickopen.scopeAriaProject"),
+    );
+
+    const current = document.createElement("span");
+    current.className = "qo-scope-seg qo-scope-current";
+    this.fillScopeSeg(current, this.scope, this.loading);
+
+    const key = document.createElement("kbd");
+    key.className = "qo-scope-key";
+    key.textContent = this.toggleKey === "Tab" ? "⇥" : this.toggleKey;
+
+    const target = document.createElement("span");
+    target.className = "qo-scope-seg qo-scope-target";
+    this.fillScopeSeg(target, other, false);
+
+    this.scopeChip.replaceChildren(current, key, target);
+  }
+
+  private fillScopeSeg(el: HTMLElement, scope: Scope, loading: boolean): void {
+    if (loading) {
+      const spin = document.createElement("span");
+      spin.className = "qo-scope-spin";
+      el.appendChild(spin);
+    } else if (scope === "home") {
+      const glyph = document.createElement("span");
+      glyph.className = "qo-scope-glyph";
+      glyph.textContent = "~";
+      el.appendChild(glyph);
+    } else if (this.roots.projectColor) {
+      const dot = document.createElement("span");
+      dot.className = "qo-project-dot";
+      dot.style.background = this.roots.projectColor;
+      el.appendChild(dot);
+    }
+    el.appendChild(
+      document.createTextNode(
+        scope === "home"
+          ? t("ui.quickopen.scopeHome")
+          : this.roots.projectLabel || t("ui.quickopen.scopeProject"),
+      ),
+    );
+  }
+
+  private announceScope(): void {
+    if (!this.statusEl) return;
+    this.statusEl.textContent =
+      this.scope === "home"
+        ? t("ui.quickopen.announceHome")
+        : t("ui.quickopen.announceProject");
   }
 
   private filter(query: string): void {
@@ -167,15 +335,31 @@ export class QuickOpen {
 
   private renderList(): void {
     this.list.replaceChildren();
+    if (this.loading) {
+      const line = document.createElement("div");
+      line.className = "quickopen-note qo-loading";
+      line.textContent = t("ui.quickopen.indexing");
+      this.list.appendChild(line);
+    }
     if (this.truncated) {
       const note = document.createElement("div");
-      note.className = "quickopen-note";
-      note.textContent = t("ui.quickopen.truncated");
+      note.className =
+        this.scope === "home"
+          ? "quickopen-note qo-note-muted"
+          : "quickopen-note";
+      note.textContent =
+        this.scope === "home"
+          ? t("ui.quickopen.truncatedHome")
+          : t("ui.quickopen.truncated");
       this.list.appendChild(note);
     }
+    if (!this.loading && this.query && this.matches.length === 0) {
+      this.list.appendChild(this.emptyState());
+      return;
+    }
     this.matches.forEach((item, i) => {
-      const row = document.createElement("div");
-      row.className =
+      const rowEl = document.createElement("div");
+      rowEl.className =
         i === this.selected ? "quickopen-row selected" : "quickopen-row";
 
       const icon = document.createElement("span");
@@ -192,33 +376,55 @@ export class QuickOpen {
         const tag = document.createElement("span");
         tag.className = "qo-tag";
         tag.textContent = t("ui.quickopen.tagProject");
-        row.append(icon, name, tag);
+        rowEl.append(icon, name, tag);
       } else if (item.kind === "command") {
         icon.textContent = "⌘";
         this.fillName(name, item.name);
         const tag = document.createElement("span");
         tag.className = "qo-tag";
         tag.textContent = t("ui.quickopen.tagCommand");
-        row.append(icon, name, tag);
+        rowEl.append(icon, name, tag);
       } else {
         icon.innerHTML = fileIcon(item.name, item.isDir, false);
         this.fillName(name, item.name);
-        row.append(icon, name);
+        rowEl.append(icon, name);
         const slash = item.rel.lastIndexOf("/");
         if (slash > 0) {
           const dir = document.createElement("span");
           dir.className = "qo-dir";
           dir.textContent = item.rel.slice(0, slash);
-          row.append(dir);
+          rowEl.append(dir);
         }
       }
 
-      row.addEventListener("click", () => this.choose(item));
-      this.list.appendChild(row);
+      rowEl.addEventListener("click", () => this.choose(item));
+      this.list.appendChild(rowEl);
     });
     this.list
       .querySelector(".quickopen-row.selected")
       ?.scrollIntoView({ block: "nearest" });
+  }
+
+  private emptyState(): HTMLElement {
+    const wrap = document.createElement("div");
+    wrap.className = "qo-empty";
+    const title = document.createElement("div");
+    title.className = "qo-empty-title";
+    title.textContent = t("ui.quickopen.empty");
+    const nudge = document.createElement("div");
+    nudge.className = "qo-empty-nudge";
+    const kbd = document.createElement("kbd");
+    kbd.textContent = this.toggleKey === "Tab" ? "⇥" : this.toggleKey;
+    nudge.append(
+      kbd,
+      document.createTextNode(
+        this.scope === "project"
+          ? t("ui.quickopen.nudgeHome")
+          : t("ui.quickopen.nudgeProject"),
+      ),
+    );
+    wrap.append(title, nudge);
+    return wrap;
   }
 
   private fillName(el: HTMLElement, text: string): void {
@@ -248,6 +454,12 @@ export class QuickOpen {
   }
 
   private onKey(e: KeyboardEvent): void {
+    if (e.key === this.toggleKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      this.toggleScope(e.shiftKey ? -1 : 1);
+      return;
+    }
     if (e.key === "ArrowDown") {
       e.preventDefault();
       this.selected = Math.min(this.matches.length - 1, this.selected + 1);
@@ -264,16 +476,20 @@ export class QuickOpen {
   }
 
   private choose(item: Item): void {
-    this.close();
     if (item.kind === "project") {
+      this.close();
       this.cb.onOpenProject(item.id);
       return;
     }
     if (item.kind === "command") {
+      this.close();
       item.run();
       return;
     }
-    const base = this.root.replace(/\/+$/, "");
+    const root = rootForScope(this.scope, this.roots);
+    this.close();
+    if (!root) return;
+    const base = root.replace(/\/+$/, "");
     const abs = `${base}/${item.rel}`;
     if (item.isDir) this.cb.onRevealDir(abs);
     else this.cb.onOpenFile(abs);
@@ -290,7 +506,7 @@ export class QuickOpen {
   }
 }
 
-function hintFooter(): HTMLElement {
+function hintFooter(scope: Scope, toggleKey: string): HTMLElement {
   const footer = document.createElement("div");
   footer.className = "quickopen-footer";
   const add = (keys: string[], label: string): void => {
@@ -306,6 +522,12 @@ function hintFooter(): HTMLElement {
   };
   add(["↑", "↓"], t("ui.quickopen.hintNavigate"));
   add(["↵"], t("ui.quickopen.hintOpen"));
+  add(
+    [toggleKey === "Tab" ? "⇥" : toggleKey],
+    scope === "project"
+      ? t("ui.quickopen.hintScopeHome")
+      : t("ui.quickopen.hintScopeProject"),
+  );
   add(["esc"], t("ui.quickopen.hintClose"));
   return footer;
 }

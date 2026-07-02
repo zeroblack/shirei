@@ -212,6 +212,10 @@ export interface Config {
     font_size_max: number;
   };
   files: { exclude_dirs: string[]; respect_gitignore: boolean };
+  quickopen: {
+    default_scope: "project" | "home";
+    toggle_scope: string;
+  };
   layout: {
     sidebar_width: number;
     sidebar_min_width: number;

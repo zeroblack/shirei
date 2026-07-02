@@ -39,6 +39,7 @@ import { promptText } from "./prompt";
 import { QuickOpen } from "./quickopen";
 import type { Screencast } from "./screencast";
 import type { CssRect } from "./screencast-core";
+import { resolveSearchRoot, type ScopeRoots } from "./searchscope";
 import { StatusBar } from "./statusbar";
 import { clearSession, loadSession, type SavedTab, saveSession } from "./store";
 import { TabBar } from "./tabbar";
@@ -1390,6 +1391,32 @@ export class App {
     return this.lastRoot;
   }
 
+  private async projectSearchRoot(): Promise<string> {
+    const projectPath = this.activeSearchProjectPath();
+    const openedFrom = this.activeOpenedFrom();
+    const shellCwd =
+      (await this.activeLiveCwd()) ?? this.activeLeafCwd() ?? null;
+    const home = await homeDir();
+    const root = resolveSearchRoot({ projectPath, openedFrom, shellCwd, home });
+    return root;
+  }
+
+  private activeSearchProjectPath(): string | null {
+    const fp = this.activeFilePath();
+    if (fp) return this.projectRootForPath(fp);
+    const tab = this.tab(this.activeId);
+    if (tab?.kind === "terminal" && tab.projectId) {
+      const p = this.projects.find((x) => x.id === tab.projectId);
+      return p ? p.path.replace(/\/+$/, "") : null;
+    }
+    return null;
+  }
+
+  private activeOpenedFrom(): string | null {
+    const fp = this.activeFilePath();
+    return fp ? parentDir(fp) : null;
+  }
+
   private activePtyId(): string | null {
     return this.activeGrid()?.activePtyId() ?? null;
   }
@@ -1470,11 +1497,23 @@ export class App {
   }
 
   private async openQuickOpen(): Promise<void> {
-    const root = await this.activeWorkspaceRoot();
+    const projectRoot = await this.projectSearchRoot();
+    const home = await homeDir();
+    const project = this.activeProject();
+    const roots: ScopeRoots = {
+      project: projectRoot,
+      home,
+      projectLabel: project?.name ?? (basename(projectRoot) || "project"),
+      projectColor: project?.color ?? null,
+    };
     void this.quickopen.open(
-      root,
+      roots,
       this.projects,
       this.config.limits.quickopen_results,
+      {
+        defaultScope: this.config.quickopen.default_scope,
+        toggleKey: this.config.quickopen.toggle_scope,
+      },
     );
   }
 

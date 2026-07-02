@@ -18,7 +18,8 @@ export const uiEn = {
   "ui.tabbar.noColor": "No color",
   "ui.tabbar.ageNow": "now",
 
-  "ui.quickopen.placeholder": "Search file or launch project…",
+  "ui.quickopen.placeholderProject": "Search this project…",
+  "ui.quickopen.placeholderHome": "Search your whole home folder…",
   "ui.quickopen.truncated":
     "Index truncated: there are more files than listed.",
   "ui.quickopen.tagProject": "project",
@@ -26,6 +27,21 @@ export const uiEn = {
   "ui.quickopen.hintNavigate": "navigate",
   "ui.quickopen.hintOpen": "open",
   "ui.quickopen.hintClose": "close",
+  "ui.quickopen.scopeHome": "home",
+  "ui.quickopen.scopeProject": "project",
+  "ui.quickopen.indexing": "Indexing home…",
+  "ui.quickopen.truncatedHome": "Showing the first matches. Refine to narrow.",
+  "ui.quickopen.empty": "No matches",
+  "ui.quickopen.hintScopeHome": "switch to home",
+  "ui.quickopen.hintScopeProject": "back to project",
+  "ui.quickopen.nudgeHome": "search Home ~",
+  "ui.quickopen.nudgeProject": "back to project",
+  "ui.quickopen.announceProject": "Search scope: project",
+  "ui.quickopen.announceHome": "Search scope: home",
+  "ui.quickopen.scopeAriaProject":
+    "Search scope: project. Press Tab to search home.",
+  "ui.quickopen.scopeAriaHome":
+    "Search scope: home. Press Tab to return to project.",
 
   "ui.editor.find.placeholder": "Find…",
   "ui.editor.find.replacePlaceholder": "Replace…",

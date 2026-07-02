@@ -20,7 +20,8 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.tabbar.noColor": "Sin color",
   "ui.tabbar.ageNow": "ahora",
 
-  "ui.quickopen.placeholder": "Buscar archivo o lanzar proyecto…",
+  "ui.quickopen.placeholderProject": "Buscar en este proyecto…",
+  "ui.quickopen.placeholderHome": "Buscar en toda tu carpeta personal…",
   "ui.quickopen.truncated":
     "Índice truncado: hay más archivos de los listados.",
   "ui.quickopen.tagProject": "proyecto",
@@ -28,6 +29,22 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.quickopen.hintNavigate": "navegar",
   "ui.quickopen.hintOpen": "abrir",
   "ui.quickopen.hintClose": "cerrar",
+  "ui.quickopen.scopeHome": "home",
+  "ui.quickopen.scopeProject": "proyecto",
+  "ui.quickopen.indexing": "Indexando home…",
+  "ui.quickopen.truncatedHome":
+    "Mostrando los primeros resultados. Afina para acotar.",
+  "ui.quickopen.empty": "Sin coincidencias",
+  "ui.quickopen.hintScopeHome": "cambiar a home",
+  "ui.quickopen.hintScopeProject": "volver al proyecto",
+  "ui.quickopen.nudgeHome": "buscar Home ~",
+  "ui.quickopen.nudgeProject": "volver al proyecto",
+  "ui.quickopen.announceProject": "Alcance: proyecto",
+  "ui.quickopen.announceHome": "Alcance: home",
+  "ui.quickopen.scopeAriaProject":
+    "Alcance: proyecto. Presiona Tab para buscar en home.",
+  "ui.quickopen.scopeAriaHome":
+    "Alcance: home. Presiona Tab para volver al proyecto.",
 
   "ui.editor.find.placeholder": "Buscar…",
   "ui.editor.find.replacePlaceholder": "Reemplazar…",
