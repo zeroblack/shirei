@@ -924,6 +924,10 @@ body {
   background: color-mix(in srgb, var(--surface-3) 90%, transparent);
 }
 
+.pane-cluster:not(.multi) {
+  padding: 3px 12px 12px 3px;
+}
+
 .pane-cluster-add {
   display: inline-flex;
   align-items: center;
@@ -936,16 +940,23 @@ body {
   color: var(--fg);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 130ms ease;
+  pointer-events: none;
+  transition: opacity 130ms ease-out;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .pane-leaf:hover .pane-cluster-add {
-    opacity: 0.5;
+  .pane-cluster:not(.multi):hover .pane-cluster-add {
+    opacity: 0.55;
+    pointer-events: auto;
   }
   .pane-cluster-add:hover {
     opacity: 1;
   }
+}
+
+.pane-cluster-add:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .pane-cluster-seg,

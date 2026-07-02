@@ -261,7 +261,6 @@ export class PaneGrid {
     this.activeSeq += 1;
     pane.lastActiveSeq = this.activeSeq;
     this.highlightActive();
-    this.refreshCluster(pane);
     this.refreshActiveState();
     if (pane.activeIndex === 0) pane.terminal.fitAndResize();
     this.activeSession(pane).focus();

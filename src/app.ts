@@ -1089,7 +1089,7 @@ export class App {
   }
 
   private openPaneContentPicker(grid: PaneGrid, paneId: string): void {
-    const { box, close } = createOverlay({
+    const { overlay, box, close } = createOverlay({
       className: "pane-picker",
       label: t("ui.pane.pickerTitle"),
       onDismiss: () => void close(),
@@ -1118,6 +1118,10 @@ export class App {
       }),
       row(t("ui.pane.addBrowser"), t("ui.pane.soon")),
     );
+    document.body.appendChild(overlay);
+    box
+      .querySelector<HTMLButtonElement>(".pane-picker-row:not([disabled])")
+      ?.focus();
   }
 
   activate(id: string): void {
