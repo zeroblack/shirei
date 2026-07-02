@@ -794,6 +794,11 @@ export class App {
           (c) => c ?? undefined,
           () => undefined,
         ),
+      contentCap: () => Math.max(1, this.config.layout.pane_content_cap),
+      onContentChange: () => {
+        this.refreshTreeIfVisible();
+        this.persist();
+      },
     });
     grid.setAccent(color);
     this.sessions.set(id, grid);
