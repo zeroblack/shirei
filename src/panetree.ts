@@ -5,6 +5,11 @@
  */
 export type Dir = "h" | "v";
 
+export interface PaneLeafFileContent {
+  kind: "file";
+  path: string;
+}
+
 export interface PaneLeaf {
   kind: "leaf";
   id: string;
@@ -17,6 +22,10 @@ export interface PaneLeaf {
    */
   lastCommand?: string | null;
   cwd?: string;
+  /** File contents opened over the terminal base, in stack order. */
+  contents?: PaneLeafFileContent[];
+  /** Active stack index: 0 = terminal, i = contents[i-1]. */
+  activeContent?: number;
 }
 
 export interface PaneSplit {
@@ -121,4 +130,12 @@ export function instantiate(
     a: instantiate(template.a, makeId, cwd),
     b: instantiate(template.b, makeId, cwd),
   };
+}
+
+export function readLeafContents(leaf: PaneLeaf): PaneLeafFileContent[] {
+  if (!Array.isArray(leaf.contents)) return [];
+  return leaf.contents.filter(
+    (c): c is PaneLeafFileContent =>
+      !!c && c.kind === "file" && typeof c.path === "string",
+  );
 }
