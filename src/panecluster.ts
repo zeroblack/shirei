@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { FILE_GLYPH, TERMINAL_GLYPH } from "./icons";
 import type { PaneContentKind } from "./panecontent";
 
@@ -30,7 +31,7 @@ export class PaneCluster {
       const add = document.createElement("button");
       add.type = "button";
       add.className = "pane-cluster-add";
-      add.title = "Add content";
+      add.title = t("ui.pane.addContent");
       add.textContent = "+";
       add.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -64,7 +65,7 @@ export class PaneCluster {
     const pick = document.createElement("button");
     pick.type = "button";
     pick.className = "pane-cluster-pick";
-    pick.title = "Change content type";
+    pick.title = t("ui.pane.changeType");
     pick.innerHTML = "&#9662;";
     pick.addEventListener("click", (e) => {
       e.stopPropagation();

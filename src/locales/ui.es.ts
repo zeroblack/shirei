@@ -232,4 +232,7 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.pane.addFile": "Archivo",
   "ui.pane.addBrowser": "Navegador",
   "ui.pane.soon": "(pronto)",
+  "ui.pane.addContent": "Agregar contenido",
+  "ui.pane.changeType": "Cambiar tipo de contenido",
+  "ui.pane.paneFull": "El panel está lleno",
 };

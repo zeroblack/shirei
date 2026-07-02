@@ -230,4 +230,7 @@ export const uiEn = {
   "ui.pane.addFile": "File",
   "ui.pane.addBrowser": "Browser",
   "ui.pane.soon": "(soon)",
+  "ui.pane.addContent": "Add content",
+  "ui.pane.changeType": "Change content type",
+  "ui.pane.paneFull": "Pane is full",
 };

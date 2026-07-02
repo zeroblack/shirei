@@ -132,6 +132,7 @@ export class PaneGrid {
     this.host.replaceChildren(root);
     this.highlightActive();
     this.fitAll();
+    for (const pane of this.panes.values()) this.refreshCluster(pane);
   }
 
   private renderNode(node: PaneNode): HTMLElement {

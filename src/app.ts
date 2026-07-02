@@ -775,7 +775,7 @@ export class App {
       for (const c of readLeafContents(leaf)) {
         await this.switchPaneToFile(grid, leaf.id, c.path, true);
       }
-      if (leaf.activeContent === 0) grid.switchContentIn(leaf.id, 0);
+      grid.switchContentIn(leaf.id, leaf.activeContent ?? 0);
     }
   }
 
@@ -1064,6 +1064,7 @@ export class App {
         title: t("ui.pane.fileTab"),
       });
       if (added) await chooser.open();
+      else if (!silent) this.notify(t("ui.pane.paneFull"));
       return;
     }
     const handle = await this.makeFileContent(grid, paneId, path);
@@ -1079,7 +1080,11 @@ export class App {
     if (grid.activeContentIsFile(paneId)) {
       grid.replaceActiveFile(paneId, handle);
     } else {
-      grid.addFileContent(paneId, handle);
+      const added = grid.addFileContent(paneId, handle);
+      if (!added) {
+        void handle.session.dispose();
+        if (!silent) this.notify(t("ui.pane.paneFull"));
+      }
     }
   }
 

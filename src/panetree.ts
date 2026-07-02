@@ -22,7 +22,6 @@ export interface PaneLeaf {
    */
   lastCommand?: string | null;
   cwd?: string;
-  /** File contents opened over the terminal base, in stack order. */
   contents?: PaneLeafFileContent[];
   /** Active stack index: 0 = terminal, i = contents[i-1]. */
   activeContent?: number;
