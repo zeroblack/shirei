@@ -1,5 +1,6 @@
 import type { RenderConfig, TerminalColors } from "./config";
 import { attachDrag } from "./drag";
+import type { PaneContentSession } from "./panecontent";
 import {
   closeLeaf,
   type Dir,
@@ -31,9 +32,22 @@ function nextPaneId(): string {
   return `p${Date.now().toString(36)}${paneSeq}`;
 }
 
+interface PaneStackEntry {
+  kind: "file";
+  session: PaneContentSession;
+  container: HTMLElement;
+  path?: string;
+  title: string;
+  dirty: boolean;
+}
+
 interface Pane {
-  session: TerminalSession;
   el: HTMLElement;
+  terminal: TerminalSession;
+  termContainer: HTMLElement;
+  contents: PaneStackEntry[];
+  activeIndex: number;
+  lastActiveSeq: number;
 }
 
 export class PaneGrid {
@@ -44,6 +58,7 @@ export class PaneGrid {
   private activeLeafId: string;
   private zoomed = false;
   private visible = true;
+  private activeSeq = 0;
 
   constructor(host: HTMLElement, tree: PaneNode, cb: PaneGridCallbacks) {
     this.host = host;
@@ -57,9 +72,7 @@ export class PaneGrid {
   async open(): Promise<void> {
     // Spawns are independent; opening serially would cost one IPC round-trip
     // per pane before anything renders.
-    await Promise.all(
-      [...this.panes.values()].map(({ session }) => session.open()),
-    );
+    await Promise.all([...this.panes.values()].map((p) => p.terminal.open()));
     this.fitAll();
     this.setActive(this.activeLeafId);
   }
@@ -67,7 +80,10 @@ export class PaneGrid {
   private createPane(leaf: PaneLeaf): void {
     const el = document.createElement("div");
     el.className = "pane-leaf";
-    const session = this.cb.makeSession(leaf.id, el, {
+    const termContainer = document.createElement("div");
+    termContainer.className = "pane-content pane-content-active";
+    el.appendChild(termContainer);
+    const session = this.cb.makeSession(leaf.id, termContainer, {
       cwd: leaf.cwd,
       command: leaf.command,
       lastCommand: leaf.lastCommand,
@@ -75,7 +91,14 @@ export class PaneGrid {
     session.onExit = () => this.closePane(leaf.id);
     el.addEventListener("mousedown", () => this.setActive(leaf.id), true);
     session.setVisible(this.visible);
-    this.panes.set(leaf.id, { session, el });
+    this.panes.set(leaf.id, {
+      el,
+      terminal: session,
+      termContainer,
+      contents: [],
+      activeIndex: 0,
+      lastActiveSeq: 0,
+    });
   }
 
   private render(): void {
@@ -142,7 +165,7 @@ export class PaneGrid {
     this.render();
     void this.panes
       .get(id)
-      ?.session.open()
+      ?.terminal.open()
       .then(() => this.setActive(id));
   }
 
@@ -151,7 +174,8 @@ export class PaneGrid {
     const next = closeLeaf(this.tree, target);
     const pane = this.panes.get(target);
     if (pane) {
-      void pane.session.dispose();
+      for (const c of pane.contents) void c.session.dispose();
+      void pane.terminal.dispose();
       this.panes.delete(target);
     }
     if (next === null) {
@@ -210,10 +234,12 @@ export class PaneGrid {
     const pane = this.panes.get(id);
     if (!pane) return;
     this.activeLeafId = id;
+    this.activeSeq += 1;
+    pane.lastActiveSeq = this.activeSeq;
     this.highlightActive();
     this.refreshActiveState();
-    pane.session.fitAndResize();
-    pane.session.focus();
+    if (pane.activeIndex === 0) pane.terminal.fitAndResize();
+    this.activeSession(pane).focus();
     this.cb.onActivePane?.();
   }
 
@@ -233,23 +259,23 @@ export class PaneGrid {
   }
 
   reconnectActive(): void {
-    void this.panes.get(this.activeLeafId)?.session.reconnect();
+    void this.panes.get(this.activeLeafId)?.terminal.reconnect();
   }
 
   killActive(): void {
-    void this.panes.get(this.activeLeafId)?.session.killSession();
+    void this.panes.get(this.activeLeafId)?.terminal.killSession();
   }
 
   scrollActive(lines: number): void {
-    this.panes.get(this.activeLeafId)?.session.scrollByLines(lines);
+    this.panes.get(this.activeLeafId)?.terminal.scrollByLines(lines);
   }
 
   copyLineActive(): void {
-    this.panes.get(this.activeLeafId)?.session.copyLine();
+    this.panes.get(this.activeLeafId)?.terminal.copyLine();
   }
 
   pasteActive(): void {
-    this.panes.get(this.activeLeafId)?.session.paste();
+    this.panes.get(this.activeLeafId)?.terminal.paste();
   }
 
   private highlightActive(): void {
@@ -260,34 +286,35 @@ export class PaneGrid {
   }
 
   private refreshActiveState(): void {
-    for (const [id, { session }] of this.panes) {
-      session.setCursorBlink(this.visible && id === this.activeLeafId);
-      if (this.visible && id !== this.activeLeafId) session.markHot();
+    for (const [id, pane] of this.panes) {
+      pane.terminal.setCursorBlink(this.visible && id === this.activeLeafId);
+      if (this.visible && id !== this.activeLeafId) pane.terminal.markHot();
     }
     // Hidden panes keep their context instead of releasing it on every tab
     // switch: churning contexts is what exhausts WebKit and garbles panes.
     // The pool's LRU evicts the coldest only when live contexts exceed the cap.
-    if (this.visible) this.panes.get(this.activeLeafId)?.session.markHot();
+    if (this.visible) this.panes.get(this.activeLeafId)?.terminal.markHot();
   }
 
   fitAll(): void {
-    for (const { session } of this.panes.values()) session.fitAndResize();
+    for (const pane of this.panes.values()) pane.terminal.fitAndResize();
   }
 
   recoverRenderers(hard: boolean): void {
-    for (const { session } of this.panes.values()) void session.recover(hard);
+    for (const pane of this.panes.values()) void pane.terminal.recover(hard);
   }
 
   show(visible: boolean): void {
     this.visible = visible;
     this.host.classList.toggle("active", visible);
-    for (const { session } of this.panes.values()) session.setVisible(visible);
+    for (const pane of this.panes.values()) this.applyContentVisibility(pane);
     this.refreshActiveState();
     if (visible) this.fitAll();
   }
 
   focus(): void {
-    this.panes.get(this.activeLeafId)?.session.focus();
+    const pane = this.panes.get(this.activeLeafId);
+    if (pane) this.activeSession(pane).focus();
   }
 
   fitAndResize(): void {
@@ -300,14 +327,41 @@ export class PaneGrid {
     render: RenderConfig,
     theme: TerminalColors,
   ): void {
-    for (const { session } of this.panes.values())
-      session.applyLook(family, size, render, theme);
+    for (const pane of this.panes.values())
+      pane.terminal.applyLook(family, size, render, theme);
     this.refreshActiveState();
   }
 
   setAccent(color: string | null): void {
     if (color) this.host.style.setProperty("--tab-color", color);
     else this.host.style.removeProperty("--tab-color");
+  }
+
+  private activeSession(pane: Pane): TerminalSession | PaneContentSession {
+    return pane.activeIndex === 0
+      ? pane.terminal
+      : pane.contents[pane.activeIndex - 1].session;
+  }
+
+  private activeContainer(pane: Pane): HTMLElement {
+    return pane.activeIndex === 0
+      ? pane.termContainer
+      : pane.contents[pane.activeIndex - 1].container;
+  }
+
+  private applyContentVisibility(pane: Pane): void {
+    const active = this.activeContainer(pane);
+    pane.termContainer.classList.toggle(
+      "pane-content-active",
+      pane.termContainer === active,
+    );
+    for (const c of pane.contents) {
+      c.container.classList.toggle(
+        "pane-content-active",
+        c.container === active,
+      );
+    }
+    pane.terminal.setVisible(this.visible && pane.activeIndex === 0);
   }
 
   serialize(): PaneNode {
@@ -340,14 +394,17 @@ export class PaneGrid {
 
   scrollbackWeight(): number {
     let total = 0;
-    for (const { session } of this.panes.values())
-      total += session.scrollbackWeight();
+    for (const pane of this.panes.values())
+      total += pane.terminal.scrollbackWeight();
     return total;
   }
 
   async dispose(): Promise<void> {
     await Promise.all(
-      [...this.panes.values()].map(({ session }) => session.dispose()),
+      [...this.panes.values()].flatMap((p) => [
+        ...p.contents.map((c) => Promise.resolve(c.session.dispose())),
+        p.terminal.dispose(),
+      ]),
     );
     this.panes.clear();
     this.host.remove();
