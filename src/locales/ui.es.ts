@@ -222,4 +222,14 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
     "Una terminal minimal. Renombra y colorea tus pestañas para identificar tus proyectos de un vistazo.",
   "ui.about.avatarAlt": "Dioni",
   "ui.about.sign": "Hecho con café los fines de semana · Dioni",
+
+  "ui.pane.noFileOpen": "Sin archivo abierto",
+  "ui.pane.takesNextFile": "Este panel recibe el próximo archivo que abras.",
+  "ui.pane.recent": "recientes",
+  "ui.pane.chooserActions": "⌘P buscar archivo · ⌫ volver al terminal",
+  "ui.pane.fileTab": "(archivo)",
+  "ui.pane.pickerTitle": "Contenido del panel",
+  "ui.pane.addFile": "Archivo",
+  "ui.pane.addBrowser": "Navegador",
+  "ui.pane.soon": "(pronto)",
 };

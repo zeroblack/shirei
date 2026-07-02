@@ -220,4 +220,14 @@ export const uiEn = {
     "A minimal terminal. Rename and color your tabs to identify your projects at a glance.",
   "ui.about.avatarAlt": "Dioni",
   "ui.about.sign": "Made with coffee on weekends · Dioni",
+
+  "ui.pane.noFileOpen": "No file open",
+  "ui.pane.takesNextFile": "This pane takes the next file you open.",
+  "ui.pane.recent": "recent",
+  "ui.pane.chooserActions": "⌘P find file · ⌫ back to terminal",
+  "ui.pane.fileTab": "(file)",
+  "ui.pane.pickerTitle": "Pane content",
+  "ui.pane.addFile": "File",
+  "ui.pane.addBrowser": "Browser",
+  "ui.pane.soon": "(soon)",
 };
