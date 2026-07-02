@@ -18,7 +18,8 @@ export const uiEn = {
   "ui.tabbar.noColor": "No color",
   "ui.tabbar.ageNow": "now",
 
-  "ui.quickopen.placeholder": "Search file or launch project…",
+  "ui.quickopen.placeholderProject": "Search this project…",
+  "ui.quickopen.placeholderHome": "Search your whole home folder…",
   "ui.quickopen.truncated":
     "Index truncated: there are more files than listed.",
   "ui.quickopen.tagProject": "project",

@@ -20,7 +20,8 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.tabbar.noColor": "Sin color",
   "ui.tabbar.ageNow": "ahora",
 
-  "ui.quickopen.placeholder": "Buscar archivo o lanzar proyecto…",
+  "ui.quickopen.placeholderProject": "Buscar en este proyecto…",
+  "ui.quickopen.placeholderHome": "Buscar en toda tu carpeta personal…",
   "ui.quickopen.truncated":
     "Índice truncado: hay más archivos de los listados.",
   "ui.quickopen.tagProject": "proyecto",

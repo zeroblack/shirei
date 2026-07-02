@@ -170,7 +170,6 @@ export class QuickOpen {
 
     this.input = document.createElement("input");
     this.input.className = "quickopen-input";
-    this.input.placeholder = t("ui.quickopen.placeholder");
     this.input.addEventListener("input", () =>
       this.scheduleFilter(this.input.value),
     );
@@ -207,6 +206,10 @@ export class QuickOpen {
 
   private renderScopeChip(): void {
     if (!this.scopeChip) return;
+    this.input.placeholder =
+      this.scope === "home"
+        ? t("ui.quickopen.placeholderHome")
+        : t("ui.quickopen.placeholderProject");
     this.scopeChip.dataset.scope = this.scope;
     const other = cycleScope(this.scope, 1);
     this.scopeChip.setAttribute(
