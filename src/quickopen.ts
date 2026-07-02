@@ -180,7 +180,6 @@ export class QuickOpen {
     this.scopeChip.type = "button";
     this.scopeChip.className = "qo-scope";
     this.scopeChip.tabIndex = -1;
-    this.scopeChip.setAttribute("aria-label", t("ui.quickopen.scopeAria"));
     this.scopeChip.addEventListener("click", (e) => {
       e.preventDefault();
       this.toggleScope(1);
@@ -209,31 +208,52 @@ export class QuickOpen {
   private renderScopeChip(): void {
     if (!this.scopeChip) return;
     this.scopeChip.dataset.scope = this.scope;
-    this.scopeChip.replaceChildren();
-    if (this.loading) {
+    const other = cycleScope(this.scope, 1);
+    this.scopeChip.setAttribute(
+      "aria-label",
+      this.scope === "home"
+        ? t("ui.quickopen.scopeAriaHome")
+        : t("ui.quickopen.scopeAriaProject"),
+    );
+
+    const current = document.createElement("span");
+    current.className = "qo-scope-seg qo-scope-current";
+    this.fillScopeSeg(current, this.scope, this.loading);
+
+    const key = document.createElement("kbd");
+    key.className = "qo-scope-key";
+    key.textContent = this.toggleKey === "Tab" ? "⇥" : this.toggleKey;
+
+    const target = document.createElement("span");
+    target.className = "qo-scope-seg qo-scope-target";
+    this.fillScopeSeg(target, other, false);
+
+    this.scopeChip.replaceChildren(current, key, target);
+  }
+
+  private fillScopeSeg(el: HTMLElement, scope: Scope, loading: boolean): void {
+    if (loading) {
       const spin = document.createElement("span");
       spin.className = "qo-scope-spin";
-      this.scopeChip.appendChild(spin);
-    }
-    if (this.scope === "project") {
-      if (this.roots.projectColor) {
-        const dot = document.createElement("span");
-        dot.className = "qo-project-dot";
-        dot.style.background = this.roots.projectColor;
-        this.scopeChip.appendChild(dot);
-      }
-      this.scopeChip.appendChild(
-        document.createTextNode(this.roots.projectLabel || "project"),
-      );
-    } else {
+      el.appendChild(spin);
+    } else if (scope === "home") {
       const glyph = document.createElement("span");
       glyph.className = "qo-scope-glyph";
       glyph.textContent = "~";
-      this.scopeChip.append(
-        glyph,
-        document.createTextNode(t("ui.quickopen.scopeHome")),
-      );
+      el.appendChild(glyph);
+    } else if (this.roots.projectColor) {
+      const dot = document.createElement("span");
+      dot.className = "qo-project-dot";
+      dot.style.background = this.roots.projectColor;
+      el.appendChild(dot);
     }
+    el.appendChild(
+      document.createTextNode(
+        scope === "home"
+          ? t("ui.quickopen.scopeHome")
+          : this.roots.projectLabel || t("ui.quickopen.scopeProject"),
+      ),
+    );
   }
 
   private announceScope(): void {
