@@ -922,6 +922,21 @@ body {
 .pane-cluster.multi {
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface-3) 90%, transparent);
+  opacity: 0;
+  transition: opacity 130ms ease-out;
+}
+
+.pane-cluster.multi > * {
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pane-cluster.multi:hover {
+    opacity: 1;
+  }
+  .pane-cluster.multi:hover > * {
+    pointer-events: auto;
+  }
 }
 
 .pane-cluster:not(.multi) {
@@ -1124,6 +1139,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .pane-cluster,
   .pane-cluster-add,
   .pane-cluster-seg,
   .pane-cluster-pick {
