@@ -249,6 +249,42 @@ export const ACTIONS: ActionDef[] = [
     defaults: [{ key: "Enter", meta: true, shift: true }],
   },
   {
+    id: "pane.content.pick",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "t", meta: true, alt: true }],
+  },
+  {
+    id: "pane.content.cycle",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "Enter", meta: true, alt: true }],
+  },
+  {
+    id: "pane.content.close",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "Backspace", meta: true, alt: true }],
+  },
+  {
+    id: "pane.content.slot-1",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "1", meta: true, alt: true }],
+  },
+  {
+    id: "pane.content.slot-2",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "2", meta: true, alt: true }],
+  },
+  {
+    id: "pane.content.slot-3",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "3", meta: true, alt: true }],
+  },
+  {
     id: "focus.left",
     category: "panes",
     scope: "global",
