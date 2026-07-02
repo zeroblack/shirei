@@ -1,6 +1,12 @@
 import type { RenderConfig, TerminalColors } from "./config";
 import { attachDrag } from "./drag";
-import type { PaneContentSession } from "./panecontent";
+import {
+  canAdd,
+  type FileTargetCandidate,
+  nextIndex,
+  type PaneContentKind,
+  type PaneContentSession,
+} from "./panecontent";
 import {
   closeLeaf,
   type Dir,
@@ -24,6 +30,9 @@ export interface PaneGridCallbacks {
   onEmpty: () => void;
   onActivePane?: () => void;
   cwdOf?: (ptyId: string) => Promise<string | undefined>;
+  contentCap: () => number;
+  onContentChange?: () => void;
+  onPickContent?: (paneId: string) => void;
 }
 
 let paneSeq = 0;
@@ -364,8 +373,175 @@ export class PaneGrid {
     pane.terminal.setVisible(this.visible && pane.activeIndex === 0);
   }
 
+  private stackLen(pane: Pane): number {
+    return 1 + pane.contents.length;
+  }
+
+  private notifyContent(): void {
+    this.cb.onContentChange?.();
+  }
+
+  private activate(pane: Pane, index: number): void {
+    pane.activeIndex = index;
+    this.applyContentVisibility(pane);
+    if (index === 0) pane.terminal.fitAndResize();
+    this.activeSession(pane).focus();
+    this.notifyContent();
+  }
+
+  addFileContent(
+    paneId: string,
+    entry: {
+      session: PaneContentSession;
+      container: HTMLElement;
+      path?: string;
+      title: string;
+    },
+  ): boolean {
+    const pane = this.panes.get(paneId);
+    if (!pane) return false;
+    if (!canAdd(this.stackLen(pane), this.cb.contentCap())) return false;
+    entry.container.classList.add("pane-content");
+    pane.el.appendChild(entry.container);
+    pane.contents.push({
+      kind: "file",
+      session: entry.session,
+      container: entry.container,
+      path: entry.path,
+      title: entry.title,
+      dirty: false,
+    });
+    this.activate(pane, pane.contents.length);
+    return true;
+  }
+
+  replaceActiveFile(
+    paneId: string,
+    entry: {
+      session: PaneContentSession;
+      container: HTMLElement;
+      path?: string;
+      title: string;
+    },
+  ): void {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) {
+      this.addFileContent(paneId, entry);
+      return;
+    }
+    const slot = pane.contents[pane.activeIndex - 1];
+    void slot.session.dispose();
+    slot.container.remove();
+    entry.container.classList.add("pane-content");
+    pane.el.appendChild(entry.container);
+    pane.contents[pane.activeIndex - 1] = {
+      kind: "file",
+      session: entry.session,
+      container: entry.container,
+      path: entry.path,
+      title: entry.title,
+      dirty: false,
+    };
+    this.activate(pane, pane.activeIndex);
+  }
+
+  activeContentIsFile(paneId: string): boolean {
+    const pane = this.panes.get(paneId);
+    return !!pane && pane.activeIndex > 0;
+  }
+
+  cycleContent(dir: 1 | -1): void {
+    const pane = this.panes.get(this.activeLeafId);
+    if (!pane) return;
+    this.activate(pane, nextIndex(this.stackLen(pane), pane.activeIndex, dir));
+  }
+
+  switchContent(index: number): void {
+    const pane = this.panes.get(this.activeLeafId);
+    if (!pane || index < 0 || index >= this.stackLen(pane)) return;
+    this.activate(pane, index);
+  }
+
+  switchContentIn(paneId: string, index: number): void {
+    const pane = this.panes.get(paneId);
+    if (!pane || index < 0 || index >= this.stackLen(pane)) return;
+    this.activate(pane, index);
+  }
+
+  closeActiveContent(): void {
+    const pane = this.panes.get(this.activeLeafId);
+    if (!pane || pane.activeIndex === 0) return;
+    const [removed] = pane.contents.splice(pane.activeIndex - 1, 1);
+    void removed.session.dispose();
+    removed.container.remove();
+    this.activate(pane, 0);
+  }
+
+  setContentDirty(paneId: string, dirty: boolean): void {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) return;
+    pane.contents[pane.activeIndex - 1].dirty = dirty;
+    this.notifyContent();
+  }
+
+  activePaneId(): string {
+    return this.activeLeafId;
+  }
+
+  contentCandidates(): FileTargetCandidate[] {
+    return [...this.panes.entries()].map(([id, pane]) => ({
+      paneId: id,
+      focused: id === this.activeLeafId,
+      activeIsFile: pane.activeIndex > 0,
+      recency: pane.lastActiveSeq,
+    }));
+  }
+
+  descriptorsOf(paneId: string): {
+    kind: PaneContentKind;
+    title: string;
+    dirty: boolean;
+    active: boolean;
+  }[] {
+    const pane = this.panes.get(paneId);
+    if (!pane) return [];
+    return [
+      {
+        kind: "terminal" as const,
+        title: "terminal",
+        dirty: false,
+        active: pane.activeIndex === 0,
+      },
+      ...pane.contents.map((c, i) => ({
+        kind: c.kind,
+        title: c.title,
+        dirty: c.dirty,
+        active: pane.activeIndex === i + 1,
+      })),
+    ];
+  }
+
   serialize(): PaneNode {
+    this.syncContents();
     return structuredClone(this.tree);
+  }
+
+  private syncContents(): void {
+    const write = (node: PaneNode): void => {
+      if (node.kind === "leaf") {
+        const pane = this.panes.get(node.id);
+        if (pane) {
+          node.contents = pane.contents
+            .filter((c) => c.path)
+            .map((c) => ({ kind: "file" as const, path: c.path as string }));
+          node.activeContent = pane.activeIndex;
+        }
+        return;
+      }
+      write(node.a);
+      write(node.b);
+    };
+    write(this.tree);
   }
 
   applySnapshot(snap: Map<string, { cwd?: string; command?: string }>): void {
