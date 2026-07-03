@@ -1,5 +1,6 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { homeDir } from "@tauri-apps/api/path";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { alpha, mix } from "./colors";
@@ -53,6 +54,10 @@ import { openTodoModal } from "./todomodal";
 import { TodoPanel } from "./todopanel";
 import type { Todo } from "./todos";
 import type { EditorTab, TabState } from "./types";
+import { UpdateIndicator } from "./updateindicator";
+import { openUpdateModal, type UpdateModalHandle } from "./updatemodal";
+import { UpdateController } from "./updates";
+import type { UpdateState } from "./updatestate";
 import { webglPool } from "./webgl-pool";
 
 let EditorSession: typeof EditorSessionType | null = null;
@@ -254,6 +259,10 @@ export class App {
     commands: () => this.paletteCommands(),
   });
   private readonly gitHistory = new GitHistory();
+  private readonly updates: UpdateController;
+  private readonly updateIndicator: UpdateIndicator;
+  private updateModal: UpdateModalHandle | null = null;
+  private appVersion = "";
 
   constructor(tabbarEl: HTMLElement, host: HTMLElement, config: Config) {
     this.host = host;
@@ -335,6 +344,15 @@ export class App {
     document.addEventListener("focusin", () => this.refreshFocusSurface());
     this.refreshFocusSurface();
     this.startTimers();
+    void getVersion()
+      .then((v) => {
+        this.appVersion = v;
+      })
+      .catch(() => {});
+    this.updateIndicator = new UpdateIndicator(() => this.openUpdatePrompt());
+    this.updates = new UpdateController((s, manual) =>
+      this.onUpdateState(s, manual),
+    );
   }
 
   // Screen recording is a rare action, so its module (and screencast-core) is
@@ -485,6 +503,13 @@ export class App {
       this.renderTabs();
     }
     if (this.panelVisible) await this.openWorkspaceTree();
+    if (this.config.updates.auto_check) {
+      // Two rAFs so the check starts only after the boot frame has painted:
+      // the first callback runs before paint, the second after.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => void this.updates.checkAuto());
+      });
+    }
   }
 
   async bindMenu(): Promise<void> {
@@ -496,6 +521,100 @@ export class App {
     await listen("menu-zoom-out", () => this.setFontSize(this.fontSize - 1));
     await listen("menu-zoom-reset", () => this.setFontSize(DEFAULT_FONT_SIZE));
     await listen<number>("menu-goto-tab", (e) => this.gotoTab(e.payload));
+  }
+
+  // Update UI wiring lives in its own bucket: the native "Check for Updates…"
+  // item and the cross-window bridge that lets the Settings → About row
+  // mirror this window's pending state and ask it to open the modal.
+  async bindUpdateEvents(): Promise<void> {
+    await listen("menu://check-updates", () => void this.updates.checkManual());
+    await listen("shirei://update-open-modal", () => this.openUpdatePrompt());
+    await listen("shirei://update-state-request", () => {
+      const pending = this.updates.pending();
+      if (!pending) return;
+      void emit("shirei://update-state", {
+        kind: "available",
+        version: pending.version,
+        notes: pending.notes,
+      } satisfies UpdateState);
+    });
+  }
+
+  // Auto-detection stays quiet: available only lights the titlebar indicator
+  // and, once per new version, a toast — it never opens the modal on its own.
+  // A manual check ("Check for Updates…") is an explicit user action, so its
+  // outcome is always visible: the modal opens directly when one is found.
+  private onUpdateState(state: UpdateState, manual = false): void {
+    void emit("shirei://update-state", state);
+    switch (state.kind) {
+      case "checking":
+        showToast(t("ui.update.checking"));
+        break;
+      case "available":
+        if (state.version) {
+          this.updateIndicator.show(state.version);
+          if (manual) {
+            this.rememberSeen(state.version);
+            this.openUpdatePrompt();
+          } else {
+            this.announceUpdate(state.version);
+          }
+        }
+        break;
+      case "uptodate":
+        this.updateIndicator.hide();
+        showToast(t("ui.update.upToDate"));
+        break;
+      case "downloading":
+      case "ready":
+        this.updateModal?.render(state);
+        break;
+      case "error":
+        if (this.updateModal) {
+          this.updateModal.render(state);
+        } else {
+          showToast(t("ui.update.checkFailed"), {
+            label: t("ui.update.retry"),
+            run: () => void this.updates.checkManual(),
+          });
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  private announceUpdate(version: string): void {
+    if (version === this.config.updates.last_seen) return;
+    showToast(t("ui.update.available", { version }), {
+      label: t("ui.update.view"),
+      run: () => this.openUpdatePrompt(),
+    });
+    this.rememberSeen(version);
+  }
+
+  private rememberSeen(version: string): void {
+    this.config = {
+      ...this.config,
+      updates: { ...this.config.updates, last_seen: version },
+    };
+    void configSet(this.config);
+  }
+
+  private openUpdatePrompt(): void {
+    if (this.updateModal) return;
+    const pending = this.updates.pending();
+    if (!pending) return;
+    void getCurrentWindow().setFocus();
+    this.updateModal = openUpdateModal({
+      version: pending.version,
+      currentVersion: this.appVersion,
+      notes: pending.notes,
+      onInstall: () => void this.updates.install(),
+      onDismiss: () => {
+        this.updateModal = null;
+      },
+    });
   }
 
   applyConfig(c: Config): void {

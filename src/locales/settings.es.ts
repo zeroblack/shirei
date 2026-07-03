@@ -389,5 +389,5 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
     "límites archivo imagen índice quickopen carpetas excluidas gitignore git ignorar worktree config json",
   "settings.projects.search": "proyecto carpeta ruta layout plantilla",
   "settings.about.search":
-    "about acerca version licencia opensource dioni blog shirei significado japones agentes ia sesion mit",
+    "about acerca version licencia opensource dioni blog shirei significado japones agentes ia sesion mit actualizacion actualizar version nueva",
 };

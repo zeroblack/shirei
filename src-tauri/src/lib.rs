@@ -125,6 +125,8 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(pty::PtyManager::default())
         .manage(mux_client::MuxClient::default())
         .manage(config::ConfigManager::default())
@@ -156,11 +158,14 @@ pub fn run() {
         })
         .menu(|handle| {
             let about = MenuItemBuilder::with_id("about", "About Shirei").build(handle)?;
+            let check_updates =
+                MenuItemBuilder::with_id("check-updates", "Check for Updates…").build(handle)?;
             let settings = MenuItemBuilder::with_id("settings", "Settings…")
                 .accelerator("CmdOrCtrl+,")
                 .build(handle)?;
             let app_menu = SubmenuBuilder::new(handle, "Shirei")
                 .item(&about)
+                .item(&check_updates)
                 .separator()
                 .item(&settings)
                 .separator()
@@ -241,6 +246,9 @@ pub fn run() {
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
             "about" => open_settings(app, Some("about")),
+            "check-updates" => {
+                let _ = app.emit("menu://check-updates", ());
+            }
             "settings" => open_settings(app, None),
             "new-window" => {
                 if let Err(e) = open_window(app) {

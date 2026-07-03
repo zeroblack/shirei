@@ -907,6 +907,24 @@ pub struct Keystroke {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]
+pub struct UpdatesConfig {
+    pub auto_check: bool,
+    // Version last announced through the one-time toast; empty until the first
+    // update is found, so the toast never fires twice for the same release.
+    pub last_seen: String,
+}
+
+impl Default for UpdatesConfig {
+    fn default() -> Self {
+        Self {
+            auto_check: true,
+            last_seen: String::new(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
 pub struct Config {
     pub locale: Locale,
     pub font: FontConfig,
@@ -923,6 +941,8 @@ pub struct Config {
     pub motion: MotionConfig,
     pub tabs: TabsConfig,
     pub chrome: ChromeConfig,
+    #[serde(default)]
+    pub updates: UpdatesConfig,
     pub performance: PerformanceConfig,
     pub files: FilesConfig,
     pub quickopen: QuickOpenConfig,
@@ -956,6 +976,7 @@ impl Default for Config {
             motion: MotionConfig::default(),
             tabs: TabsConfig::default(),
             chrome: ChromeConfig::default(),
+            updates: UpdatesConfig::default(),
             performance: PerformanceConfig::default(),
             files: FilesConfig::default(),
             quickopen: QuickOpenConfig::default(),
