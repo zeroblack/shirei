@@ -231,6 +231,7 @@ export interface Config {
   motion: MotionConfig;
   tabs: TabsConfig;
   chrome: ChromeConfig;
+  updates: { auto_check: boolean; last_seen: string };
   performance: PerformanceConfig;
   recorder: RecorderConfig;
   projects: Project[];

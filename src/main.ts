@@ -39,6 +39,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const app = new App(tabbar, host, config);
   await onConfigChanged((c) => app.applyConfig(c));
   await app.bindMenu();
+  await app.bindUpdateEvents();
   void app.init();
   const title = document.querySelector<HTMLElement>("#app-title");
   if (title)

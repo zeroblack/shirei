@@ -947,6 +947,37 @@ kbd.shortcut-key--fixed {
   color: var(--fg-4);
 }
 
+.about-update {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.about-update.hidden {
+  display: none;
+}
+.about-update-text {
+  font: var(--type-label);
+  color: var(--fg);
+}
+.about-update-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: var(--type-label);
+  cursor: pointer;
+}
+.about-update-btn:hover {
+  border-color: var(--fg-4);
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .projects-head {
   display: flex;
   gap: 10px;

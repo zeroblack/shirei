@@ -44,8 +44,17 @@
       }
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/zeroblack/shirei/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM0ODM1NkQ3RkY4NDFEN0UKUldSK0hZVC8xMWFEeE85bklYMVFCTkp4L0NPbFdLWXFlY2UyUG05NWpINHI0eDJmVjBpSG04WmIK"
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "externalBin": ["binaries/shirei-mux"],
     "copyright": "© 2026 Dionisio Fernández. MIT License.",

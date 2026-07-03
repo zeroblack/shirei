@@ -119,6 +119,56 @@ body {
     monospace;
 }
 
+#titlebar-update {
+  position: absolute;
+  right: 220px;
+  top: 50%;
+  margin-top: -13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fg);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 150ms var(--ease-out),
+    transform 150ms var(--ease-out);
+}
+
+#titlebar-update[data-mounted="true"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#titlebar-update:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--fg-dim);
+}
+
+.tu-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.tu-label {
+  font: var(--type-label);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #titlebar-update {
+    transition: none;
+  }
+}
+
 #app-title {
   cursor: pointer;
   color: var(--fg);
@@ -2201,6 +2251,255 @@ body {
   .confirm,
   .confirm-box {
     animation: none;
+  }
+}
+
+.update {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 16vh;
+  background: rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(8px) saturate(118%);
+  backdrop-filter: blur(8px) saturate(118%);
+  animation: confirm-overlay-in 150ms ease;
+}
+
+.update-box {
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 88vw);
+  padding: var(--space-6) var(--space-6) var(--space-5);
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 28px 70px -20px rgba(0, 0, 0, 0.8),
+    0 8px 20px -10px rgba(0, 0, 0, 0.55);
+  transform-origin: center top;
+  animation: confirm-pop var(--modal-in, 200ms) var(--ease-out);
+}
+
+.update-box:focus {
+  outline: none;
+}
+
+.update-title {
+  color: var(--fg);
+  font: var(--type-title);
+  letter-spacing: var(--tracking-snug);
+}
+
+.update-title-danger {
+  color: var(--danger);
+}
+
+.update-caption {
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+  font: var(--type-body);
+}
+
+.update-group-label {
+  margin-top: var(--space-5);
+  color: var(--text-subtle);
+  font: var(--type-group);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.update-notes {
+  margin-top: var(--space-2);
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: var(--space-1);
+  color: var(--text-muted);
+  font: var(--type-desc);
+}
+
+.update-notes.scrollable {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black 16px,
+    black calc(100% - 16px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black 16px,
+    black calc(100% - 16px),
+    transparent
+  );
+}
+
+.update-notes-line {
+  margin-top: var(--space-1);
+}
+
+.update-notes-line:first-child {
+  margin-top: 0;
+}
+
+.update-notes-heading {
+  margin-top: var(--space-2);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.update-notes-list {
+  margin: var(--space-1) 0 0;
+  padding-left: 1.1em;
+}
+
+.update-notes-link {
+  color: var(--accent);
+}
+
+.update-progress {
+  margin-top: var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.update-progress-track {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.update-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  transition: width 140ms linear;
+}
+
+.update-progress-indeterminate .update-progress-fill {
+  width: 30%;
+  animation: update-progress-sweep 1100ms linear infinite;
+}
+
+@keyframes update-progress-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(333%);
+  }
+}
+
+.update-progress-pct {
+  flex-shrink: 0;
+  min-width: 34px;
+  text-align: right;
+  color: var(--text-muted);
+  font: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.update-progress-static {
+  display: none;
+  color: var(--text-muted);
+  font: var(--type-caption);
+}
+
+.update-ready {
+  margin-top: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+
+.update-spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  animation: update-spin 800ms linear infinite;
+}
+
+@keyframes update-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.update-actions {
+  margin-top: var(--space-6);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.update-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font: var(--type-label);
+  letter-spacing: var(--tracking-snug);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 90ms ease;
+}
+
+.update-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--fg-dim);
+  color: var(--fg);
+}
+
+.update-btn:active {
+  transform: scale(0.98);
+}
+
+.update-btn:focus-visible,
+.update-btn.selected {
+  outline: none;
+  border-color: color-mix(in srgb, var(--fg) 52%, transparent);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update,
+  .update-box {
+    animation: none;
+  }
+  .update-progress-fill {
+    transition: none;
+  }
+  .update-progress-indeterminate .update-progress-fill {
+    animation: none;
+    display: none;
+  }
+  .update-progress-indeterminate .update-progress-static {
+    display: block;
+  }
+  .update-spinner {
+    animation: none;
+    opacity: 0.6;
   }
 }
 

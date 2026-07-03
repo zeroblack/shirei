@@ -377,5 +377,5 @@ export const settingsEn = {
     "limits file image index quickopen excluded folders gitignore git ignore worktree config json",
   "settings.projects.search": "project folder path layout template",
   "settings.about.search":
-    "about version license opensource dioni blog shirei meaning japanese agents ai session mit",
+    "about version license opensource dioni blog shirei meaning japanese agents ai session mit update upgrade release",
 };
