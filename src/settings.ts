@@ -22,6 +22,7 @@ import { sessionSection } from "./settings/section-session";
 import { shortcutsSection } from "./settings/section-shortcuts";
 import { tabsSection } from "./settings/section-tabs";
 import { terminalSection } from "./settings/section-terminal";
+import { updatesSection } from "./settings/section-updates";
 import { mountSettings, type SettingsSection } from "./settings/shell";
 
 const BY_ID: Record<SectionId, SettingsSection> = {
@@ -38,6 +39,7 @@ const BY_ID: Record<SectionId, SettingsSection> = {
   performance: performanceSection,
   about: aboutSection,
   advanced: advancedSection,
+  updates: updatesSection,
 };
 
 const SECTIONS: SettingsSection[] = SECTION_LAYOUT.map((l) => ({

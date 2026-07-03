@@ -11,6 +11,7 @@ export const SECTION_LAYOUT = [
   { id: "recording", group: "tools" },
   { id: "performance", group: "tools" },
   { id: "advanced", group: "system" },
+  { id: "updates", group: "system" },
   { id: "about", group: "system" },
 ] as const satisfies readonly { id: string; group: string }[];
 

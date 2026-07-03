@@ -68,6 +68,7 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.recording.label": "Grabación",
   "settings.performance.label": "Rendimiento",
   "settings.advanced.label": "Avanzado",
+  "settings.updates.label": "Actualizaciones",
   "settings.about.label": "About",
 
   "settings.shortcuts.title": "Atajos de teclado",
@@ -295,6 +296,16 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.advanced.configFile": "Archivo de configuración",
   "settings.advanced.openConfig": "Abrir config.json",
 
+  "settings.updates.title": "Actualizaciones",
+  "settings.updates.desc":
+    "Las actualizaciones siempre piden confirmación antes de instalar, ya sea que se detecten automáticamente o con una revisión manual.",
+  "settings.updates.autoCheck": "Buscar actualizaciones automáticamente",
+  "settings.updates.autoCheckDesc":
+    "Revisa al abrir Shirei y avisa cuando se publica una versión nueva. Las actualizaciones siempre piden confirmación antes de instalar.",
+  "settings.updates.checkNowLabel": "Revisión manual",
+  "settings.updates.checkNow": "Buscar actualizaciones ahora",
+  "settings.updates.statusLabel": "Estado",
+
   "settings.projects.title": "Proyectos",
   "settings.projects.noPath": "sin ruta",
   "settings.projects.git": "git",
@@ -387,6 +398,8 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
     "rendimiento performance barra estado cpu ram memoria disco red network monitor uso pestaña app total umbral webgl contextos",
   "settings.advanced.search":
     "límites archivo imagen índice quickopen carpetas excluidas gitignore git ignorar worktree config json",
+  "settings.updates.search":
+    "actualizaciones actualizar version release upgrade descargar instalar",
   "settings.projects.search": "proyecto carpeta ruta layout plantilla",
   "settings.about.search":
     "about acerca version licencia opensource dioni blog shirei significado japones agentes ia sesion mit actualizacion actualizar version nueva",
