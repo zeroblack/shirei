@@ -104,3 +104,19 @@ describe("pane content actions", () => {
     ]);
   });
 });
+
+describe("macOS Option-remapped letter chords", () => {
+  it("recovers the letter from e.code (⌥T reports e.key '†')", () => {
+    const ks = eventToKeystroke(
+      ev({ key: "†", code: "KeyT", metaKey: true, altKey: true }),
+    );
+    expect(ks && keystrokeId(ks)).toBe("meta+alt+t");
+  });
+
+  it("recovers ⌘⌥W (⌥W reports '∑')", () => {
+    const ks = eventToKeystroke(
+      ev({ key: "∑", code: "KeyW", metaKey: true, altKey: true }),
+    );
+    expect(ks && keystrokeId(ks)).toBe("meta+alt+w");
+  });
+});
