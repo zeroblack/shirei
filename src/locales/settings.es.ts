@@ -149,6 +149,10 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
     "Foco · realce de la pestaña activa",
   "settings.appearance.field.activeTabHighlightDesc":
     "Borde tipo sombrero que destaca la pestaña activa.",
+  "settings.appearance.field.contextHints":
+    "Foco · pistas de atajos contextuales",
+  "settings.appearance.field.contextHintsDesc":
+    "Muestra los atajos de la superficie enfocada en la barra de estado.",
 
   "settings.terminal.title": "Terminal",
   "settings.terminal.desc": "Cómo se ve y se comporta el render del terminal.",

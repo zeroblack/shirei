@@ -34,6 +34,7 @@ export interface PaneGridCallbacks {
   contentCap: () => number;
   onContentChange?: () => void;
   onPickContent?: (paneId: string) => void;
+  onCloseContent?: (paneId: string) => void;
 }
 
 let paneSeq = 0;
@@ -110,6 +111,11 @@ export class PaneGrid {
       onPick: () => {
         this.setActive(leaf.id);
         this.cb.onPickContent?.(leaf.id);
+      },
+      onClose: (index) => {
+        this.setActive(leaf.id);
+        this.switchContent(index);
+        this.cb.onCloseContent?.(leaf.id);
       },
     });
     this.panes.set(leaf.id, {
@@ -527,9 +533,74 @@ export class PaneGrid {
     return [...this.panes.entries()].map(([id, pane]) => ({
       paneId: id,
       focused: id === this.activeLeafId,
-      activeIsFile: pane.activeIndex > 0,
+      hasFile: pane.contents.length > 0,
       recency: pane.lastActiveSeq,
     }));
+  }
+
+  // A file already loaded in this grid, so an open can reveal it in place
+  // instead of creating a duplicate view.
+  locateFile(path: string): { paneId: string; index: number } | null {
+    for (const [id, pane] of this.panes) {
+      const i = pane.contents.findIndex((c) => c.path === path);
+      if (i >= 0) return { paneId: id, index: i + 1 };
+    }
+    return null;
+  }
+
+  activeContentPath(paneId: string): string | undefined {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) return undefined;
+    return pane.contents[pane.activeIndex - 1].path;
+  }
+
+  activeContentDirty(paneId: string): boolean {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) return false;
+    return pane.contents[pane.activeIndex - 1].dirty;
+  }
+
+  activeContentSession(paneId: string): PaneContentSession | undefined {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) return undefined;
+    return pane.contents[pane.activeIndex - 1].session;
+  }
+
+  activeContentTitle(paneId: string): string {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) return "";
+    return pane.contents[pane.activeIndex - 1].title;
+  }
+
+  // Any pane in this tab holds an unsaved file, so a tab/pane teardown would
+  // drop edits without asking.
+  hasDirtyContent(): boolean {
+    for (const pane of this.panes.values())
+      if (pane.contents.some((c) => c.dirty)) return true;
+    return false;
+  }
+
+  private activeIsChooser(pane: Pane): boolean {
+    return (
+      pane.activeIndex > 0 &&
+      pane.contents[pane.activeIndex - 1].path === undefined
+    );
+  }
+
+  // Whether a file open can land in this pane: replacing an empty chooser slot
+  // never grows the stack, so it always fits; otherwise it needs room.
+  canAcceptFile(paneId: string): boolean {
+    const pane = this.panes.get(paneId);
+    if (!pane) return false;
+    return (
+      this.activeIsChooser(pane) ||
+      canAdd(this.stackLen(pane), this.cb.contentCap())
+    );
+  }
+
+  activeContentIsChooser(paneId: string): boolean {
+    const pane = this.panes.get(paneId);
+    return !!pane && this.activeIsChooser(pane);
   }
 
   descriptorsOf(paneId: string): {

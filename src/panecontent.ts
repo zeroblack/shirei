@@ -19,16 +19,24 @@ export function canAdd(stackLen: number, cap: number): boolean {
 export interface FileTargetCandidate {
   paneId: string;
   focused: boolean;
-  activeIsFile: boolean;
+  hasFile: boolean;
   recency: number;
 }
 
+// The pane a plain file-open lands in: the focused pane if it already holds a
+// file (even while showing its terminal), else the most-recently-active pane
+// that holds a file, else the focused pane, which becomes the file pane. Never
+// null when panes exist, so a plain open reaches a tab only by overflow, never
+// by accident.
 export function pickFileTarget(
   candidates: FileTargetCandidate[],
 ): string | null {
-  const eligible = candidates.filter((c) => c.activeIsFile);
-  if (eligible.length === 0) return null;
-  const focused = eligible.find((c) => c.focused);
-  if (focused) return focused.paneId;
-  return eligible.reduce((a, b) => (b.recency > a.recency ? b : a)).paneId;
+  if (candidates.length === 0) return null;
+  const withFile = candidates.filter((c) => c.hasFile);
+  const focusedWithFile = withFile.find((c) => c.focused);
+  if (focusedWithFile) return focusedWithFile.paneId;
+  if (withFile.length > 0)
+    return withFile.reduce((a, b) => (b.recency > a.recency ? b : a)).paneId;
+  const focused = candidates.find((c) => c.focused);
+  return (focused ?? candidates[0]).paneId;
 }

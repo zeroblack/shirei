@@ -109,6 +109,7 @@ export interface ChromeConfig {
   pane_accent: boolean;
   tab_accent_line: boolean;
   active_tab_highlight: boolean;
+  context_hints: boolean;
 }
 
 export interface PerformanceConfig {

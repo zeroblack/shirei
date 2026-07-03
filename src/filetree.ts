@@ -6,7 +6,7 @@ import { showToast } from "./toast";
 import type { DirEntry } from "./types";
 
 export interface FileTreeCallbacks {
-  onOpenFile: (path: string) => void;
+  onOpenFile: (path: string, newTab?: boolean) => void;
   onEscape?: () => void;
 }
 
@@ -257,10 +257,10 @@ export class FileTree {
 
     el.append(twist, icon, name);
     const row: Row = { el, icon, entry, depth, expanded: false };
-    el.addEventListener("click", () => {
+    el.addEventListener("click", (e) => {
       this.selected = this.rows.indexOf(row);
       this.highlight();
-      void this.activate(row);
+      void this.activate(row, e.shiftKey);
     });
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
@@ -298,9 +298,9 @@ export class FileTree {
     this.menu = null;
   }
 
-  private async activate(row: Row): Promise<void> {
+  private async activate(row: Row, newTab = false): Promise<void> {
     if (!row.entry.is_dir) {
-      this.cb.onOpenFile(row.entry.path);
+      this.cb.onOpenFile(row.entry.path, newTab);
       return;
     }
     if (row.expanded) this.collapse(row);
@@ -374,7 +374,7 @@ export class FileTree {
     } else if (e.key === "Enter" || e.key === "ArrowRight" || e.key === " ") {
       e.preventDefault();
       const row = this.rows[this.selected];
-      if (row) void this.activate(row);
+      if (row) void this.activate(row, e.shiftKey);
     } else if (e.key === "ArrowLeft") {
       e.preventDefault();
       const row = this.rows[this.selected];

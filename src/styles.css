@@ -247,6 +247,20 @@ body {
   display: none;
 }
 
+.statusbar-perf {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+.statusbar-hint {
+  color: var(--text-subtle);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
 .perf-spacer {
   flex: 1;
 }
@@ -1009,6 +1023,23 @@ body {
   white-space: nowrap;
 }
 
+.pane-cluster-close {
+  display: inline-flex;
+  margin-left: 3px;
+  opacity: 0;
+  transition: opacity 80ms ease-out;
+  pointer-events: none;
+}
+
+.pane-cluster-seg:hover .pane-cluster-close {
+  opacity: 0.55;
+  pointer-events: auto;
+}
+
+.pane-cluster-close:hover {
+  opacity: 1;
+}
+
 .pane-cluster-seg.active {
   color: var(--fg);
   background: rgba(255, 255, 255, 0.06);
@@ -1079,7 +1110,8 @@ body {
   cursor: pointer;
 }
 
-.pane-filechooser-row:hover {
+.pane-filechooser-row:hover,
+.pane-filechooser-row.selected {
   background: rgba(255, 255, 255, 0.06);
 }
 

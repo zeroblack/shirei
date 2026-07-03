@@ -34,38 +34,34 @@ describe("canAdd", () => {
 });
 
 describe("pickFileTarget", () => {
-  it("returns null when no pane has an active file viewer", () => {
-    expect(
-      pickFileTarget([
-        { paneId: "a", focused: true, activeIsFile: false, recency: 2 },
-        { paneId: "b", focused: false, activeIsFile: false, recency: 1 },
-      ]),
-    ).toBeNull();
+  it("returns null only when there are no panes", () => {
+    expect(pickFileTarget([])).toBeNull();
   });
 
-  it("prefers the focused file-viewer pane", () => {
+  it("prefers the focused pane that already holds a file", () => {
     expect(
       pickFileTarget([
-        { paneId: "a", focused: false, activeIsFile: true, recency: 5 },
-        { paneId: "b", focused: true, activeIsFile: true, recency: 1 },
+        { paneId: "a", focused: false, hasFile: true, recency: 5 },
+        { paneId: "b", focused: true, hasFile: true, recency: 1 },
       ]),
     ).toBe("b");
   });
 
-  it("falls back to the most recent file-viewer pane when none is focused", () => {
+  it("routes to a pane that holds a file even while it shows its terminal", () => {
     expect(
       pickFileTarget([
-        { paneId: "a", focused: false, activeIsFile: true, recency: 3 },
-        { paneId: "b", focused: false, activeIsFile: true, recency: 7 },
+        { paneId: "a", focused: true, hasFile: false, recency: 9 },
+        { paneId: "b", focused: false, hasFile: true, recency: 3 },
+        { paneId: "c", focused: false, hasFile: true, recency: 7 },
       ]),
-    ).toBe("b");
+    ).toBe("c");
   });
 
-  it("ignores non-file panes even when focused", () => {
+  it("falls back to the focused pane when no pane holds a file", () => {
     expect(
       pickFileTarget([
-        { paneId: "a", focused: true, activeIsFile: false, recency: 9 },
-        { paneId: "b", focused: false, activeIsFile: true, recency: 2 },
+        { paneId: "a", focused: false, hasFile: false, recency: 9 },
+        { paneId: "b", focused: true, hasFile: false, recency: 2 },
       ]),
     ).toBe("b");
   });

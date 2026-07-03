@@ -128,6 +128,9 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.todo.error.reload": "Error al recargar tareas: {error}",
 
   "ui.statusbar.apps": "tus apps",
+  "ui.statusbar.hintFile": "⌘W cerrar archivo · ⌘⌥1 terminal · ⌘⌥↵ ciclar",
+  "ui.statusbar.hintTerminal": "⌘⌥2 archivo · ⌘⌥T agregar · ⌘W cerrar panel",
+  "ui.statusbar.hintChooser": "↵ abrir · ⌘P buscar · ⎋ volver",
 
   "ui.todomodal.noProject": "Sin proyecto — no se puede guardar",
   "ui.todomodal.titlePlaceholder": "¿Qué hay que hacer?",
@@ -209,6 +212,13 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
     "Se cerrarán sus {count} terminales y se perderá lo que corren.",
   "ui.close.tabDetailProc": 'Se cerrará "{proc}" y se perderá lo que corre.',
   "ui.close.tabConfirm": "Cerrar pestaña",
+  "ui.close.saveTitle": "¿Guardar cambios en {name}?",
+  "ui.close.saveDetail": "Este archivo tiene cambios sin guardar.",
+  "ui.close.save": "Guardar",
+  "ui.close.discard": "Descartar",
+  "ui.close.dirtyTitle": "¿Descartar cambios sin guardar?",
+  "ui.close.dirtyDetail":
+    "Hay archivos abiertos en esta pestaña con cambios sin guardar.",
 
   "ui.kill.titleNamed": '¿Matar "{proc}"?',
   "ui.kill.titleSession": "¿Matar la sesión?",
@@ -224,9 +234,10 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.about.sign": "Hecho con café los fines de semana · Dioni",
 
   "ui.pane.noFileOpen": "Sin archivo abierto",
-  "ui.pane.takesNextFile": "Este panel recibe el próximo archivo que abras.",
+  "ui.pane.takesNextFile": "Esta ranura recibe el próximo archivo que abras.",
   "ui.pane.recent": "recientes",
-  "ui.pane.chooserActions": "⌘P buscar archivo · ⌫ volver al terminal",
+  "ui.pane.chooserActions":
+    "↑↓ mover · ↵ abrir · ⌘P buscar archivo · ⎋ volver al terminal",
   "ui.pane.fileTab": "(archivo)",
   "ui.pane.pickerTitle": "Contenido del panel",
   "ui.pane.addFile": "Archivo",
@@ -235,4 +246,8 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.pane.addContent": "Agregar contenido",
   "ui.pane.changeType": "Cambiar tipo de contenido",
   "ui.pane.paneFull": "El panel está lleno",
+  "ui.pane.overflowTab": "Panel lleno, abierto en un tab",
+  "ui.pane.teachClose": "⌘W cierra este archivo · ⌘⌥1 vuelve al terminal",
+  "ui.pane.closeFile": "Cerrar archivo",
+  "ui.pane.terminalSeg": "Terminal",
 };

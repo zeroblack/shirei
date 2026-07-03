@@ -17,6 +17,7 @@ export class PaneCluster {
     private readonly cb: {
       onSelect: (index: number) => void;
       onPick: () => void;
+      onClose: (index: number) => void;
     },
   ) {
     this.root = document.createElement("div");
@@ -46,6 +47,8 @@ export class PaneCluster {
       seg.className = "pane-cluster-seg";
       seg.classList.toggle("active", item.active);
       seg.classList.toggle("dirty", item.dirty);
+      seg.title =
+        item.kind === "terminal" ? t("ui.pane.terminalSeg") : item.title;
       const glyph = document.createElement("span");
       glyph.className = "pane-cluster-glyph";
       glyph.innerHTML = item.kind === "terminal" ? TERMINAL_GLYPH : FILE_GLYPH;
@@ -55,6 +58,15 @@ export class PaneCluster {
         label.className = "pane-cluster-label";
         label.textContent = item.title;
         seg.appendChild(label);
+        const close = document.createElement("span");
+        close.className = "pane-cluster-close";
+        close.title = t("ui.pane.closeFile");
+        close.textContent = "×";
+        close.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.cb.onClose(index);
+        });
+        seg.appendChild(close);
       }
       seg.addEventListener("click", (e) => {
         e.stopPropagation();

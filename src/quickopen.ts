@@ -21,7 +21,7 @@ export interface PaletteCommand {
 }
 
 export interface QuickOpenCallbacks {
-  onOpenFile: (path: string) => void;
+  onOpenFile: (path: string, newTab?: boolean) => void;
   onRevealDir: (path: string) => void;
   onOpenProject: (id: string) => void;
   commands?: () => PaletteCommand[];
@@ -397,7 +397,7 @@ export class QuickOpen {
         }
       }
 
-      rowEl.addEventListener("click", () => this.choose(item));
+      rowEl.addEventListener("click", (e) => this.choose(item, e.shiftKey));
       this.list.appendChild(rowEl);
     });
     this.list
@@ -471,11 +471,11 @@ export class QuickOpen {
     } else if (e.key === "Enter") {
       e.preventDefault();
       const item = this.matches[this.selected];
-      if (item) this.choose(item);
+      if (item) this.choose(item, e.shiftKey);
     }
   }
 
-  private choose(item: Item): void {
+  private choose(item: Item, newTab = false): void {
     if (item.kind === "project") {
       this.close();
       this.cb.onOpenProject(item.id);
@@ -492,7 +492,7 @@ export class QuickOpen {
     const base = root.replace(/\/+$/, "");
     const abs = `${base}/${item.rel}`;
     if (item.isDir) this.cb.onRevealDir(abs);
-    else this.cb.onOpenFile(abs);
+    else this.cb.onOpenFile(abs, newTab);
   }
 
   private close(): void {

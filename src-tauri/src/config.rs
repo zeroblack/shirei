@@ -460,6 +460,7 @@ pub struct ChromeConfig {
     pub pane_accent: bool,
     pub tab_accent_line: bool,
     pub active_tab_highlight: bool,
+    pub context_hints: bool,
 }
 
 impl Default for ChromeConfig {
@@ -469,6 +470,7 @@ impl Default for ChromeConfig {
             pane_accent: true,
             tab_accent_line: true,
             active_tab_highlight: true,
+            context_hints: true,
         }
     }
 }

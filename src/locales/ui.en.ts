@@ -125,6 +125,9 @@ export const uiEn = {
   "ui.todo.error.reload": "Failed to reload tasks: {error}",
 
   "ui.statusbar.apps": "your apps",
+  "ui.statusbar.hintFile": "⌘W close file · ⌘⌥1 terminal · ⌘⌥↵ cycle",
+  "ui.statusbar.hintTerminal": "⌘⌥2 file · ⌘⌥T add file · ⌘W close pane",
+  "ui.statusbar.hintChooser": "↵ open · ⌘P find · ⎋ back",
 
   "ui.todomodal.noProject": "No project — can't save",
   "ui.todomodal.titlePlaceholder": "What needs doing?",
@@ -207,6 +210,12 @@ export const uiEn = {
   "ui.close.tabDetailProc":
     'It will close "{proc}" and lose whatever is running.',
   "ui.close.tabConfirm": "Close tab",
+  "ui.close.saveTitle": "Save changes to {name}?",
+  "ui.close.saveDetail": "This file has unsaved changes.",
+  "ui.close.save": "Save",
+  "ui.close.discard": "Discard",
+  "ui.close.dirtyTitle": "Discard unsaved changes?",
+  "ui.close.dirtyDetail": "Files open in this tab have unsaved changes.",
 
   "ui.kill.titleNamed": 'Kill "{proc}"?',
   "ui.kill.titleSession": "Kill the session?",
@@ -222,9 +231,10 @@ export const uiEn = {
   "ui.about.sign": "Made with coffee on weekends · Dioni",
 
   "ui.pane.noFileOpen": "No file open",
-  "ui.pane.takesNextFile": "This pane takes the next file you open.",
+  "ui.pane.takesNextFile": "This slot takes the next file you open.",
   "ui.pane.recent": "recent",
-  "ui.pane.chooserActions": "⌘P find file · ⌫ back to terminal",
+  "ui.pane.chooserActions":
+    "↑↓ move · ↵ open · ⌘P find file · ⎋ back to terminal",
   "ui.pane.fileTab": "(file)",
   "ui.pane.pickerTitle": "Pane content",
   "ui.pane.addFile": "File",
@@ -233,4 +243,8 @@ export const uiEn = {
   "ui.pane.addContent": "Add content",
   "ui.pane.changeType": "Change content type",
   "ui.pane.paneFull": "Pane is full",
+  "ui.pane.overflowTab": "Pane full, opened in a tab",
+  "ui.pane.teachClose": "⌘W closes this file · ⌘⌥1 drops to the terminal",
+  "ui.pane.closeFile": "Close file",
+  "ui.pane.terminalSeg": "Terminal",
 };
