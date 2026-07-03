@@ -65,6 +65,7 @@ export const settingsEn = {
   "settings.recording.label": "Recording",
   "settings.performance.label": "Performance",
   "settings.advanced.label": "Advanced",
+  "settings.updates.label": "Updates",
   "settings.about.label": "About",
 
   "settings.shortcuts.title": "Keyboard shortcuts",
@@ -284,6 +285,16 @@ export const settingsEn = {
   "settings.advanced.configFile": "Configuration file",
   "settings.advanced.openConfig": "Open config.json",
 
+  "settings.updates.title": "Updates",
+  "settings.updates.desc":
+    "Updates always ask before installing, whether found automatically or by a manual check.",
+  "settings.updates.autoCheck": "Check for updates automatically",
+  "settings.updates.autoCheckDesc":
+    "Check on launch and notify when a newer release is published. Updates always ask before installing.",
+  "settings.updates.checkNowLabel": "Manual check",
+  "settings.updates.checkNow": "Check for updates now",
+  "settings.updates.statusLabel": "Status",
+
   "settings.projects.title": "Projects",
   "settings.projects.noPath": "no path",
   "settings.projects.git": "git",
@@ -375,6 +386,8 @@ export const settingsEn = {
     "performance status bar cpu ram memory disk network monitor usage tab app total threshold webgl contexts",
   "settings.advanced.search":
     "limits file image index quickopen excluded folders gitignore git ignore worktree config json",
+  "settings.updates.search":
+    "updates update auto check version release upgrade download install",
   "settings.projects.search": "project folder path layout template",
   "settings.about.search":
     "about version license opensource dioni blog shirei meaning japanese agents ai session mit update upgrade release",

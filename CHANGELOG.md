@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.4] - 2026-07-03
+
+### Added
+- A dedicated Updates section in Settings: turn automatic update checks on or
+  off, check for updates now, and see the current version and status.
+
 ## [0.14.3] - 2026-07-03
 
 ### Added
@@ -137,7 +143,8 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.14.3...HEAD
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.14.4...HEAD
+[0.14.4]: https://github.com/zeroblack/shirei/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/zeroblack/shirei/compare/v0.13.4...v0.14.3
 [0.12.1]: https://github.com/zeroblack/shirei/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/zeroblack/shirei/releases/tag/v0.12.0
