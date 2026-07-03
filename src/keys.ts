@@ -31,10 +31,28 @@ function normalizeKey(raw: string): string | null {
   return null;
 }
 
+// The physical key from `e.code` (layout position), which Option never remaps.
+// Only the keys our bindings use; anything else falls back to `e.key`.
+function physicalKey(code: string): string | null {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  if (code === "Minus") return "-";
+  if (code === "Equal") return "=";
+  return null;
+}
+
 export function eventToKeystroke(e: KeyboardEvent): Keystroke | null {
-  const key = normalizeKey(e.key);
-  if (!key) return null;
   if (!(e.metaKey || e.ctrlKey || e.altKey)) return null;
+  const fromKey = normalizeKey(e.key);
+  // macOS Option remaps letter/punctuation keys (⌥T -> "†"), so a stored a-z
+  // binding would never match. When `e.key` is not a plain letter/digit,
+  // recover the physical key from `e.code`; otherwise honor `e.key` so
+  // non-QWERTY layouts still bind by the character they type.
+  const key =
+    fromKey && /^[a-z0-9]$/.test(fromKey)
+      ? fromKey
+      : (physicalKey(e.code) ?? fromKey);
+  if (!key) return null;
   return {
     key,
     meta: e.metaKey || undefined,
@@ -247,6 +265,42 @@ export const ACTIONS: ActionDef[] = [
     category: "panes",
     scope: "pane",
     defaults: [{ key: "Enter", meta: true, shift: true }],
+  },
+  {
+    id: "pane.content.pick",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "t", meta: true, alt: true }],
+  },
+  {
+    id: "pane.content.cycle",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "Enter", meta: true, alt: true }],
+  },
+  {
+    id: "pane.content.close",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "Backspace", meta: true, alt: true }],
+  },
+  {
+    id: "pane.content.slot-1",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "1", meta: true, alt: true }],
+  },
+  {
+    id: "pane.content.slot-2",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "2", meta: true, alt: true }],
+  },
+  {
+    id: "pane.content.slot-3",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "3", meta: true, alt: true }],
   },
   {
     id: "focus.left",

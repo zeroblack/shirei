@@ -1,5 +1,13 @@
 import type { RenderConfig, TerminalColors } from "./config";
 import { attachDrag } from "./drag";
+import { PaneCluster } from "./panecluster";
+import {
+  canAdd,
+  type FileTargetCandidate,
+  nextIndex,
+  type PaneContentKind,
+  type PaneContentSession,
+} from "./panecontent";
 import {
   closeLeaf,
   type Dir,
@@ -23,6 +31,10 @@ export interface PaneGridCallbacks {
   onEmpty: () => void;
   onActivePane?: () => void;
   cwdOf?: (ptyId: string) => Promise<string | undefined>;
+  contentCap: () => number;
+  onContentChange?: () => void;
+  onPickContent?: (paneId: string) => void;
+  onCloseContent?: (paneId: string) => void;
 }
 
 let paneSeq = 0;
@@ -31,9 +43,23 @@ function nextPaneId(): string {
   return `p${Date.now().toString(36)}${paneSeq}`;
 }
 
+interface PaneStackEntry {
+  kind: "file";
+  session: PaneContentSession;
+  container: HTMLElement;
+  path?: string;
+  title: string;
+  dirty: boolean;
+}
+
 interface Pane {
-  session: TerminalSession;
   el: HTMLElement;
+  terminal: TerminalSession;
+  termContainer: HTMLElement;
+  contents: PaneStackEntry[];
+  activeIndex: number;
+  lastActiveSeq: number;
+  cluster: PaneCluster;
 }
 
 export class PaneGrid {
@@ -44,6 +70,7 @@ export class PaneGrid {
   private activeLeafId: string;
   private zoomed = false;
   private visible = true;
+  private activeSeq = 0;
 
   constructor(host: HTMLElement, tree: PaneNode, cb: PaneGridCallbacks) {
     this.host = host;
@@ -57,9 +84,7 @@ export class PaneGrid {
   async open(): Promise<void> {
     // Spawns are independent; opening serially would cost one IPC round-trip
     // per pane before anything renders.
-    await Promise.all(
-      [...this.panes.values()].map(({ session }) => session.open()),
-    );
+    await Promise.all([...this.panes.values()].map((p) => p.terminal.open()));
     this.fitAll();
     this.setActive(this.activeLeafId);
   }
@@ -67,7 +92,10 @@ export class PaneGrid {
   private createPane(leaf: PaneLeaf): void {
     const el = document.createElement("div");
     el.className = "pane-leaf";
-    const session = this.cb.makeSession(leaf.id, el, {
+    const termContainer = document.createElement("div");
+    termContainer.className = "pane-content pane-content-active";
+    el.appendChild(termContainer);
+    const session = this.cb.makeSession(leaf.id, termContainer, {
       cwd: leaf.cwd,
       command: leaf.command,
       lastCommand: leaf.lastCommand,
@@ -75,7 +103,30 @@ export class PaneGrid {
     session.onExit = () => this.closePane(leaf.id);
     el.addEventListener("mousedown", () => this.setActive(leaf.id), true);
     session.setVisible(this.visible);
-    this.panes.set(leaf.id, { session, el });
+    const cluster = new PaneCluster(el, {
+      onSelect: (index) => {
+        this.setActive(leaf.id);
+        this.switchContent(index);
+      },
+      onPick: () => {
+        this.setActive(leaf.id);
+        this.cb.onPickContent?.(leaf.id);
+      },
+      onClose: (index) => {
+        this.setActive(leaf.id);
+        this.switchContent(index);
+        this.cb.onCloseContent?.(leaf.id);
+      },
+    });
+    this.panes.set(leaf.id, {
+      el,
+      terminal: session,
+      termContainer,
+      contents: [],
+      activeIndex: 0,
+      lastActiveSeq: 0,
+      cluster,
+    });
   }
 
   private render(): void {
@@ -87,6 +138,7 @@ export class PaneGrid {
     this.host.replaceChildren(root);
     this.highlightActive();
     this.fitAll();
+    for (const pane of this.panes.values()) this.refreshCluster(pane);
   }
 
   private renderNode(node: PaneNode): HTMLElement {
@@ -142,7 +194,7 @@ export class PaneGrid {
     this.render();
     void this.panes
       .get(id)
-      ?.session.open()
+      ?.terminal.open()
       .then(() => this.setActive(id));
   }
 
@@ -151,7 +203,9 @@ export class PaneGrid {
     const next = closeLeaf(this.tree, target);
     const pane = this.panes.get(target);
     if (pane) {
-      void pane.session.dispose();
+      for (const c of pane.contents) void c.session.dispose();
+      pane.cluster.dispose();
+      void pane.terminal.dispose();
       this.panes.delete(target);
     }
     if (next === null) {
@@ -210,10 +264,12 @@ export class PaneGrid {
     const pane = this.panes.get(id);
     if (!pane) return;
     this.activeLeafId = id;
+    this.activeSeq += 1;
+    pane.lastActiveSeq = this.activeSeq;
     this.highlightActive();
     this.refreshActiveState();
-    pane.session.fitAndResize();
-    pane.session.focus();
+    if (pane.activeIndex === 0) pane.terminal.fitAndResize();
+    this.activeSession(pane).focus();
     this.cb.onActivePane?.();
   }
 
@@ -233,23 +289,23 @@ export class PaneGrid {
   }
 
   reconnectActive(): void {
-    void this.panes.get(this.activeLeafId)?.session.reconnect();
+    void this.panes.get(this.activeLeafId)?.terminal.reconnect();
   }
 
   killActive(): void {
-    void this.panes.get(this.activeLeafId)?.session.killSession();
+    void this.panes.get(this.activeLeafId)?.terminal.killSession();
   }
 
   scrollActive(lines: number): void {
-    this.panes.get(this.activeLeafId)?.session.scrollByLines(lines);
+    this.panes.get(this.activeLeafId)?.terminal.scrollByLines(lines);
   }
 
   copyLineActive(): void {
-    this.panes.get(this.activeLeafId)?.session.copyLine();
+    this.panes.get(this.activeLeafId)?.terminal.copyLine();
   }
 
   pasteActive(): void {
-    this.panes.get(this.activeLeafId)?.session.paste();
+    this.panes.get(this.activeLeafId)?.terminal.paste();
   }
 
   private highlightActive(): void {
@@ -260,34 +316,35 @@ export class PaneGrid {
   }
 
   private refreshActiveState(): void {
-    for (const [id, { session }] of this.panes) {
-      session.setCursorBlink(this.visible && id === this.activeLeafId);
-      if (this.visible && id !== this.activeLeafId) session.markHot();
+    for (const [id, pane] of this.panes) {
+      pane.terminal.setCursorBlink(this.visible && id === this.activeLeafId);
+      if (this.visible && id !== this.activeLeafId) pane.terminal.markHot();
     }
     // Hidden panes keep their context instead of releasing it on every tab
     // switch: churning contexts is what exhausts WebKit and garbles panes.
     // The pool's LRU evicts the coldest only when live contexts exceed the cap.
-    if (this.visible) this.panes.get(this.activeLeafId)?.session.markHot();
+    if (this.visible) this.panes.get(this.activeLeafId)?.terminal.markHot();
   }
 
   fitAll(): void {
-    for (const { session } of this.panes.values()) session.fitAndResize();
+    for (const pane of this.panes.values()) pane.terminal.fitAndResize();
   }
 
   recoverRenderers(hard: boolean): void {
-    for (const { session } of this.panes.values()) void session.recover(hard);
+    for (const pane of this.panes.values()) void pane.terminal.recover(hard);
   }
 
   show(visible: boolean): void {
     this.visible = visible;
     this.host.classList.toggle("active", visible);
-    for (const { session } of this.panes.values()) session.setVisible(visible);
+    for (const pane of this.panes.values()) this.applyContentVisibility(pane);
     this.refreshActiveState();
     if (visible) this.fitAll();
   }
 
   focus(): void {
-    this.panes.get(this.activeLeafId)?.session.focus();
+    const pane = this.panes.get(this.activeLeafId);
+    if (pane) this.activeSession(pane).focus();
   }
 
   fitAndResize(): void {
@@ -300,9 +357,14 @@ export class PaneGrid {
     render: RenderConfig,
     theme: TerminalColors,
   ): void {
-    for (const { session } of this.panes.values())
-      session.applyLook(family, size, render, theme);
+    for (const pane of this.panes.values())
+      pane.terminal.applyLook(family, size, render, theme);
     this.refreshActiveState();
+  }
+
+  applyContentLook(apply: (session: PaneContentSession) => void): void {
+    for (const pane of this.panes.values())
+      for (const c of pane.contents) apply(c.session);
   }
 
   setAccent(color: string | null): void {
@@ -310,8 +372,282 @@ export class PaneGrid {
     else this.host.style.removeProperty("--tab-color");
   }
 
+  private activeSession(pane: Pane): TerminalSession | PaneContentSession {
+    return pane.activeIndex === 0
+      ? pane.terminal
+      : pane.contents[pane.activeIndex - 1].session;
+  }
+
+  private activeContainer(pane: Pane): HTMLElement {
+    return pane.activeIndex === 0
+      ? pane.termContainer
+      : pane.contents[pane.activeIndex - 1].container;
+  }
+
+  private applyContentVisibility(pane: Pane): void {
+    const active = this.activeContainer(pane);
+    pane.termContainer.classList.toggle(
+      "pane-content-active",
+      pane.termContainer === active,
+    );
+    for (const c of pane.contents) {
+      c.container.classList.toggle(
+        "pane-content-active",
+        c.container === active,
+      );
+    }
+    pane.terminal.setVisible(this.visible && pane.activeIndex === 0);
+  }
+
+  private stackLen(pane: Pane): number {
+    return 1 + pane.contents.length;
+  }
+
+  private notifyContent(): void {
+    this.cb.onContentChange?.();
+  }
+
+  private idOf(pane: Pane): string {
+    for (const [id, p] of this.panes) if (p === pane) return id;
+    return this.activeLeafId;
+  }
+
+  private refreshCluster(pane: Pane): void {
+    pane.cluster.render(this.descriptorsOf(this.idOf(pane)));
+  }
+
+  private activate(pane: Pane, index: number): void {
+    pane.activeIndex = index;
+    this.applyContentVisibility(pane);
+    if (index === 0) {
+      pane.terminal.fitAndResize();
+      // The terminal was display:none behind the file content, so its renderer
+      // can strand blank; force a repaint now that it is shown again.
+      void pane.terminal.recover(false);
+    }
+    this.activeSession(pane).focus();
+    this.notifyContent();
+    this.refreshCluster(pane);
+  }
+
+  addFileContent(
+    paneId: string,
+    entry: {
+      session: PaneContentSession;
+      container: HTMLElement;
+      path?: string;
+      title: string;
+    },
+  ): boolean {
+    const pane = this.panes.get(paneId);
+    if (!pane) return false;
+    if (!canAdd(this.stackLen(pane), this.cb.contentCap())) return false;
+    entry.container.classList.add("pane-content");
+    pane.el.appendChild(entry.container);
+    pane.contents.push({
+      kind: "file",
+      session: entry.session,
+      container: entry.container,
+      path: entry.path,
+      title: entry.title,
+      dirty: false,
+    });
+    this.activate(pane, pane.contents.length);
+    return true;
+  }
+
+  replaceActiveFile(
+    paneId: string,
+    entry: {
+      session: PaneContentSession;
+      container: HTMLElement;
+      path?: string;
+      title: string;
+    },
+  ): void {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) {
+      this.addFileContent(paneId, entry);
+      return;
+    }
+    const slot = pane.contents[pane.activeIndex - 1];
+    void slot.session.dispose();
+    slot.container.remove();
+    entry.container.classList.add("pane-content");
+    pane.el.appendChild(entry.container);
+    pane.contents[pane.activeIndex - 1] = {
+      kind: "file",
+      session: entry.session,
+      container: entry.container,
+      path: entry.path,
+      title: entry.title,
+      dirty: false,
+    };
+    this.activate(pane, pane.activeIndex);
+  }
+
+  activeContentIsFile(paneId: string): boolean {
+    const pane = this.panes.get(paneId);
+    return !!pane && pane.activeIndex > 0;
+  }
+
+  cycleContent(dir: 1 | -1): void {
+    const pane = this.panes.get(this.activeLeafId);
+    if (!pane) return;
+    this.activate(pane, nextIndex(this.stackLen(pane), pane.activeIndex, dir));
+  }
+
+  switchContent(index: number): void {
+    const pane = this.panes.get(this.activeLeafId);
+    if (!pane || index < 0 || index >= this.stackLen(pane)) return;
+    this.activate(pane, index);
+  }
+
+  switchContentIn(paneId: string, index: number): void {
+    const pane = this.panes.get(paneId);
+    if (!pane || index < 0 || index >= this.stackLen(pane)) return;
+    this.activate(pane, index);
+  }
+
+  closeActiveContent(): void {
+    const pane = this.panes.get(this.activeLeafId);
+    if (!pane || pane.activeIndex === 0) return;
+    const [removed] = pane.contents.splice(pane.activeIndex - 1, 1);
+    void removed.session.dispose();
+    removed.container.remove();
+    this.activate(pane, 0);
+  }
+
+  setContentDirty(paneId: string, dirty: boolean): void {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) return;
+    pane.contents[pane.activeIndex - 1].dirty = dirty;
+    this.notifyContent();
+  }
+
+  activePaneId(): string {
+    return this.activeLeafId;
+  }
+
+  contentCandidates(): FileTargetCandidate[] {
+    return [...this.panes.entries()].map(([id, pane]) => ({
+      paneId: id,
+      focused: id === this.activeLeafId,
+      hasFile: pane.contents.length > 0,
+      recency: pane.lastActiveSeq,
+    }));
+  }
+
+  // A file already loaded in this grid, so an open can reveal it in place
+  // instead of creating a duplicate view.
+  locateFile(path: string): { paneId: string; index: number } | null {
+    for (const [id, pane] of this.panes) {
+      const i = pane.contents.findIndex((c) => c.path === path);
+      if (i >= 0) return { paneId: id, index: i + 1 };
+    }
+    return null;
+  }
+
+  activeContentPath(paneId: string): string | undefined {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) return undefined;
+    return pane.contents[pane.activeIndex - 1].path;
+  }
+
+  activeContentDirty(paneId: string): boolean {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) return false;
+    return pane.contents[pane.activeIndex - 1].dirty;
+  }
+
+  activeContentSession(paneId: string): PaneContentSession | undefined {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) return undefined;
+    return pane.contents[pane.activeIndex - 1].session;
+  }
+
+  activeContentTitle(paneId: string): string {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) return "";
+    return pane.contents[pane.activeIndex - 1].title;
+  }
+
+  // Any pane in this tab holds an unsaved file, so a tab/pane teardown would
+  // drop edits without asking.
+  hasDirtyContent(): boolean {
+    for (const pane of this.panes.values())
+      if (pane.contents.some((c) => c.dirty)) return true;
+    return false;
+  }
+
+  private activeIsChooser(pane: Pane): boolean {
+    return (
+      pane.activeIndex > 0 &&
+      pane.contents[pane.activeIndex - 1].path === undefined
+    );
+  }
+
+  // Whether a file open can land in this pane: replacing an empty chooser slot
+  // never grows the stack, so it always fits; otherwise it needs room.
+  canAcceptFile(paneId: string): boolean {
+    const pane = this.panes.get(paneId);
+    if (!pane) return false;
+    return (
+      this.activeIsChooser(pane) ||
+      canAdd(this.stackLen(pane), this.cb.contentCap())
+    );
+  }
+
+  activeContentIsChooser(paneId: string): boolean {
+    const pane = this.panes.get(paneId);
+    return !!pane && this.activeIsChooser(pane);
+  }
+
+  descriptorsOf(paneId: string): {
+    kind: PaneContentKind;
+    title: string;
+    dirty: boolean;
+    active: boolean;
+  }[] {
+    const pane = this.panes.get(paneId);
+    if (!pane) return [];
+    return [
+      {
+        kind: "terminal" as const,
+        title: "terminal",
+        dirty: false,
+        active: pane.activeIndex === 0,
+      },
+      ...pane.contents.map((c, i) => ({
+        kind: c.kind,
+        title: c.title,
+        dirty: c.dirty,
+        active: pane.activeIndex === i + 1,
+      })),
+    ];
+  }
+
   serialize(): PaneNode {
+    this.syncContents();
     return structuredClone(this.tree);
+  }
+
+  private syncContents(): void {
+    const write = (node: PaneNode): void => {
+      if (node.kind === "leaf") {
+        const pane = this.panes.get(node.id);
+        if (pane) {
+          node.contents = pane.contents
+            .filter((c) => c.path)
+            .map((c) => ({ kind: "file" as const, path: c.path as string }));
+          node.activeContent = pane.activeIndex;
+        }
+        return;
+      }
+      write(node.a);
+      write(node.b);
+    };
+    write(this.tree);
   }
 
   applySnapshot(snap: Map<string, { cwd?: string; command?: string }>): void {
@@ -340,14 +676,17 @@ export class PaneGrid {
 
   scrollbackWeight(): number {
     let total = 0;
-    for (const { session } of this.panes.values())
-      total += session.scrollbackWeight();
+    for (const pane of this.panes.values())
+      total += pane.terminal.scrollbackWeight();
     return total;
   }
 
   async dispose(): Promise<void> {
     await Promise.all(
-      [...this.panes.values()].map(({ session }) => session.dispose()),
+      [...this.panes.values()].flatMap((p) => [
+        ...p.contents.map((c) => Promise.resolve(c.session.dispose())),
+        p.terminal.dispose(),
+      ]),
     );
     this.panes.clear();
     this.host.remove();

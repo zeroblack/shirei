@@ -388,6 +388,7 @@ pub struct LayoutConfig {
     pub todo_collapsed: bool,
     pub default_template: String,
     pub new_tab_dir: String,
+    pub pane_content_cap: u8,
 }
 
 impl Default for LayoutConfig {
@@ -401,6 +402,7 @@ impl Default for LayoutConfig {
             todo_collapsed: false,
             default_template: String::new(),
             new_tab_dir: String::new(),
+            pane_content_cap: 3,
         }
     }
 }
@@ -458,6 +460,7 @@ pub struct ChromeConfig {
     pub pane_accent: bool,
     pub tab_accent_line: bool,
     pub active_tab_highlight: bool,
+    pub context_hints: bool,
 }
 
 impl Default for ChromeConfig {
@@ -467,6 +470,7 @@ impl Default for ChromeConfig {
             pane_accent: true,
             tab_accent_line: true,
             active_tab_highlight: true,
+            context_hints: true,
         }
     }
 }

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Files open into a pane's stack layered over the terminal: keep several open,
+  switch with the cluster pill or ⌘⌥1/2/3, and drop back to the session without
+  losing them. A contextual shortcut legend in the status bar (toggle in
+  Settings) shows what the focused surface can do.
+
+### Changed
+- Opening a file adds it to the file pane instead of replacing the one already
+  there; a full pane opens the next file in a new tab. Shift-click in the tree,
+  or Shift+Enter in quick open, promotes a file to its own tab.
+- ⌘W closes the focused file and reveals the terminal, leaving the tab in place;
+  unsaved changes are confirmed before the file is dropped.
+
+### Fixed
+- New panes no longer open black after updating the app with keep-alive sessions
+  on. A session daemon left over from a previous build could keep owning the
+  socket and fail to start any new session; the app now verifies the daemon's
+  build identity when it connects and replaces a stale one before spawning.
+- Killing a keep-alive session now removes its persisted scrollback buffer from
+  disk instead of leaving the file behind.
+- Shortcuts that combine Cmd and Option with a letter (⌘⌥T to open a file pane,
+  ⌘⌥W, and others) fire again on macOS instead of being swallowed by Option's
+  character remapping.
+
 ## [0.13.4] - 2026-06-30
 
 ### Fixed

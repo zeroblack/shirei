@@ -5,6 +5,7 @@ import {
   instantiate,
   leaves,
   type PaneNode,
+  readLeafContents,
   resolveDefaultTemplate,
   sameStructure,
   splitLeaf,
@@ -126,5 +127,49 @@ describe("instantiate", () => {
     expect(ls.map((l) => l.id)).toEqual(["x1", "x2"]);
     expect(ls.every((l) => l.cwd === "/proj")).toBe(true);
     expect(ls[0].command).toBe("claude");
+  });
+});
+
+describe("readLeafContents", () => {
+  it("returns [] when a leaf has no contents", () => {
+    expect(readLeafContents({ kind: "leaf", id: "a" })).toEqual([]);
+  });
+
+  it("keeps well-formed file contents", () => {
+    expect(
+      readLeafContents({
+        kind: "leaf",
+        id: "a",
+        contents: [{ kind: "file", path: "/x/y.md" }],
+      }),
+    ).toEqual([{ kind: "file", path: "/x/y.md" }]);
+  });
+
+  it("drops malformed entries", () => {
+    expect(
+      readLeafContents({
+        kind: "leaf",
+        id: "a",
+        contents: [
+          { kind: "file", path: "/ok.md" },
+          { kind: "file" } as never,
+          { kind: "bogus", path: "/x" } as never,
+        ],
+      }),
+    ).toEqual([{ kind: "file", path: "/ok.md" }]);
+  });
+});
+
+describe("instantiate keeps contents empty", () => {
+  it("does not copy template contents onto instantiated leaves", () => {
+    const tpl: PaneNode = {
+      kind: "leaf",
+      id: "",
+      command: "claude",
+      contents: [{ kind: "file", path: "/should-not-copy.md" }],
+    };
+    const out = instantiate(tpl, () => "fresh", "/proj");
+    expect(out.kind).toBe("leaf");
+    expect((out as { contents?: unknown }).contents).toBeUndefined();
   });
 });

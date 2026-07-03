@@ -143,6 +143,9 @@ export const settingsEn = {
     "Focus · active tab highlight",
   "settings.appearance.field.activeTabHighlightDesc":
     "Hat-style border highlighting the active tab.",
+  "settings.appearance.field.contextHints": "Focus · contextual shortcut hints",
+  "settings.appearance.field.contextHintsDesc":
+    "Show the shortcuts for the focused surface in the status bar.",
 
   "settings.terminal.title": "Terminal",
   "settings.terminal.desc": "How the terminal render looks and behaves.",

@@ -93,6 +93,8 @@ export class TerminalSession {
   private fontSize: number;
   private unlisten?: UnlistenFn;
   private webgl?: WebglAddon;
+  private resizeObs?: ResizeObserver;
+  private fitQueued = false;
   private dprQuery?: MediaQueryList;
   private wantWebgl: boolean;
   private readonly kitty = new KittyKeyboardState();
@@ -235,6 +237,12 @@ export class TerminalSession {
     await this.loadFont();
     this.term.open(this.container);
     this.fit.fit();
+    // The one initial fit above can land before the pane container reaches its
+    // final size (new tab/split settling after layout), leaving the terminal at
+    // a wrong size and blank. Refit whenever the container actually resizes —
+    // window resize alone misses per-pane layout changes.
+    this.resizeObs = new ResizeObserver(() => this.queueFit());
+    this.resizeObs.observe(this.container);
     webglPool.setEnabled(this.wantWebgl);
     webglPool.register(
       this.id,
@@ -547,6 +555,19 @@ export class TerminalSession {
     if (becameVisible) this.drainPending();
   }
 
+  private queueFit(): void {
+    if (this.fitQueued) return;
+    this.fitQueued = true;
+    requestAnimationFrame(() => {
+      this.fitQueued = false;
+      if (this.container.clientWidth === 0) return;
+      this.fitAndResize();
+      // A resize that corrects an initial wrong fit reflows the buffer but the
+      // DOM renderer can leave the rows unpainted; force a full repaint.
+      this.repaint();
+    });
+  }
+
   fitAndResize(): void {
     this.fit.fit();
     fireForget(this.useDaemon ? "mux_resize" : "pty_resize", {
@@ -607,6 +628,8 @@ export class TerminalSession {
     this.unlisten?.();
     this.unlisten = undefined;
     this.ac.abort();
+    this.resizeObs?.disconnect();
+    this.resizeObs = undefined;
     this.diag.dispose();
     webglPool.unregister(this.id);
     this.disposeWebgl();

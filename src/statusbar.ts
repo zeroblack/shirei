@@ -79,6 +79,8 @@ export function pick(
 
 export class StatusBar {
   private readonly root: HTMLElement;
+  private readonly perfEl: HTMLElement;
+  private readonly hintEl: HTMLElement;
   private cfg: PerformanceConfig | null = null;
   private unlisten?: UnlistenFn;
   private readonly histories = new Map<string, number[]>();
@@ -87,6 +89,9 @@ export class StatusBar {
 
   constructor(root: HTMLElement) {
     this.root = root;
+    this.perfEl = span("statusbar-perf");
+    this.hintEl = span("statusbar-hint");
+    this.root.append(this.perfEl, this.hintEl);
   }
 
   async start(): Promise<void> {
@@ -98,11 +103,22 @@ export class StatusBar {
   setConfig(cfg: PerformanceConfig): void {
     this.cfg = cfg;
     const on = cfg?.enabled ?? false;
-    this.root.classList.toggle("hidden", !on);
     if (!on) {
-      this.root.replaceChildren();
+      this.perfEl.replaceChildren();
       this.histories.clear();
     }
+    this.updateVisibility();
+  }
+
+  setContextHint(text: string): void {
+    this.hintEl.textContent = text;
+    this.updateVisibility();
+  }
+
+  private updateVisibility(): void {
+    const perfOn = this.cfg?.enabled ?? false;
+    const hasHint = this.hintEl.textContent !== "";
+    this.root.classList.toggle("hidden", !perfOn && !hasHint);
   }
 
   private onData(p: PerfPayload): void {
@@ -124,7 +140,7 @@ export class StatusBar {
         if (cell) frag.append(cell);
       }
     });
-    this.root.replaceChildren(frag);
+    this.perfEl.replaceChildren(frag);
   }
 
   private metricCell(

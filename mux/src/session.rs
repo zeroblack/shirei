@@ -242,6 +242,13 @@ impl Session {
         // daemon itself exits.
         let _ = g.child.wait();
         g.alive = false;
+        // Take the persist path so the reader thread's final dump can't recreate
+        // the file after we unlink it: a killed session is gone for good, so its
+        // scrollback buffer must not leak on disk.
+        if let Some(path) = g.persist.take() {
+            let _ = std::fs::remove_file(&path);
+            let _ = std::fs::remove_file(path.with_extension("tmp"));
+        }
     }
 
     pub fn alive(&self) -> bool {
@@ -399,6 +406,31 @@ mod tests {
         session.kill();
         assert!(session.pid().is_none());
         assert_eq!(session.probe(), Snapshot::default());
+    }
+
+    #[test]
+    fn kill_unlinks_the_persist_file() {
+        let path =
+            std::env::temp_dir().join(format!("shirei-mux-killbuf-{}.buf", std::process::id()));
+        std::fs::write(&path, b"OLD_SCROLLBACK\n").unwrap();
+
+        let session = Session::spawn(
+            "kb".into(),
+            80,
+            24,
+            Some("/tmp".into()),
+            None,
+            64 * 1024,
+            Some(path.clone()),
+        )
+        .unwrap();
+        assert!(path.exists());
+
+        session.kill();
+        assert!(
+            !path.exists(),
+            "the persist file must be unlinked when a session is killed"
+        );
     }
 
     #[test]

@@ -254,6 +254,13 @@ function buildAppearance(config: Config, save: () => void): HTMLElement {
           save,
           t("settings.appearance.field.activeTabHighlightDesc"),
         ),
+        boolField(
+          t("settings.appearance.field.contextHints"),
+          config.chrome,
+          "context_hints",
+          save,
+          t("settings.appearance.field.contextHintsDesc"),
+        ),
       ]),
   };
 

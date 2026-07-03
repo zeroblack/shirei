@@ -59,7 +59,7 @@ fn peer_is_same_user(stream: &UnixStream) -> bool {
     rc == 0 && uid == unsafe { libc::geteuid() }
 }
 
-pub fn run(socket_path: &Path) -> anyhow::Result<()> {
+pub fn run(socket_path: &Path, build_id: String) -> anyhow::Result<()> {
     if socket_path.exists() {
         if UnixStream::connect(socket_path).is_ok() {
             anyhow::bail!("a live daemon already owns {socket_path:?}");
@@ -93,8 +93,9 @@ pub fn run(socket_path: &Path) -> anyhow::Result<()> {
         }
         let reg = Arc::clone(&registry);
         let persist = persist_dir.clone();
+        let build_id = build_id.clone();
         thread::spawn(move || {
-            let _ = handle_client(stream, reg, persist);
+            let _ = handle_client(stream, reg, persist, build_id);
         });
     }
     Ok(())
@@ -148,6 +149,7 @@ fn handle_client(
     stream: UnixStream,
     reg: Registry,
     persist_dir: Option<PathBuf>,
+    build_id: String,
 ) -> anyhow::Result<()> {
     let client = NEXT_CLIENT.fetch_add(1, Ordering::Relaxed);
     let mut reader = stream.try_clone()?;
@@ -166,7 +168,7 @@ fn handle_client(
 
     while let Some(body) = read_frame(&mut reader)? {
         let msg: ClientMsg = decode(&body)?;
-        handle_msg(msg, &reg, &tx, &persist_dir, client);
+        handle_msg(msg, &reg, &tx, &persist_dir, client, &build_id);
     }
 
     for session in reg.lock_ignore_poison().values() {
@@ -187,8 +189,18 @@ fn handle_msg(
     tx: &SyncSender<ServerMsg>,
     persist_dir: &Option<PathBuf>,
     client: u64,
+    build_id: &str,
 ) {
     match msg {
+        ClientMsg::Hello { .. } => {
+            let _ = tx.send(ServerMsg::Welcome {
+                build_id: build_id.to_string(),
+                pid: std::process::id(),
+            });
+        }
+        ClientMsg::Shutdown => {
+            std::process::exit(0);
+        }
         ClientMsg::Spawn {
             id,
             cols,
@@ -285,5 +297,50 @@ fn handle_msg(
             };
             let _ = tx.send(ServerMsg::Sessions { ids });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hello_is_answered_with_the_daemon_build_id() {
+        let dir = std::env::temp_dir().join(format!("shirei-mux-hs-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let sock = dir.join("hs.sock");
+        let _ = std::fs::remove_file(&sock);
+
+        let sock_srv = sock.clone();
+        thread::spawn(move || {
+            let _ = run(&sock_srv, "daemon-build-abc".into());
+        });
+
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let mut stream = loop {
+            if let Ok(s) = UnixStream::connect(&sock) {
+                break s;
+            }
+            assert!(Instant::now() < deadline, "daemon never bound its socket");
+            thread::sleep(Duration::from_millis(20));
+        };
+
+        let hello = encode(&ClientMsg::Hello {
+            build_id: "client-build-xyz".into(),
+        })
+        .unwrap();
+        stream.write_all(&hello).unwrap();
+        stream.flush().unwrap();
+
+        let body = read_frame(&mut stream).unwrap().expect("welcome frame");
+        match decode::<ServerMsg>(&body).unwrap() {
+            ServerMsg::Welcome { build_id, pid } => {
+                assert_eq!(build_id, "daemon-build-abc");
+                assert!(pid > 0);
+            }
+            other => panic!("expected Welcome, got {other:?}"),
+        }
+
+        let _ = std::fs::remove_file(&sock);
     }
 }

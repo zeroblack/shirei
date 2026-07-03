@@ -68,3 +68,55 @@ describe("registry", () => {
     expect(involved).not.toContain("finder.reveal");
   });
 });
+
+describe("pane content actions", () => {
+  const ids = new Set(ACTIONS.map((a) => a.id));
+
+  it("registers the four content actions plus slot jumps", () => {
+    expect(ids.has("pane.content.pick")).toBe(true);
+    expect(ids.has("pane.content.cycle")).toBe(true);
+    expect(ids.has("pane.content.close")).toBe(true);
+    expect(ids.has("pane.content.slot-1")).toBe(true);
+    expect(ids.has("pane.content.slot-2")).toBe(true);
+    expect(ids.has("pane.content.slot-3")).toBe(true);
+  });
+
+  it("scopes content actions to the pane", () => {
+    for (const id of [
+      "pane.content.pick",
+      "pane.content.cycle",
+      "pane.content.close",
+    ]) {
+      expect(ACTIONS.find((a) => a.id === id)?.scope).toBe("pane");
+    }
+  });
+
+  it("binds pick/cycle/close to meta+alt defaults", () => {
+    const b = resolveBindings({});
+    expect(b["pane.content.pick"]).toEqual([
+      { key: "t", meta: true, alt: true },
+    ]);
+    expect(b["pane.content.cycle"]).toEqual([
+      { key: "Enter", meta: true, alt: true },
+    ]);
+    expect(b["pane.content.close"]).toEqual([
+      { key: "Backspace", meta: true, alt: true },
+    ]);
+  });
+});
+
+describe("macOS Option-remapped letter chords", () => {
+  it("recovers the letter from e.code (⌥T reports e.key '†')", () => {
+    const ks = eventToKeystroke(
+      ev({ key: "†", code: "KeyT", metaKey: true, altKey: true }),
+    );
+    expect(ks && keystrokeId(ks)).toBe("meta+alt+t");
+  });
+
+  it("recovers ⌘⌥W (⌥W reports '∑')", () => {
+    const ks = eventToKeystroke(
+      ev({ key: "∑", code: "KeyW", metaKey: true, altKey: true }),
+    );
+    expect(ks && keystrokeId(ks)).toBe("meta+alt+w");
+  });
+});

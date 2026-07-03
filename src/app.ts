@@ -26,12 +26,16 @@ import { ImageSession } from "./image";
 import { Keymap } from "./keymap";
 import { eventToKeystroke, formatKeystroke, resolveBindings } from "./keys";
 import { MediaSession } from "./media";
+import { createOverlay } from "./overlay";
+import { pickFileTarget } from "./panecontent";
+import { PaneFileChooser } from "./panefilechooser";
 import { type FocusDir, type LeafSpawn, PaneGrid } from "./panegrid";
 import {
   declaredCommands,
   instantiate,
   leaves,
   type PaneNode,
+  readLeafContents,
   resolveDefaultTemplate,
 } from "./panetree";
 import { basename, parentDir } from "./path";
@@ -244,7 +248,7 @@ export class App {
   private readonly cmdAvailable = new Map<string, boolean>();
   private screencast?: Screencast;
   private readonly quickopen = new QuickOpen({
-    onOpenFile: (path) => void this.openFile(path),
+    onOpenFile: (path, newTab) => void this.openFile(path, { newTab }),
     onRevealDir: (path) => void this.revealDir(path),
     onOpenProject: (id) => void this.openProject(id),
     commands: () => this.paletteCommands(),
@@ -275,7 +279,7 @@ export class App {
     ) as HTMLElement;
     if (!this.todoPanelEl) throw new Error("missing #todopanel");
     this.tree = new FileTree(this.treeRegionEl, {
-      onOpenFile: (path) => void this.openFile(path),
+      onOpenFile: (path, newTab) => void this.openFile(path, { newTab }),
       onEscape: () => this.sessions.get(this.activeId ?? "")?.focus(),
     });
     this.todoDividerEl = document.querySelector<HTMLElement>(
@@ -468,7 +472,7 @@ export class App {
         if (t.kind === "terminal") {
           await this.openTerminalTab(t.tree, t.title, t.color, t.projectId);
         } else {
-          await this.openFile(t.path, true);
+          await this.openFile(t.path, { silent: true });
         }
       }
       if (!this.tabs.some((x) => x.kind === "terminal")) await this.newTab();
@@ -513,6 +517,7 @@ export class App {
     applyRenderCss(c.render);
     this.applyFocusChrome(c.chrome);
     this.applyMotionVars(c.motion);
+    this.updateContextHint();
     webglPool.setCap(c.render.webgl_pool_cap);
     if (
       previous.session.snapshot_interval_secs !==
@@ -552,6 +557,22 @@ export class App {
     for (const s of this.sessions.values()) {
       if (s instanceof PaneGrid) {
         s.applyLook(family, c.font.size, c.render, c.theme.terminal);
+        s.applyContentLook((session) => {
+          if (EditorSession !== null && session instanceof EditorSession) {
+            session.applyLook(
+              family,
+              c.font.size,
+              c.theme.terminal,
+              c.theme.preset,
+            );
+            session.applyEditorConfig(c.editor);
+          } else if (
+            session instanceof ImageSession ||
+            session instanceof MediaSession
+          ) {
+            session.setBg(c.theme.editor.bg);
+          }
+        });
       } else if (EditorSession !== null && s instanceof EditorSession) {
         s.applyLook(family, c.font.size, c.theme.terminal, c.theme.preset);
         s.applyEditorConfig(c.editor);
@@ -581,6 +602,32 @@ export class App {
       s.show(sid === this.activeId);
     }
     void this.updateActiveTab();
+    this.updateContextHint();
+  }
+
+  private updateContextHint(): void {
+    if (!this.config.chrome.context_hints) {
+      this.statusbar.setContextHint("");
+      return;
+    }
+    const active = this.sessions.get(this.activeId ?? "");
+    if (!(active instanceof PaneGrid)) {
+      this.statusbar.setContextHint("");
+      return;
+    }
+    const paneId = active.activePaneId();
+    if (active.activeContentIsChooser(paneId)) {
+      this.statusbar.setContextHint(t("ui.statusbar.hintChooser"));
+      return;
+    }
+    if (active.activeContentIsFile(paneId)) {
+      this.statusbar.setContextHint(t("ui.statusbar.hintFile"));
+      return;
+    }
+    const focused = active.contentCandidates().find((c) => c.focused);
+    this.statusbar.setContextHint(
+      focused?.hasFile ? t("ui.statusbar.hintTerminal") : "",
+    );
   }
 
   private async updateActiveTab(): Promise<void> {
@@ -747,6 +794,18 @@ export class App {
     );
   }
 
+  private async restorePaneContents(
+    grid: PaneGrid,
+    tree: PaneNode,
+  ): Promise<void> {
+    for (const leaf of leaves(tree)) {
+      for (const c of readLeafContents(leaf)) {
+        await this.switchPaneToFile(grid, leaf.id, c.path, true);
+      }
+      grid.switchContentIn(leaf.id, leaf.activeContent ?? 0);
+    }
+  }
+
   private async openTerminalTab(
     tree: PaneNode,
     title?: string,
@@ -788,18 +847,34 @@ export class App {
       onActivePane: () => {
         this.refreshTreeIfVisible();
         void this.updateActiveTab();
+        this.updateContextHint();
       },
       cwdOf: (pid) =>
         ptyCwd(pid).then(
           (c) => c ?? undefined,
           () => undefined,
         ),
+      contentCap: () => Math.max(1, this.config.layout.pane_content_cap),
+      onContentChange: () => {
+        this.refreshTreeIfVisible();
+        this.persist();
+        this.updateContextHint();
+      },
+      onPickContent: (paneId) => {
+        const g = this.sessions.get(id);
+        if (g instanceof PaneGrid) this.openPaneContentPicker(g, paneId);
+      },
+      onCloseContent: () => {
+        const g = this.sessions.get(id);
+        if (g instanceof PaneGrid) void this.closeActiveContentGuarded(g);
+      },
     });
     grid.setAccent(color);
     this.sessions.set(id, grid);
     this.activeId = id;
     this.showActive();
     await grid.open();
+    await this.restorePaneContents(grid, tree);
     this.renderTabs();
     grid.focus();
     this.persist();
@@ -876,17 +951,50 @@ export class App {
     this.notify(t("ui.template.saved", { name }));
   }
 
-  openFile(path: string, silent = false): Promise<void> {
-    return this.enqueue(() => this.doOpenFile(path, silent));
+  openFile(
+    path: string,
+    opts: { newTab?: boolean; silent?: boolean } = {},
+  ): Promise<void> {
+    return this.enqueue(() => this.doOpenFile(path, opts));
   }
 
-  private async doOpenFile(path: string, silent = false): Promise<void> {
+  private async doOpenFile(
+    path: string,
+    opts: { newTab?: boolean; silent?: boolean } = {},
+  ): Promise<void> {
+    const { newTab = false, silent = false } = opts;
+    // Dedupe: one live view per path, revealed wherever it lives (tab or slot).
     const existing = this.tabs.find(
       (t) => t.kind === "editor" && t.path === path,
     );
     if (existing) {
       this.activate(existing.id);
       return;
+    }
+    for (const [gridId, session] of this.sessions) {
+      if (session instanceof PaneGrid) {
+        const loc = session.locateFile(path);
+        if (loc) {
+          this.activate(gridId);
+          session.switchContentIn(loc.paneId, loc.index);
+          return;
+        }
+      }
+    }
+    // Plain open routes into the file pane; Shift promotes to a tab; a full
+    // pane overflows to a tab.
+    if (!newTab) {
+      const routeGrid = this.sessions.get(this.activeId ?? "");
+      if (routeGrid instanceof PaneGrid) {
+        const target = pickFileTarget(routeGrid.contentCandidates());
+        if (target) {
+          if (routeGrid.canAcceptFile(target)) {
+            await this.switchPaneToFile(routeGrid, target, path, silent);
+            return;
+          }
+          if (!silent) this.notify(t("ui.pane.overflowTab"));
+        }
+      }
     }
     const id = nextId();
     const name = basename(path);
@@ -949,6 +1057,140 @@ export class App {
     this.persist();
     if (this.panelVisible) void this.openWorkspaceTree();
     this.setActiveProject(null);
+  }
+
+  private async makeFileContent(
+    grid: PaneGrid,
+    paneId: string,
+    path: string,
+  ): Promise<{
+    session: EditorSessionType | ImageSession | MediaSession;
+    container: HTMLElement;
+    path: string;
+    title: string;
+  }> {
+    const name = basename(path);
+    const container = document.createElement("div");
+    container.className = "terminal-host editor-host pane-content";
+    let session: EditorSessionType | ImageSession | MediaSession;
+    if (isImage(name)) {
+      session = new ImageSession(paneId, path, container);
+    } else if (mediaKind(name)) {
+      session = new MediaSession(paneId, path, container);
+    } else {
+      const ES = await loadEditor();
+      session = new ES(paneId, path, container, {
+        fontFamily: fontStack(this.config.font.family, this.config.fonts),
+        fontSize: this.config.font.size,
+        palette: this.config.theme.terminal,
+        preset: this.config.theme.preset,
+        editor: this.config.editor,
+        git: this.config.git,
+      });
+      session.onDirtyChange = (dirty) => grid.setContentDirty(paneId, dirty);
+      const editorSession = session;
+      editorSession.onHistory = () => void this.openHistory(editorSession);
+    }
+    return { session, container, path, title: name };
+  }
+
+  private paneRecents(): { rel: string; abs: string }[] {
+    return this.tabs
+      .filter((tab): tab is EditorTab => tab.kind === "editor")
+      .slice(-5)
+      .reverse()
+      .map((tab) => ({ rel: basename(tab.path), abs: tab.path }));
+  }
+
+  private async switchPaneToFile(
+    grid: PaneGrid,
+    paneId: string,
+    path?: string,
+    silent = false,
+  ): Promise<void> {
+    if (!path) {
+      const container = document.createElement("div");
+      const chooser = new PaneFileChooser(container, {
+        recents: () => this.paneRecents(),
+        onOpen: (abs) => void this.switchPaneToFile(grid, paneId, abs),
+        onFind: () => this.openQuickOpen(),
+        onBackToTerminal: () => grid.closeActiveContent(),
+      });
+      const added = grid.addFileContent(paneId, {
+        session: chooser,
+        container,
+        title: t("ui.pane.fileTab"),
+      });
+      if (added) await chooser.open();
+      else if (!silent) this.notify(t("ui.pane.paneFull"));
+      return;
+    }
+    const handle = await this.makeFileContent(grid, paneId, path);
+    try {
+      await handle.session.open();
+    } catch (e) {
+      console.error("open file in pane failed:", path, e);
+      if (!silent) this.notify(t("ui.app.cannotShowFile"));
+      void handle.session.dispose();
+      handle.container.remove();
+      return;
+    }
+    // Replace an empty chooser slot in place; otherwise add a new slot. The
+    // caller checks canAcceptFile first, so add only fails on a race.
+    let placed = false;
+    if (grid.activeContentIsChooser(paneId)) {
+      grid.replaceActiveFile(paneId, handle);
+      placed = true;
+    } else if (grid.addFileContent(paneId, handle)) {
+      placed = true;
+    } else {
+      void handle.session.dispose();
+      handle.container.remove();
+      if (!silent) this.notify(t("ui.pane.paneFull"));
+    }
+    if (placed && !silent) this.teachPaneFileOnce();
+  }
+
+  private teachPaneFileOnce(): void {
+    if (localStorage.getItem("shirei.taught.paneFile")) return;
+    localStorage.setItem("shirei.taught.paneFile", "1");
+    this.notify(t("ui.pane.teachClose"));
+  }
+
+  private openPaneContentPicker(grid: PaneGrid, paneId: string): void {
+    const { overlay, box, close } = createOverlay({
+      className: "pane-picker",
+      label: t("ui.pane.pickerTitle"),
+      onDismiss: () => void close(),
+    });
+    const row = (label: string, hint: string, onClick?: () => void) => {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "pane-picker-row";
+      el.disabled = !onClick;
+      const name = document.createElement("span");
+      name.textContent = label;
+      const tag = document.createElement("span");
+      tag.className = "pane-picker-hint";
+      tag.textContent = hint;
+      el.append(name, tag);
+      if (onClick)
+        el.addEventListener("click", () => {
+          void close();
+          onClick();
+        });
+      return el;
+    };
+    box.append(
+      row(t("ui.pane.addFile"), "⌘⌥T", () => {
+        void this.switchPaneToFile(grid, paneId);
+      }),
+      row(t("ui.pane.addBrowser"), t("ui.pane.soon")),
+    );
+    document.body.appendChild(overlay);
+    box
+      .querySelector<HTMLButtonElement>(".pane-picker-row:not([disabled])")
+      ?.focus();
   }
 
   activate(id: string): void {
@@ -1686,6 +1928,24 @@ export class App {
       case "pane.zoom":
         if (pane) pane.toggleZoom();
         break;
+      case "pane.content.pick":
+        if (pane) this.openPaneContentPicker(pane, pane.activePaneId());
+        break;
+      case "pane.content.cycle":
+        if (pane) pane.cycleContent(1);
+        break;
+      case "pane.content.close":
+        if (pane) pane.closeActiveContent();
+        break;
+      case "pane.content.slot-1":
+        if (pane) pane.switchContent(0);
+        break;
+      case "pane.content.slot-2":
+        if (pane) pane.switchContent(1);
+        break;
+      case "pane.content.slot-3":
+        if (pane) pane.switchContent(2);
+        break;
       case "focus.left":
         this.navigateFocus("left", active);
         break;
@@ -1716,10 +1976,71 @@ export class App {
     }
   }
 
+  private async guardDirtyContent(
+    grid: PaneGrid,
+    paneId: string,
+  ): Promise<boolean> {
+    if (!grid.activeContentDirty(paneId)) return true;
+    const session = grid.activeContentSession(paneId);
+    const choice = await choiceDialog({
+      title: t("ui.close.saveTitle", { name: grid.activeContentTitle(paneId) }),
+      detail: t("ui.close.saveDetail"),
+      choices: [
+        { label: t("ui.close.save"), value: "save" },
+        { label: t("ui.close.discard"), value: "discard", danger: true },
+      ],
+    });
+    if (choice === null) return false;
+    if (
+      choice === "save" &&
+      EditorSession !== null &&
+      session instanceof EditorSession
+    ) {
+      const res = await session.save();
+      if (res.conflict) {
+        const overwrite = await confirmDialog({
+          title: t("ui.app.fileChangedTitle"),
+          detail: t("ui.app.fileChangedDetail"),
+          confirmLabel: t("ui.app.fileChangedConfirm"),
+        });
+        if (!overwrite) return false;
+        await session.saveForce();
+      }
+    }
+    return true;
+  }
+
+  private async closeActiveContentGuarded(grid: PaneGrid): Promise<void> {
+    const paneId = grid.activePaneId();
+    if (await this.guardDirtyContent(grid, paneId)) grid.closeActiveContent();
+  }
+
+  private async confirmDiscardDirty(grid: PaneGrid): Promise<boolean> {
+    if (!grid.hasDirtyContent()) return true;
+    return confirmDialog({
+      title: t("ui.close.dirtyTitle"),
+      detail: t("ui.close.dirtyDetail"),
+      confirmLabel: t("ui.close.discard"),
+    });
+  }
+
   private async closeActive(): Promise<void> {
     const active = this.sessions.get(this.activeId ?? "");
+    // ⌘W closes the frontmost thing: a file layered over a terminal closes the
+    // file and reveals the terminal, leaving the tab in place.
+    if (
+      active instanceof PaneGrid &&
+      active.activeContentIsFile(active.activePaneId())
+    ) {
+      await this.closeActiveContentGuarded(active);
+      return;
+    }
     if (!(active instanceof PaneGrid)) {
       if (this.activeId) void this.closeTab(this.activeId);
+      return;
+    }
+    if (!(await this.confirmDiscardDirty(active))) {
+      active.focus();
       return;
     }
     const tabId = this.activeId;
@@ -1772,6 +2093,10 @@ export class App {
     const active = this.sessions.get(tabId);
     if (!(active instanceof PaneGrid)) {
       void this.closeTab(tabId);
+      return;
+    }
+    if (!(await this.confirmDiscardDirty(active))) {
+      active.focus();
       return;
     }
     const { confirm, proc, count } = await this.evalConfirmTab(active);

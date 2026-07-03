@@ -247,6 +247,20 @@ body {
   display: none;
 }
 
+.statusbar-perf {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+.statusbar-hint {
+  color: var(--text-subtle);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
 .perf-spacer {
   flex: 1;
 }
@@ -895,6 +909,274 @@ body {
 
 .pane-split.v > .pane-divider {
   cursor: row-resize;
+}
+
+.pane-content {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+
+.pane-content.pane-content-active {
+  display: block;
+}
+
+.pane-cluster {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.pane-cluster.multi {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-3) 90%, transparent);
+  opacity: 0;
+  transition: opacity 130ms ease-out;
+}
+
+.pane-cluster.multi > * {
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pane-cluster.multi:hover {
+    opacity: 1;
+  }
+  .pane-cluster.multi:hover > * {
+    pointer-events: auto;
+  }
+}
+
+.pane-cluster:not(.multi) {
+  padding: 3px 12px 12px 3px;
+}
+
+.pane-cluster-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-3) 90%, transparent);
+  color: var(--fg);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 130ms ease-out;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pane-cluster:not(.multi):hover .pane-cluster-add {
+    opacity: 0.55;
+    pointer-events: auto;
+  }
+  .pane-cluster-add:hover {
+    opacity: 1;
+  }
+}
+
+.pane-cluster-add:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pane-cluster-seg,
+.pane-cluster-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font: var(--type-caption);
+  cursor: pointer;
+  transition:
+    color 130ms ease,
+    background 130ms ease;
+}
+
+.pane-cluster-seg:hover,
+.pane-cluster-pick:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.pane-cluster-glyph {
+  display: inline-flex;
+}
+
+.pane-cluster-label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pane-cluster-close {
+  display: inline-flex;
+  margin-left: 3px;
+  opacity: 0;
+  transition: opacity 80ms ease-out;
+  pointer-events: none;
+}
+
+.pane-cluster-seg:hover .pane-cluster-close {
+  opacity: 0.55;
+  pointer-events: auto;
+}
+
+.pane-cluster-close:hover {
+  opacity: 1;
+}
+
+.pane-cluster-seg.active {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pane-cluster-seg.active .pane-cluster-label {
+  color: var(--tab-color, var(--fg));
+}
+
+.pane-cluster-seg.dirty .pane-cluster-label::after {
+  content: " ●";
+  color: var(--tab-color, var(--fg));
+}
+
+.pane-cluster-seg:active,
+.pane-cluster-pick:active {
+  transform: scale(0.97);
+}
+
+.pane-filechooser {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.pane-filechooser.pane-content-active {
+  display: flex;
+}
+
+.pane-filechooser-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 280px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.pane-filechooser-title {
+  color: var(--fg);
+  font: var(--type-label);
+}
+
+.pane-filechooser-hint {
+  font: var(--type-caption);
+}
+
+.pane-filechooser-label {
+  margin-top: 10px;
+  text-align: left;
+  font: var(--type-caption);
+  opacity: 0.7;
+}
+
+.pane-filechooser-row {
+  display: block;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  font: var(--type-caption);
+  text-align: left;
+  cursor: pointer;
+}
+
+.pane-filechooser-row:hover,
+.pane-filechooser-row.selected {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pane-filechooser-actions {
+  margin-top: 12px;
+  font: var(--type-caption);
+  opacity: 0.6;
+}
+
+.pane-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.pane-picker-box {
+  min-width: 280px;
+  padding: 6px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    var(--elev-shadow);
+}
+
+.pane-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg);
+  font: var(--type-label);
+  cursor: pointer;
+}
+
+.pane-picker-row:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pane-picker-row:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.pane-picker-hint {
+  color: var(--text-muted);
+  font: var(--type-caption);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane-cluster,
+  .pane-cluster-add,
+  .pane-cluster-seg,
+  .pane-cluster-pick {
+    transition: none;
+  }
 }
 
 .palette {
