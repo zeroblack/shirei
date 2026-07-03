@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-07-03
+
 ### Added
+- In-app auto-update: a dismissible modal detects a newer published release and,
+  on your click, downloads, verifies its signature, and relaunches. Detection
+  stays quiet (a titlebar indicator and a one-time notice); automatic versus
+  manual checking is a Settings toggle.
+- Quick open can search your whole home folder, not just the current project,
+  toggled with Tab in the palette.
 - Files open into a pane's stack layered over the terminal: keep several open,
   switch with the cluster pill or ⌘⌥1/2/3, and drop back to the session without
   losing them. A contextual shortcut legend in the status bar (toggle in
@@ -129,6 +137,7 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.14.3...HEAD
+[0.14.3]: https://github.com/zeroblack/shirei/compare/v0.13.4...v0.14.3
 [0.12.1]: https://github.com/zeroblack/shirei/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/zeroblack/shirei/releases/tag/v0.12.0
