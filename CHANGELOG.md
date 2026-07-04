@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.6] - 2026-07-04
+
+### Added
+- Autosave for the editor: the file saves on its own a short while after you
+  stop typing, with a "Saved" indicator in the top-left corner. Configurable in
+  Settings under Editor, on by default with a one-second delay.
+
+### Fixed
+- Cmd+S now saves a file opened over a terminal pane. It previously only saved
+  a file in a full editor tab and did nothing over a pane.
+
 ## [0.14.5] - 2026-07-03
 
 ### Fixed

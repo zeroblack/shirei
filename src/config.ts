@@ -176,6 +176,8 @@ export interface Config {
   session: SessionConfig;
   editor: {
     vim: boolean;
+    autosave: boolean;
+    autosave_delay_ms: number;
     live_preview: boolean;
     line_numbers: boolean;
     active_line: boolean;

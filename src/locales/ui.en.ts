@@ -58,6 +58,7 @@ export const uiEn = {
   "ui.editor.find.noResults": "No results",
   "ui.editor.copy": "Copy",
   "ui.editor.copied": "Copied",
+  "ui.editor.saved": "Saved",
   "ui.editor.fold.lines": "{n} lines",
   "ui.editor.fold.tasks": "{done}/{total} tasks",
   "ui.editor.diff.none": "No committed version to compare against.",
