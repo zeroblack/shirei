@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.7] - 2026-07-04
+
+### Fixed
+- Cmd+E and Cmd+J now close the sidebar on a second press instead of only
+  moving focus back to the terminal, so each is a full open/close toggle.
+
 ## [0.14.6] - 2026-07-04
 
 ### Added
