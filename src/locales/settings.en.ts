@@ -34,10 +34,15 @@ export const settingsEn = {
   "settings.git.historyViewDiff": "Diff (commit change)",
   "settings.git.historyViewWorking": "Working tree",
   "settings.git.historyViewFull": "File",
+  "settings.editor.group.saving": "Saving",
   "settings.editor.group.markdown": "Markdown",
   "settings.editor.group.editing": "Editing",
   "settings.editor.group.prose": "Prose & code",
   "settings.editor.group.search": "Search",
+  "settings.editor.autosave": "Autosave",
+  "settings.editor.autosaveDesc":
+    "Save the file automatically a short while after you stop typing.",
+  "settings.editor.autosaveDelay": "Autosave delay (seconds)",
   "settings.editor.livePreview": "Live preview",
   "settings.editor.livePreviewDesc":
     "Render markdown inline as you write; raw syntax shows on the cursor's line.",

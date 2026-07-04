@@ -1550,21 +1550,37 @@ export class App {
     });
   }
 
-  private async saveActive(): Promise<void> {
-    const s = this.sessions.get(this.activeId ?? "");
-    if (!this.isEditor(s)) return;
-    const res = await s.save();
+  private async saveEditor(session: EditorSessionType): Promise<boolean> {
+    const res = await session.save();
     if (res.conflict) {
       const overwrite = await confirmDialog({
         title: t("ui.app.fileChangedTitle"),
         detail: t("ui.app.fileChangedDetail"),
         confirmLabel: t("ui.app.fileChangedConfirm"),
       });
-      if (overwrite) await s.saveForce();
-      return;
+      if (!overwrite) return false;
+      await session.saveForce();
+      return true;
     }
     if (!res.ok && res.error) {
       this.notify(t("ui.app.saveFailed", { error: res.error }));
+      return false;
+    }
+    return true;
+  }
+
+  private async saveActive(): Promise<void> {
+    const s = this.sessions.get(this.activeId ?? "");
+    if (this.isEditor(s)) {
+      await this.saveEditor(s);
+      return;
+    }
+    if (!(s instanceof PaneGrid)) return;
+    const paneId = s.activePaneId();
+    if (!s.activeContentIsFile(paneId)) return;
+    const content = s.activeContentSession(paneId);
+    if (EditorSession !== null && content instanceof EditorSession) {
+      await this.saveEditor(content);
     }
   }
 
@@ -2155,16 +2171,7 @@ export class App {
       EditorSession !== null &&
       session instanceof EditorSession
     ) {
-      const res = await session.save();
-      if (res.conflict) {
-        const overwrite = await confirmDialog({
-          title: t("ui.app.fileChangedTitle"),
-          detail: t("ui.app.fileChangedDetail"),
-          confirmLabel: t("ui.app.fileChangedConfirm"),
-        });
-        if (!overwrite) return false;
-        await session.saveForce();
-      }
+      return this.saveEditor(session);
     }
     return true;
   }

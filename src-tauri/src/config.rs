@@ -266,6 +266,8 @@ impl Default for EditorTheme {
 #[serde(default)]
 pub struct EditorConfig {
     pub vim: bool,
+    pub autosave: bool,
+    pub autosave_delay_ms: u32,
     pub live_preview: bool,
     pub line_numbers: bool,
     pub active_line: bool,
@@ -291,6 +293,8 @@ impl Default for EditorConfig {
     fn default() -> Self {
         EditorConfig {
             vim: false,
+            autosave: true,
+            autosave_delay_ms: 1000,
             live_preview: true,
             line_numbers: true,
             active_line: true,

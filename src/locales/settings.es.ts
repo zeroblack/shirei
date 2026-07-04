@@ -36,10 +36,15 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.git.historyViewDiff": "Diff (cambio del commit)",
   "settings.git.historyViewWorking": "Árbol de trabajo",
   "settings.git.historyViewFull": "Archivo",
+  "settings.editor.group.saving": "Guardado",
   "settings.editor.group.markdown": "Markdown",
   "settings.editor.group.editing": "Edición",
   "settings.editor.group.prose": "Prosa y código",
   "settings.editor.group.search": "Búsqueda",
+  "settings.editor.autosave": "Autoguardado",
+  "settings.editor.autosaveDesc":
+    "Guarda el archivo solo, poco después de que dejas de escribir.",
+  "settings.editor.autosaveDelay": "Retardo de autoguardado (segundos)",
   "settings.editor.livePreview": "Vista previa en vivo",
   "settings.editor.livePreviewDesc":
     "Renderiza el markdown inline al escribir; la sintaxis cruda aparece en la línea del cursor.",

@@ -61,6 +61,7 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.editor.find.noResults": "Sin resultados",
   "ui.editor.copy": "Copiar",
   "ui.editor.copied": "Copiado",
+  "ui.editor.saved": "Guardado",
   "ui.editor.fold.lines": "{n} líneas",
   "ui.editor.fold.tasks": "{done}/{total} tareas",
   "ui.editor.diff.none": "No hay versión commiteada para comparar.",

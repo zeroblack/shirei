@@ -1,6 +1,6 @@
 import { t } from "../i18n";
 import type { SettingsSection } from "./shell";
-import { boolField, groupLabel, section, textField } from "./widgets";
+import { boolField, groupLabel, numField, section, textField } from "./widgets";
 
 export const editorSection: SettingsSection = {
   id: "editor",
@@ -11,6 +11,21 @@ export const editorSection: SettingsSection = {
     return section(
       t("settings.editor.title"),
       [
+        groupLabel(t("settings.editor.group.saving")),
+        boolField(
+          t("settings.editor.autosave"),
+          e,
+          "autosave",
+          save,
+          t("settings.editor.autosaveDesc"),
+        ),
+        numField(
+          t("settings.editor.autosaveDelay"),
+          e,
+          "autosave_delay_ms",
+          { min: 0.5, max: 60, step: 0.5, scale: 1000 },
+          save,
+        ),
         groupLabel(t("settings.editor.group.markdown")),
         boolField(
           t("settings.editor.livePreview"),

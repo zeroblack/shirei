@@ -737,6 +737,56 @@ body {
   border-color: rgba(255, 255, 255, 0.28);
 }
 
+.editor-saved {
+  position: absolute;
+  top: 10px;
+  left: 14px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1_5);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-3) 88%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-snug);
+  color: var(--text-muted);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 240ms ease,
+    transform 240ms ease;
+}
+
+.editor-saved::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--success);
+}
+
+.editor-saved.visible {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 160ms var(--ease-out),
+    transform 160ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-saved,
+  .editor-saved.visible {
+    transform: none;
+    transition: opacity 120ms linear;
+  }
+}
+
 .cm-blame-card {
   position: fixed;
   z-index: 80;

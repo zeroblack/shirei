@@ -75,6 +75,8 @@ export interface ReadingConfig {
 
 const PROSE_EXTS = new Set(["md", "markdown", "mdx", "txt", "text"]);
 
+const SAVED_VISIBLE_MS = 1500;
+
 function isProse(path: string): boolean {
   const ext = (path.split("/").pop() ?? path).split(".").pop()?.toLowerCase();
   return ext !== undefined && PROSE_EXTS.has(ext);
@@ -216,6 +218,10 @@ export class EditorSession {
   private blameOn = false;
   private diffBtn: HTMLButtonElement | null = null;
   private blameBtn: HTMLButtonElement | null = null;
+  private dirty = false;
+  private autosaveTimer: number | null = null;
+  private savedEl: HTMLElement | null = null;
+  private savedTimer: number | null = null;
   onDirtyChange?: (dirty: boolean) => void;
   onHistory?: () => void;
 
@@ -340,12 +346,17 @@ export class EditorSession {
           ),
         ),
         EditorView.updateListener.of((u) => {
-          if (u.docChanged) this.onDirtyChange?.(true);
+          if (u.docChanged) {
+            this.dirty = true;
+            this.onDirtyChange?.(true);
+            this.scheduleAutosave();
+          }
         }),
       ],
     });
     this.view = new EditorView({ state, parent: this.container });
     this.container.appendChild(this.chromeButtons());
+    this.container.appendChild(this.savedIndicator());
     const lang = await languageFor(this.path);
     if (lang) this.view.dispatch({ effects: languageConf.reconfigure(lang) });
     if (this.gitCfg.blame.enabled) void this.setBlame(true, false);
@@ -425,7 +436,10 @@ export class EditorSession {
     const data = this.view.state.doc.toString();
     try {
       this.baseMtime = await writeFile(this.path, data, known);
+      this.dirty = false;
+      this.clearAutosave();
       this.onDirtyChange?.(false);
+      this.flashSaved();
       return { ok: true };
     } catch (e) {
       return {
@@ -434,6 +448,51 @@ export class EditorSession {
         error: errorMessage(e),
       };
     }
+  }
+
+  private scheduleAutosave(): void {
+    this.clearAutosave();
+    if (!this.editorCfg.autosave || this.editorCfg.autosave_delay_ms <= 0)
+      return;
+    this.autosaveTimer = window.setTimeout(
+      () => void this.autosave(),
+      this.editorCfg.autosave_delay_ms,
+    );
+  }
+
+  private clearAutosave(): void {
+    if (this.autosaveTimer !== null) {
+      window.clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+    }
+  }
+
+  // Autosave never prompts: a stale-mtime conflict leaves the file dirty and
+  // reschedules on the next edit, so the user resolves it through a manual save.
+  private async autosave(): Promise<void> {
+    this.autosaveTimer = null;
+    if (!this.dirty) return;
+    await this.write(this.baseMtime);
+  }
+
+  private savedIndicator(): HTMLElement {
+    const el = document.createElement("div");
+    el.className = "editor-saved";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    el.textContent = t("ui.editor.saved");
+    this.savedEl = el;
+    return el;
+  }
+
+  private flashSaved(): void {
+    if (!this.savedEl) return;
+    this.savedEl.classList.add("visible");
+    if (this.savedTimer !== null) window.clearTimeout(this.savedTimer);
+    this.savedTimer = window.setTimeout(() => {
+      this.savedEl?.classList.remove("visible");
+      this.savedTimer = null;
+    }, SAVED_VISIBLE_MS);
   }
 
   show(visible: boolean): void {
@@ -453,6 +512,8 @@ export class EditorSession {
 
   applyEditorConfig(cfg: EditorConfig): void {
     this.editorCfg = cfg;
+    if (this.dirty) this.scheduleAutosave();
+    else this.clearAutosave();
     this.view?.dispatch({
       effects: [
         featuresConf.reconfigure(editorFeatures(cfg)),
@@ -495,6 +556,8 @@ export class EditorSession {
   }
 
   dispose(): void {
+    this.clearAutosave();
+    if (this.savedTimer !== null) window.clearTimeout(this.savedTimer);
     this.view?.destroy();
     this.view = null;
     this.container.remove();
