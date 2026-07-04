@@ -212,10 +212,16 @@ impl MuxClient {
 
     /// Called when a connection's reader dies: the next command reconnects
     /// (and respawns the daemon if needed) instead of reusing a dead stream.
-    fn invalidate(&self, dead: &Arc<Conn>) {
+    /// Returns whether this actually cleared the live connection, so the
+    /// caller only notifies the frontend once per real drop, not on every
+    /// reader thread that happens to unwind after having already been replaced.
+    fn invalidate(&self, dead: &Arc<Conn>) -> bool {
         let mut guard = self.conn.lock_ignore_poison();
         if guard.as_ref().is_some_and(|c| Arc::ptr_eq(c, dead)) {
             *guard = None;
+            true
+        } else {
+            false
         }
     }
 
@@ -297,7 +303,12 @@ fn spawn_reader(mut read: UnixStream, conn: Arc<Conn>, app: AppHandle) {
                 ServerMsg::Welcome { .. } => {}
             }
         }
-        app.state::<MuxClient>().invalidate(&conn);
+        if app.state::<MuxClient>().invalidate(&conn) {
+            // Every pane's input keeps going into the dead connection until
+            // something re-attaches it; tell the frontend so it can recover
+            // without waiting for the user to hit the manual reconnect shortcut.
+            let _ = app.emit("mux://connection-lost", ());
+        }
     });
 }
 

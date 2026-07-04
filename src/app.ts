@@ -89,6 +89,11 @@ function withClaudeFlag(cmd: string, flag: "--continue" | "--resume"): string {
 // rather than a quick app switch (light repaint).
 const LONG_HIDDEN_MS = 5000;
 
+// A flaky daemon can drop and reconnect in quick succession; collapsing
+// "connection-lost" events within this window keeps one bad stretch from
+// resetting every pane's terminal in a loop.
+const MUX_RECONNECT_DEBOUNCE_MS = 1000;
+
 // Pane keystrokes that operate on the terminal and must defer to a focused file
 // editor when one is layered over it, so copy/paste/scroll work in the editor.
 const TERMINAL_CONTENT_ACTIONS = new Set([
@@ -252,6 +257,7 @@ export class App {
   private snapshotTimer: ReturnType<typeof setInterval> | null = null;
   private ageTimer: ReturnType<typeof setInterval> | null = null;
   private lastSessionJson: string | null = null;
+  private lastMuxReconnectAt = 0;
   private fitQueued = false;
   private hiddenAt: number | null = null;
   // Tab mutations interleave awaits (IPC, dialogs) with edits to this.tabs and
@@ -530,6 +536,21 @@ export class App {
     await listen("menu-zoom-out", () => this.setFontSize(this.fontSize - 1));
     await listen("menu-zoom-reset", () => this.setFontSize(DEFAULT_FONT_SIZE));
     await listen<number>("menu-goto-tab", (e) => this.gotoTab(e.payload));
+  }
+
+  // The daemon connection can die between any two keystrokes (idle-exit, a
+  // rebuilt binary replacing it, a crash); the backend has no way to retry a
+  // half-completed attach on its own, so it asks the frontend to redo it here
+  // instead of leaving every pane silently unresponsive until ⌘⇧R.
+  async bindMuxEvents(): Promise<void> {
+    await listen("mux://connection-lost", () => {
+      const now = Date.now();
+      if (now - this.lastMuxReconnectAt < MUX_RECONNECT_DEBOUNCE_MS) return;
+      this.lastMuxReconnectAt = now;
+      for (const session of this.sessions.values()) {
+        if (session instanceof PaneGrid) session.reconnectAll();
+      }
+    });
   }
 
   // Update UI wiring lives in its own bucket: the native "Check for Updates…"

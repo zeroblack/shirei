@@ -292,6 +292,10 @@ export class PaneGrid {
     void this.panes.get(this.activeLeafId)?.terminal.reconnect();
   }
 
+  reconnectAll(): void {
+    for (const pane of this.panes.values()) void pane.terminal.reconnect();
+  }
+
   killActive(): void {
     void this.panes.get(this.activeLeafId)?.terminal.killSession();
   }
