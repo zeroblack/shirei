@@ -89,6 +89,15 @@ function withClaudeFlag(cmd: string, flag: "--continue" | "--resume"): string {
 // rather than a quick app switch (light repaint).
 const LONG_HIDDEN_MS = 5000;
 
+// Pane keystrokes that operate on the terminal and must defer to a focused file
+// editor when one is layered over it, so copy/paste/scroll work in the editor.
+const TERMINAL_CONTENT_ACTIONS = new Set([
+  "terminal.copy-line",
+  "terminal.paste",
+  "scroll.up",
+  "scroll.down",
+]);
+
 // Row height of the TODO panel, used to convert `todo_min_rows` to pixels when
 // clamping the divider position. Matches the CSS row height; not user-configurable.
 const TODO_ROW_HEIGHT_PX = 24;
@@ -1927,6 +1936,16 @@ export class App {
       pane: active instanceof PaneGrid,
     });
     if (!action) return;
+    // These pane keys act on the terminal (copy line, paste, scroll). When a
+    // file content is layered over the terminal, they belong to the focused
+    // editor instead, so let the keystroke reach it unhandled.
+    if (
+      TERMINAL_CONTENT_ACTIONS.has(action) &&
+      active instanceof PaneGrid &&
+      active.activeContentIsFile(active.activePaneId())
+    ) {
+      return;
+    }
     e.preventDefault();
     this.dispatch(action, active);
   }
