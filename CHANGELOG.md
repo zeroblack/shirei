@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.5] - 2026-07-03
+
+### Fixed
+- Copy, paste, and scroll now work in a file opened over a terminal pane. They
+  were bound to terminal actions, so Cmd+C copied the terminal line instead of
+  the editor selection.
+- Reopening the app no longer leaves mouse-report escape sequences printing as
+  text in a terminal: re-attaching a persistent session resets stale input
+  modes before restoring the live ones.
+- A terminal no longer goes silently unresponsive when the session daemon drops
+  (idle exit, replacement, or crash); the app re-attaches every pane
+  automatically instead of waiting for a manual redraw.
+
 ## [0.14.4] - 2026-07-03
 
 ### Added
@@ -143,7 +156,8 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.14.4...HEAD
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.14.5...HEAD
+[0.14.5]: https://github.com/zeroblack/shirei/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/zeroblack/shirei/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/zeroblack/shirei/compare/v0.13.4...v0.14.3
 [0.12.1]: https://github.com/zeroblack/shirei/compare/v0.12.0...v0.12.1
