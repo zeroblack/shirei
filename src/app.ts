@@ -2134,16 +2134,12 @@ export class App {
         this.navigateFocus("down", active);
         break;
       case "tree.focus":
-        if (this.treeHasFocus()) this.focusActive();
+        if (this.treeHasFocus()) this.setPanelVisible(false);
         else this.focusTree();
         break;
       case "todo.focus":
-        if (this.todoFocused) {
-          this.blurTodoPanel();
-          this.focusActive();
-        } else {
-          this.focusTodoPanel();
-        }
+        if (this.todoFocused) this.setPanelVisible(false);
+        else this.focusTodoPanel();
         break;
       case "todo.capture":
         this.openTodoCapture();
