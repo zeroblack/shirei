@@ -40,6 +40,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   await onConfigChanged((c) => app.applyConfig(c));
   await app.bindMenu();
   await app.bindUpdateEvents();
+  await app.bindMuxEvents();
   void app.init();
   const title = document.querySelector<HTMLElement>("#app-title");
   if (title)

@@ -27,6 +27,7 @@ enum State {
 pub struct ModeTracker {
     state: State,
     private: bool,
+    intermediate_bang: bool,
     param: Option<u16>,
     params: Vec<u16>,
     set: BTreeMap<u16, bool>,
@@ -45,11 +46,16 @@ impl ModeTracker {
             match self.state {
                 State::Ground => {}
                 State::Esc => {
-                    self.state = if b == b'[' {
-                        State::Csi
-                    } else {
+                    self.state = match b {
+                        b'[' => State::Csi,
+                        // RIS (`ESC c`): a full terminal reset on a real terminal,
+                        // so any mode a dead TUI left set must not survive it.
+                        b'c' => {
+                            self.set.clear();
+                            State::Ground
+                        }
                         // OSC, charset selection, ...: mode sequences are CSI-only.
-                        State::Ground
+                        _ => State::Ground,
                     };
                 }
                 State::Csi => self.csi_byte(b),
@@ -65,6 +71,7 @@ impl ModeTracker {
             }
             b';' => self.params.push(self.param.take().unwrap_or(0)),
             b'?' => self.private = true,
+            b'!' => self.intermediate_bang = true,
             b'h' | b'l' => {
                 if let Some(p) = self.param.take() {
                     self.params.push(p);
@@ -79,6 +86,11 @@ impl ModeTracker {
                 }
                 self.reset_csi();
             }
+            // DECSTR (`CSI ! p`): soft terminal reset, same story as RIS.
+            b'p' if self.intermediate_bang => {
+                self.set.clear();
+                self.reset_csi();
+            }
             0x40..=0x7e => self.reset_csi(),
             _ => {}
         }
@@ -87,6 +99,7 @@ impl ModeTracker {
     fn reset_csi(&mut self) {
         self.state = State::Ground;
         self.private = false;
+        self.intermediate_bang = false;
         self.param = None;
         self.params.clear();
     }
@@ -173,5 +186,26 @@ mod tests {
     fn non_private_mode_is_ignored() {
         // `\e[25l` (no '?') is not a DEC private mode and must not be tracked.
         assert!(restored(b"\x1b[25l").is_empty());
+    }
+
+    #[test]
+    fn ris_clears_a_previously_set_mode() {
+        assert!(restored(b"\x1b[?1000h\x1bc").is_empty());
+    }
+
+    #[test]
+    fn decstr_clears_a_previously_set_mode() {
+        assert!(restored(b"\x1b[?1000h\x1b[!p").is_empty());
+    }
+
+    #[test]
+    fn set_reset_round_trip_still_works_after_a_reset_sequence() {
+        let mut m = ModeTracker::default();
+        m.feed(b"\x1b[?1000h\x1bc");
+        assert!(m.restore_seq().is_empty());
+        m.feed(b"\x1b[?25l");
+        assert_eq!(m.restore_seq(), b"\x1b[?25l");
+        m.feed(b"\x1b[?25h");
+        assert_eq!(m.restore_seq(), b"\x1b[?25h");
     }
 }

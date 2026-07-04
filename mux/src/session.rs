@@ -196,6 +196,22 @@ impl Session {
             // view would be corrupt, so let it reconnect instead.
             return;
         }
+        // The replayed history can end with a dangling mouse-enable left by a
+        // TUI that died with the old daemon (no paired reset ever arrived), so
+        // a fresh login shell would otherwise echo raw mouse escape sequences
+        // as text. Turn those modes off before re-asserting the live tracker's
+        // state below, so a still-running TUI can re-enable its own mouse
+        // while a plain shell stays clean.
+        const NORMALIZE: &[u8] = b"\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l";
+        if sub
+            .try_send(ServerMsg::Output {
+                id: id.to_string(),
+                data: NORMALIZE.to_vec(),
+            })
+            .is_err()
+        {
+            return;
+        }
         // Re-assert the sticky DEC private modes the ring replay can't rebuild
         // (cursor visibility, mouse, bracketed paste), so a reattaching TUI does
         // not surface a stray cursor or lose mouse input.
