@@ -1234,7 +1234,16 @@ mod tests {
             .collect();
         assert_eq!(
             names,
-            ["s1", "s2", "s4", "w1", "w2", "w4", "Yagura", "Shirei Template"]
+            [
+                "s1",
+                "s2",
+                "s4",
+                "w1",
+                "w2",
+                "w4",
+                "Yagura",
+                "Shirei Template"
+            ]
         );
     }
 
