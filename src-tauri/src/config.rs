@@ -694,6 +694,10 @@ fn tpl_split(
     serde_json::json!({ "kind": "split", "dir": dir, "ratio": ratio, "a": a, "b": b })
 }
 
+fn tpl_file() -> serde_json::Value {
+    serde_json::json!({ "kind": "leaf", "id": "", "file": true })
+}
+
 fn tpl_sidebar() -> serde_json::Value {
     tpl_split("v", 0.5, tpl_leaf(None), tpl_leaf(None))
 }
@@ -767,6 +771,13 @@ fn default_templates() -> Vec<serde_json::Value> {
             "name": "Yagura",
             "tree": tpl_split("h", 0.5, tpl_leaf(None),
                 tpl_split("v", 0.62, tpl_leaf(Some("yagura")), tpl_leaf(None))),
+        }),
+        serde_json::json!({
+            "name": "Shirei Template",
+            "tree": tpl_split("h", 0.34, tpl_leaf(Some("claude")),
+                tpl_split("h", 0.5,
+                    tpl_split("v", 0.8, tpl_file(), tpl_leaf(None)),
+                    tpl_leaf(Some("yagura")))),
         }),
     ]
 }
@@ -1221,13 +1232,16 @@ mod tests {
             .iter()
             .filter_map(|t| t["name"].as_str().map(str::to_string))
             .collect();
-        assert_eq!(names, ["s1", "s2", "s4", "w1", "w2", "w4", "Yagura"]);
+        assert_eq!(
+            names,
+            ["s1", "s2", "s4", "w1", "w2", "w4", "Yagura", "Shirei Template"]
+        );
     }
 
     #[test]
     fn partial_json_seeds_templates() {
         let c = Config::from_json_or_default(r#"{"font":{"size":20}}"#);
-        assert_eq!(c.templates.len(), 7);
+        assert_eq!(c.templates.len(), 8);
     }
 
     #[test]
@@ -1236,7 +1250,7 @@ mod tests {
         let templates = json["templates"]
             .as_array()
             .expect("templates missing from serialized config");
-        assert_eq!(templates.len(), 7);
+        assert_eq!(templates.len(), 8);
     }
 
     // `yagura` is an intentional first-class companion template; only ad-hoc

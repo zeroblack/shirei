@@ -957,8 +957,15 @@ export class App {
     tree: PaneNode,
   ): Promise<void> {
     for (const leaf of leaves(tree)) {
-      for (const c of readLeafContents(leaf)) {
+      const contents = readLeafContents(leaf);
+      for (const c of contents) {
         await this.switchPaneToFile(grid, leaf.id, c.path, true);
+      }
+      // A template's dedicated file pane is born showing the chooser; leave it
+      // active rather than snapping back to the terminal underneath.
+      if (contents.length === 0 && leaf.file) {
+        await this.switchPaneToFile(grid, leaf.id, undefined, true);
+        continue;
       }
       grid.switchContentIn(leaf.id, leaf.activeContent ?? 0);
     }
