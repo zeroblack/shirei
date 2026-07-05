@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.8] - 2026-07-04
+
+### Added
+- A "recording is live" highlight: a glowing frame hugs the surface being
+  recorded. It is drawn in a separate always-on-top window, so it never appears
+  in the video. Configurable under Settings via the recording color, and it can
+  be turned off.
+- Redesigned recording overlays and HUD: the target/format picker, countdown,
+  and finish prompt share one look and motion, and the recording indicator is a
+  frosted capsule with a live pulse.
+
+### Fixed
+- MP4 recording produced an empty file when the captured area had an odd pixel
+  width or height, which the H.264 encoder rejects. Capture dimensions are now
+  rounded to even, so app, panel, and region recordings all work.
+- The countdown no longer appears in the first frames of the recording.
+- A failed recording now reports the error and resets instead of leaving the
+  feature stuck with no feedback.
+
 ## [0.14.7] - 2026-07-04
 
 ### Fixed
