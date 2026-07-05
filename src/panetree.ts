@@ -25,6 +25,11 @@ export interface PaneLeaf {
   contents?: PaneLeafFileContent[];
   /** Active stack index: 0 = terminal, i = contents[i-1]. */
   activeContent?: number;
+  /**
+   * Template-only: born with an empty file slot (chooser) open over the
+   * terminal, so a layout can dedicate a pane to files without a fixed path.
+   */
+  file?: boolean;
 }
 
 export interface PaneSplit {
@@ -120,7 +125,13 @@ export function instantiate(
   cwd: string,
 ): PaneNode {
   if (template.kind === "leaf") {
-    return { kind: "leaf", id: makeId(), command: template.command, cwd };
+    return {
+      kind: "leaf",
+      id: makeId(),
+      command: template.command,
+      cwd,
+      file: template.file,
+    };
   }
   return {
     kind: "split",
