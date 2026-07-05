@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.9] - 2026-07-05
+
+### Added
+- A built-in "Shirei Template" layout: a full Claude pane on the left, a
+  files-over-commands split in the middle, and a full Yagura pane on the right.
+  The middle file pane opens on the file chooser, ready for the next file.
+
 ## [0.14.8] - 2026-07-04
 
 ### Added
