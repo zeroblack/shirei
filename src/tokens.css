@@ -61,6 +61,10 @@
   --warning: #d29922;
   --danger: #f85149;
 
+  --rec: #ff453a;
+  --rec-soft: rgba(255, 69, 58, 0.55);
+  --rec-dim: rgba(255, 69, 58, 0.16);
+
   --elev-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
   --popover-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 

@@ -136,11 +136,25 @@ pub fn screencast_stop(app: AppHandle, state: State<'_, RecorderState>) -> Resul
         .ok_or_else(|| Error::Screencast("no recording in progress".into()))?;
 
     active.stop_flag.store(true, Ordering::SeqCst);
-    let res = StopResult {
-        path: active.capture.finish()?,
-    };
-    let _ = app.emit("screencast://stopped", &res);
-    Ok(res)
+    finish_and_emit(&app, active.capture)
+}
+
+// A recording can be stopped from the HUD window, the timer, or the main window,
+// and none of them can surface a finish error on their own. Emitting a terminal
+// event on every outcome lets the main window own the toast and state reset from
+// one place, so a failed encode never leaves the UI stuck without feedback.
+fn finish_and_emit(app: &AppHandle, capture: imp::Capture) -> Result<StopResult> {
+    match capture.finish() {
+        Ok(path) => {
+            let res = StopResult { path };
+            let _ = app.emit("screencast://stopped", &res);
+            Ok(res)
+        }
+        Err(e) => {
+            let _ = app.emit("screencast://failed", e.to_string());
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
@@ -197,9 +211,7 @@ fn spawn_timer(app: AppHandle, stop_flag: Arc<AtomicBool>, max_duration_secs: u3
                     let active = state.0.lock().ok().and_then(|mut g| g.take());
                     if let Some(active) = active {
                         active.stop_flag.store(true, Ordering::SeqCst);
-                        if let Ok(path) = active.capture.finish() {
-                            let _ = app.emit("screencast://stopped", &StopResult { path });
-                        }
+                        let _ = finish_and_emit(&app, active.capture);
                     }
                 }
                 return;
@@ -443,6 +455,16 @@ mod imp {
         unsafe { (config.width(), config.height()) }
     }
 
+    // The H.264 encoder rejects odd width/height, which yields a failed writer
+    // and an empty MP4 while the GIF path (which has no parity constraint) works
+    // fine. Capture dimensions come from the window frame times the display
+    // scale, so they can land odd; floor them to even before they reach both the
+    // stream config and the encoder that reads it back.
+    fn even_dim(n: f64) -> usize {
+        let v = n.round().max(2.0) as usize;
+        v & !1
+    }
+
     fn build_config(window: &SCWindow, target: &CaptureTarget) -> Retained<SCStreamConfiguration> {
         let config = unsafe { SCStreamConfiguration::new() };
         unsafe {
@@ -456,8 +478,8 @@ mod imp {
             let frame = window.frame();
             match target.rect {
                 Some(r) => {
-                    config.setWidth(r.width as usize);
-                    config.setHeight(r.height as usize);
+                    config.setWidth(even_dim(r.width as f64));
+                    config.setHeight(even_dim(r.height as f64));
                     // sourceRect is in points (window space); width/height are output pixels.
                     config.setSourceRect(CGRect {
                         origin: objc2_core_foundation::CGPoint {
@@ -471,8 +493,8 @@ mod imp {
                     });
                 }
                 None => {
-                    config.setWidth((frame.size.width * target.scale).round().max(2.0) as usize);
-                    config.setHeight((frame.size.height * target.scale).round().max(2.0) as usize);
+                    config.setWidth(even_dim(frame.size.width * target.scale));
+                    config.setHeight(even_dim(frame.size.height * target.scale));
                 }
             }
         }
@@ -695,19 +717,28 @@ mod imp {
             }
         }
 
+        fn writer_error(&self) -> Option<String> {
+            unsafe { self.writer.error() }.map(|e| ns_error_message(&e))
+        }
+
         fn finish(&mut self, out_path: &str) -> Result<String> {
             if !self.started {
                 let _ = std::fs::remove_file(out_path);
-                return Err(Error::Screencast("empty recording".into()));
+                let detail = self
+                    .writer_error()
+                    .unwrap_or_else(|| "recording produced no frames".into());
+                return Err(Error::Screencast(detail));
             }
             unsafe { self.input.markAsFinished() };
             block_on_void(|done| unsafe { self.writer.finishWritingWithCompletionHandler(&done) });
             let status = unsafe { self.writer.status() };
-            if status == AVAssetWriterStatus::Failed
-                || std::fs::metadata(out_path).map(|m| m.len()).unwrap_or(0) == 0
-            {
+            let empty = std::fs::metadata(out_path).map(|m| m.len()).unwrap_or(0) == 0;
+            if status == AVAssetWriterStatus::Failed || empty {
                 let _ = std::fs::remove_file(out_path);
-                return Err(Error::Screencast("empty recording".into()));
+                let detail = self
+                    .writer_error()
+                    .unwrap_or_else(|| "recording produced no frames".into());
+                return Err(Error::Screencast(detail));
             }
             Ok(out_path.to_string())
         }

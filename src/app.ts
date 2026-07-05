@@ -226,6 +226,13 @@ function applyRenderCss(render: Config["render"]): void {
   root.dataset.termSmoothing = render.font_smoothing;
 }
 
+function applyRecColor(color: string): void {
+  const root = document.documentElement.style;
+  root.setProperty("--rec", color);
+  root.setProperty("--rec-soft", alpha(color, 0.55));
+  root.setProperty("--rec-dim", alpha(color, 0.16));
+}
+
 export class App {
   private tabs: TabState[] = [];
   private readonly sessions = new Map<
@@ -346,6 +353,7 @@ export class App {
     void this.statusbar.start();
     applyChrome(config.theme.preset, config.theme.terminal);
     applyRenderCss(config.render);
+    applyRecColor(config.recorder.highlight_color);
     webglPool.setCap(config.render.webgl_pool_cap);
     window.addEventListener("resize", () => this.queueFit());
     window.addEventListener("keydown", (e) => this.onKey(e));
@@ -664,6 +672,7 @@ export class App {
     this.renderTabs();
     applyChrome(c.theme.preset, c.theme.terminal);
     applyRenderCss(c.render);
+    applyRecColor(c.recorder.highlight_color);
     this.applyFocusChrome(c.chrome);
     this.applyMotionVars(c.motion);
     this.updateContextHint();

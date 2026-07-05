@@ -2564,6 +2564,8 @@ body {
   align-items: flex-start;
   padding-top: 22vh;
   background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px) saturate(118%);
+  -webkit-backdrop-filter: blur(8px) saturate(118%);
 }
 
 .screencast-countdown {
@@ -2572,98 +2574,327 @@ body {
 }
 
 .screencast-selector-box,
-.screencast-finish-box {
-  width: min(360px, 80vw);
-  padding: 18px;
+.screencast-finish-box,
+.screencast-countdown-box {
+  width: min(340px, 82vw);
+  padding: 16px;
   background: var(--surface-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--elev-shadow);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    var(--elev-shadow);
   outline: none;
+  transform-origin: top center;
+  opacity: 0;
+  transform: scale(0.99) translateY(-6px);
+  transition:
+    opacity var(--modal-in, 200ms) var(--ease-out, ease),
+    transform var(--modal-in, 200ms) var(--ease-out, ease);
 }
 
 .screencast-countdown-box {
-  padding: 28px 36px;
-  background: var(--surface-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--elev-shadow);
-  outline: none;
+  width: auto;
+  padding: 30px 40px;
   text-align: center;
+  transform-origin: center;
+  transform: scale(0.9);
 }
 
-.screencast-countdown-number {
-  color: var(--fg);
-  font:
-    28px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
-  font-variant-numeric: tabular-nums;
+.screencast-selector[data-mounted="true"] .screencast-selector-box,
+.screencast-finish[data-mounted="true"] .screencast-finish-box,
+.screencast-countdown[data-mounted="true"] .screencast-countdown-box {
+  opacity: 1;
+  transform: none;
 }
 
-.screencast-countdown-hint {
-  margin-top: 12px;
-  color: var(--fg-dim);
-  font:
-    11.5px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+.screencast-selector[data-closing] .screencast-selector-box,
+.screencast-finish[data-closing] .screencast-finish-box {
+  opacity: 0;
+  transform: scale(0.99) translateY(-6px);
+  transition:
+    opacity var(--modal-out, 130ms) var(--ease-out, ease),
+    transform var(--modal-out, 130ms) var(--ease-out, ease);
+}
+
+.screencast-countdown[data-closing] .screencast-countdown-box {
+  opacity: 0;
+  transform: scale(0.96);
+  transition:
+    opacity 120ms var(--ease-out, ease),
+    transform 120ms var(--ease-out, ease);
+}
+
+@starting-style {
+  .screencast-selector-box,
+  .screencast-finish-box {
+    opacity: 0;
+    transform: scale(0.99) translateY(-6px);
+  }
+  .screencast-countdown-box {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+.screencast-selector-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.screencast-rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--rec);
+  box-shadow: 0 0 8px var(--rec-soft);
 }
 
 .screencast-selector-title,
 .screencast-finish-title {
   color: var(--fg);
-  font:
-    14px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: var(--type-label);
+  letter-spacing: var(--tracking-snug);
 }
 
 .screencast-selector-choices {
-  margin-top: 12px;
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+}
+
+.screencast-selector-rail {
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  width: 2px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--rec);
+  transition: transform 140ms var(--ease-out);
 }
 
 .screencast-selector-row {
-  padding: 7px 10px;
-  border-radius: 6px;
-  color: color-mix(in srgb, var(--fg) 80%, var(--bg));
-  font:
-    13px ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  padding: 0 10px 0 14px;
+  border-radius: 7px;
+  color: var(--text-muted);
+  font: var(--type-label);
 }
 
 .screencast-selector-row.selected {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--rec-dim);
   color: var(--fg);
 }
 
-.screencast-selector-formats {
-  margin-top: 12px;
-  color: var(--fg-dim);
-  font:
-    12px ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
+.screencast-selector-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface-1);
+  color: var(--fg);
+  font: var(--type-kbd);
+}
+
+.screencast-selector-row.selected .screencast-selector-chip {
+  background: var(--rec);
+  border-color: var(--rec);
+  color: #000;
+}
+
+.screencast-seg {
+  position: relative;
+  display: flex;
+  margin-top: 14px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+
+.screencast-seg-underline {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  border-radius: 6px;
+  background: var(--rec-dim);
+  box-shadow: inset 0 0 0 1px var(--rec-soft);
+  transition: transform 140ms var(--ease-out);
+}
+
+.screencast-seg-option {
+  flex: 1;
+  z-index: 1;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: var(--type-kbd);
+  letter-spacing: 0.4px;
+  cursor: default;
+  transition: color 140ms var(--ease-out);
+}
+
+.screencast-seg-option.active {
+  color: var(--fg);
 }
 
 .screencast-selector-hint,
 .screencast-finish-hint {
   margin-top: 14px;
-  color: var(--fg-dim);
-  font:
-    11.5px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  color: var(--text-subtle);
+  font: var(--type-caption);
+}
+
+.screencast-countdown-lead {
+  color: var(--text-muted);
+  font: var(--type-caption);
+  letter-spacing: var(--tracking-snug);
+}
+
+.screencast-countdown-ring-wrap {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  margin: 10px auto 12px;
+}
+
+.screencast-countdown-ring {
+  width: 84px;
+  height: 84px;
+  transform: rotate(-90deg);
+}
+
+.screencast-countdown-track {
+  fill: none;
+  stroke: var(--surface-1);
+  stroke-width: 3;
+}
+
+.screencast-countdown-arc {
+  fill: none;
+  stroke: var(--rec);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.screencast-countdown-number {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg);
+  font: var(--type-display);
+  font-size: 40px;
+  font-variant-numeric: tabular-nums;
+}
+
+.screencast-countdown-number.pop {
+  animation: countdown-pop 180ms var(--ease-out);
+}
+
+@keyframes countdown-pop {
+  from {
+    opacity: 0.4;
+    transform: scale(1.12);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.screencast-countdown-hint {
+  color: var(--text-subtle);
+  font: var(--type-caption);
+}
+
+.screencast-finish-check {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  animation: finish-pop 260ms var(--ease-out);
+}
+
+.screencast-finish-check::after {
+  content: "";
+  display: block;
+  width: 8px;
+  height: 14px;
+  margin: 4px auto 0;
+  border: solid var(--success);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+@keyframes finish-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.screencast-finish-file {
+  margin-top: 4px;
+  color: var(--text-subtle);
+  font: var(--type-kbd);
+}
+
+.screencast-finish-cells {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.screencast-finish-cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font: var(--type-caption);
+}
+
+.screencast-finish-cell.primary {
+  border-color: var(--rec-soft);
+  background: var(--rec-dim);
+  color: var(--fg);
+}
+
+.screencast-finish-cell kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface-1);
+  color: var(--fg);
+  font: var(--type-kbd);
 }
 
 .screencast-region {
@@ -2674,12 +2905,84 @@ body {
   background: rgba(0, 0, 0, 0.25);
 }
 
+.screencast-region-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font: var(--type-caption);
+  box-shadow: var(--popover-shadow);
+}
+
 .screencast-region-box {
   position: absolute;
-  border: 1px solid var(--fg);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--rec);
+  background: var(--rec-dim);
   box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.25);
   pointer-events: none;
+}
+
+.screencast-region-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--rec);
+}
+
+.screencast-region-handle.tl {
+  top: -1px;
+  left: -1px;
+  border-right: 0;
+  border-bottom: 0;
+}
+.screencast-region-handle.tr {
+  top: -1px;
+  right: -1px;
+  border-left: 0;
+  border-bottom: 0;
+}
+.screencast-region-handle.bl {
+  bottom: -1px;
+  left: -1px;
+  border-right: 0;
+  border-top: 0;
+}
+.screencast-region-handle.br {
+  bottom: -1px;
+  right: -1px;
+  border-left: 0;
+  border-top: 0;
+}
+
+.screencast-region-badge {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  color: var(--fg);
+  font: var(--type-kbd);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screencast-selector-rail,
+  .screencast-seg-underline {
+    transition: none;
+  }
+  .screencast-countdown-number.pop {
+    animation: none;
+  }
+  .screencast-finish-check {
+    animation: none;
+  }
 }
 
 .toast {

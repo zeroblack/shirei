@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Recording</title>
     <style>
+      :root {
+        --rec: #ff453a;
+        --rec-soft: rgba(255, 69, 58, 0.55);
+        --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+      }
       html,
       body {
         margin: 0;
@@ -18,34 +23,83 @@
       #hud {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 9px;
         height: 100%;
-        padding: 0 12px;
+        padding: 0 14px;
         box-sizing: border-box;
-        border-radius: 10px;
-        background: rgba(10, 10, 10, 0.92);
+        border-radius: 9999px;
+        background: rgba(12, 12, 13, 0.82);
+        backdrop-filter: blur(20px) saturate(160%);
+        -webkit-backdrop-filter: blur(20px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 69, 58, 0.08),
+          0 6px 20px rgba(0, 0, 0, 0.5);
         color: #fff;
         font:
-          12px / 1 ui-monospace, SFMono-Regular, Menlo, monospace;
+          500 12px / 1 system-ui,
+          -apple-system,
+          sans-serif;
+        transition: background 140ms var(--ease-out);
+      }
+      #hud:hover {
+        background: color-mix(in srgb, rgba(12, 12, 13, 0.82) 84%, var(--rec));
+      }
+      #hud:active {
+        transform: scale(0.97);
       }
       #dot {
+        position: relative;
         width: 9px;
         height: 9px;
+        flex: none;
         border-radius: 50%;
-        background: #e5534b;
-        animation: blink 1s steps(2, start) infinite;
+        background: var(--rec);
+      }
+      #dot::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        box-shadow: 0 0 0 2px var(--rec-soft);
+        animation: ping 2s var(--ease-out) infinite;
+      }
+      @keyframes ping {
+        to {
+          transform: scale(2.4);
+          opacity: 0;
+        }
       }
       #time {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-variant-numeric: tabular-nums;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.4px;
       }
       #stop {
         margin-left: auto;
-        opacity: 0.85;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: rgba(255, 255, 255, 0.7);
+        transition: color 140ms var(--ease-out);
       }
-      @keyframes blink {
-        50% {
-          opacity: 0.2;
+      #stop-label {
+        font-size: 11px;
+        opacity: 0;
+        transition: opacity 140ms var(--ease-out);
+      }
+      #hud:hover #stop {
+        color: var(--rec);
+      }
+      #hud:hover #stop-label {
+        opacity: 1;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #dot::after {
+          display: none;
+        }
+        #hud:active {
+          transform: none;
         }
       }
     </style>
@@ -55,7 +109,7 @@
     <div id="hud">
       <span id="dot"></span>
       <span id="time">0:00</span>
-      <span id="stop">⏹</span>
+      <span id="stop"><span id="stop-label"></span>⏹</span>
     </div>
   </body>
 </html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recording frame</title>
+    <style>
+      :root {
+        --rec: #ff453a;
+        --rec-soft: rgba(255, 69, 58, 0.55);
+        --rec-dim: rgba(255, 69, 58, 0.16);
+        --bleed: 8px;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .rec-frame {
+        position: fixed;
+        inset: var(--bleed);
+        border: 2px solid var(--rec);
+        border-radius: 10px;
+        pointer-events: none;
+      }
+      .rec-frame::before {
+        content: "";
+        position: absolute;
+        inset: -2px;
+        border-radius: inherit;
+        box-shadow:
+          0 0 0 1px var(--rec-soft),
+          0 0 24px 2px var(--rec-soft),
+          inset 0 0 18px var(--rec-dim);
+        animation: rec-breathe 2.4s ease-in-out infinite alternate;
+      }
+      @keyframes rec-breathe {
+        from {
+          opacity: 0.55;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .rec-frame::before {
+          animation: none;
+          opacity: 1;
+        }
+      }
+    </style>
+    <script type="module" src="/src/frame.ts" defer></script>
+  </head>
+  <body>
+    <div class="rec-frame"></div>
+  </body>
+</html>

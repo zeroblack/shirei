@@ -655,6 +655,8 @@ pub struct RecorderConfig {
     pub max_duration_secs: u32,
     pub on_finish: FinishAction,
     pub filename_template: String,
+    pub highlight_color: String,
+    pub highlight_frame: bool,
 }
 
 impl Default for RecorderConfig {
@@ -670,6 +672,8 @@ impl Default for RecorderConfig {
             max_duration_secs: 0,
             on_finish: FinishAction::Ask,
             filename_template: "{tab}-{date}".to_string(),
+            highlight_color: "#ff453a".to_string(),
+            highlight_frame: true,
         }
     }
 }

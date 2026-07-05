@@ -166,6 +166,8 @@ export interface RecorderConfig {
   max_duration_secs: number;
   on_finish: FinishAction;
   filename_template: string;
+  highlight_color: string;
+  highlight_frame: boolean;
 }
 
 export interface Config {
