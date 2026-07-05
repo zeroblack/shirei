@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "screencast-frame",
+  "description": "Minimal capability for the recording frame overlay window: it only displays a glowing border and closes itself.",
+  "windows": ["screencast-frame"],
+  "permissions": [
+    "core:webview:default",
+    "core:window:default",
+    "core:window:allow-close"
+  ]
+}

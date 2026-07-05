@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { alpha } from "./colors";
 import { configGet } from "./config";
 import { setLocale, t } from "./i18n";
 
@@ -16,6 +17,11 @@ window.addEventListener("DOMContentLoaded", () => {
     .then((c) => {
       setLocale(c.locale);
       document.title = t("ui.screencast.recordingTitle");
+      const root = document.documentElement.style;
+      root.setProperty("--rec", c.recorder.highlight_color);
+      root.setProperty("--rec-soft", alpha(c.recorder.highlight_color, 0.55));
+      const label = document.querySelector("#stop-label");
+      if (label) label.textContent = t("ui.screencast.hudStop");
     })
     .catch(() => {});
 

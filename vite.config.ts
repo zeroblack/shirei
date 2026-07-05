@@ -26,6 +26,7 @@ export default defineConfig({
         main: "index.html",
         settings: "settings.html",
         hud: "hud.html",
+        frame: "frame.html",
       },
       output: {
         codeSplitting: {
