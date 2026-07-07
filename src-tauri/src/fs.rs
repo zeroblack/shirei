@@ -61,6 +61,15 @@ fn is_too_large(len: u64, max: u64) -> bool {
     len > max
 }
 
+// ~/Library holds other apps' Containers, Group Containers, and Application
+// Support; descending into it trips the macOS "access data from other apps" TCC
+// prompt once per app. It is never source the user searches for, so the file
+// tree and index skip it unconditionally — this is a system invariant, not a
+// user-tunable exclude (which persisted configs could be missing).
+fn home_library() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library"))
+}
+
 fn mtime_secs(meta: &std::fs::Metadata) -> u64 {
     meta.modified()
         .ok()
@@ -80,6 +89,7 @@ fn sort_entries(entries: &mut [DirEntry]) {
 fn list_dir(path: &str, cap: usize, exclude: &[String]) -> Result<DirListing> {
     let mut entries = Vec::new();
     let mut truncated = false;
+    let home_lib = home_library();
     let read = std::fs::read_dir(path).map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => Error::NotFound(path.to_string()),
         _ => Error::Io(e),
@@ -89,6 +99,9 @@ fn list_dir(path: &str, cap: usize, exclude: &[String]) -> Result<DirListing> {
         let is_dir = meta.is_dir();
         let name = item.file_name().to_string_lossy().into_owned();
         if is_dir && exclude.contains(&name) {
+            continue;
+        }
+        if is_dir && home_lib.as_deref() == Some(item.path().as_path()) {
             continue;
         }
         if entries.len() >= cap {
@@ -223,6 +236,7 @@ fn index_walk(
     respect_gitignore: bool,
 ) -> FileIndex {
     let exclude: Vec<std::ffi::OsString> = exclude.iter().map(std::ffi::OsString::from).collect();
+    let home_lib = home_library();
     let mut entries = Vec::new();
     let mut truncated = false;
 
@@ -236,7 +250,13 @@ fn index_walk(
         .require_git(false)
         .filter_entry(move |e| {
             let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
-            !(is_dir && exclude.iter().any(|x| e.file_name() == x.as_os_str()))
+            if !is_dir {
+                return true;
+            }
+            if home_lib.as_deref() == Some(e.path()) {
+                return false;
+            }
+            !exclude.iter().any(|x| e.file_name() == x.as_os_str())
         })
         .build();
     for result in walker {
