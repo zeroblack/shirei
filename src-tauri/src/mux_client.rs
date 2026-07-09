@@ -59,9 +59,10 @@ fn build_id() -> String {
     format!("v{}", env!("CARGO_PKG_VERSION"))
 }
 
-fn spawn_daemon(orphan_ttl_secs: u32, build_id: &str) -> Result<()> {
+fn spawn_daemon(orphan_ttl_secs: u32, build_id: &str, path: &Path) -> Result<()> {
     let mut cmd = Command::new(daemon_bin());
-    cmd.stdin(Stdio::null())
+    cmd.arg(path)
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .env("SHIREI_ORPHAN_TTL", orphan_ttl_secs.to_string())
@@ -140,7 +141,7 @@ fn connect_or_spawn(orphan_ttl_secs: u32) -> Result<UnixStream> {
         let mut stream = match UnixStream::connect(&path) {
             Ok(stream) => stream,
             Err(_) => {
-                spawn_daemon(orphan_ttl_secs, &want)?;
+                spawn_daemon(orphan_ttl_secs, &want, &path)?;
                 wait_for_daemon(&path)?
             }
         };
@@ -165,8 +166,9 @@ pub fn autostart(app: &AppHandle) {
     if !session.autostart_daemon || !session.keep_alive {
         return;
     }
-    if UnixStream::connect(socket_path()).is_err() {
-        let _ = spawn_daemon(session.orphan_ttl_secs, &build_id());
+    let path = socket_path();
+    if UnixStream::connect(&path).is_err() {
+        let _ = spawn_daemon(session.orphan_ttl_secs, &build_id(), &path);
     }
 }
 
