@@ -14,6 +14,21 @@ export interface Overlay {
   close: () => Promise<void>;
 }
 
+// Every overlay is constructed here, so counting mounts/closes at this one
+// origin covers current and future overlays alike: a native child webview
+// (the browser pane) cannot be clipped by the DOM and must be told
+// explicitly to hide whenever any of these is on top of it.
+let overlayCount = 0;
+let onOverlayChange: ((count: number) => void) | null = null;
+
+export function overlaysOpen(): boolean {
+  return overlayCount > 0;
+}
+
+export function setOverlayObserver(cb: (count: number) => void): void {
+  onOverlayChange = cb;
+}
+
 /**
  * Scaffold shared by every transient overlay: dialog role, click-outside and
  * Escape dismissal, and a focus trap so Tab never escapes to the page below —
@@ -65,6 +80,9 @@ export function createOverlay(opts: OverlayOpts): Overlay {
 
   overlay.append(box);
 
+  overlayCount += 1;
+  onOverlayChange?.(overlayCount);
+
   // Trigger the entrance animation in the next frame so CSS transitions fire.
   // Using @starting-style is the native way in WebKit 17.4+; the data-mounted
   // attribute is the fallback for older WebKit builds.
@@ -83,6 +101,8 @@ export function createOverlay(opts: OverlayOpts): Overlay {
         settled = true;
         clearTimeout(timer);
         overlay.remove();
+        overlayCount = Math.max(0, overlayCount - 1);
+        onOverlayChange?.(overlayCount);
         resolve();
       };
 

@@ -51,4 +51,9 @@ export const commandsEs: Record<keyof typeof commandsEn, string> = {
   "cmd.tree.focus": "Enfocar/colapsar árbol de directorio",
   "cmd.todo.focus": "Enfocar/colapsar panel TODO",
   "cmd.todo.capture": "Captura rápida de TODO",
+  "cmd.browser.open": "Abrir navegador en el panel",
+  "cmd.browser.focus-url": "Enfocar barra de URL del navegador",
+  "cmd.browser.back": "Navegador: atrás",
+  "cmd.browser.forward": "Navegador: adelante",
+  "cmd.browser.reload": "Recargar navegador",
 };

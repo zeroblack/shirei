@@ -68,6 +68,7 @@ export const settingsEn = {
   "settings.sessions.label": "Sessions",
   "settings.tabs.label": "Tabs",
   "settings.recording.label": "Recording",
+  "settings.browser.label": "Browser",
   "settings.performance.label": "Performance",
   "settings.advanced.label": "Advanced",
   "settings.updates.label": "Updates",
@@ -228,6 +229,26 @@ export const settingsEn = {
 
   "settings.recording.title": "Recording",
   "settings.recording.desc": "Capture the session as video or gif to share.",
+
+  "settings.browser.title": "Browser",
+  "settings.browser.desc":
+    "A native web view inside a pane, for a persistent player or a live preview.",
+  "settings.browser.enabled": "Enable the Browser pane",
+  "settings.browser.enabledDesc": "Adds Browser to the pane content picker.",
+  "settings.browser.homeUrl": "Home URL",
+  "settings.browser.homeUrlPlaceholder": "https://…",
+  "settings.browser.homeUrlDesc": "Opened by default in a new browser pane.",
+  "settings.browser.colorScheme": "Color scheme",
+  "settings.browser.colorScheme.dark": "Dark",
+  "settings.browser.colorScheme.light": "Light",
+  "settings.browser.colorScheme.auto": "Follow macOS",
+  "settings.browser.colorScheme.theme": "Follow Shirei's theme",
+  "settings.browser.colorSchemeDesc":
+    "Forces the page's own dark/light rendering, when the page supports it.",
+  "settings.browser.autoHide": "Auto-hide the address bar",
+  "settings.browser.autoHideDesc":
+    "Hides the bar after a moment of inactivity; hover the top edge or press ⌘L to bring it back.",
+  "settings.browser.autoHideDelay": "Auto-hide delay (seconds)",
   "settings.recording.group.output": "Output",
   "settings.recording.group.quality": "Quality",
   "settings.recording.group.capture": "Capture",
@@ -387,6 +408,8 @@ export const settingsEn = {
     "tabs age time last used pin pinning fix layout template yagura directory folder projects home cwd",
   "settings.recording.search":
     "recording record screen screencast video gif mp4 folder format fps cursor share clipboard finder countdown",
+  "settings.browser.search":
+    "browser webview web page url youtube video player preview localhost dev server dark light color scheme auto hide chrome address bar",
   "settings.performance.search":
     "performance status bar cpu ram memory disk network monitor usage tab app total threshold webgl contexts",
   "settings.advanced.search":

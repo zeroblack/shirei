@@ -71,6 +71,7 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.sessions.label": "Sesiones",
   "settings.tabs.label": "Pestañas",
   "settings.recording.label": "Grabación",
+  "settings.browser.label": "Navegador",
   "settings.performance.label": "Rendimiento",
   "settings.advanced.label": "Avanzado",
   "settings.updates.label": "Actualizaciones",
@@ -236,6 +237,28 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
 
   "settings.recording.title": "Grabación",
   "settings.recording.desc": "Captura la sesión en video o gif para compartir.",
+
+  "settings.browser.title": "Navegador",
+  "settings.browser.desc":
+    "Una vista web nativa dentro de un panel, para un reproductor persistente o una vista previa en vivo.",
+  "settings.browser.enabled": "Habilitar el panel de navegador",
+  "settings.browser.enabledDesc":
+    "Agrega Navegador al selector de contenido del panel.",
+  "settings.browser.homeUrl": "URL de inicio",
+  "settings.browser.homeUrlPlaceholder": "https://…",
+  "settings.browser.homeUrlDesc":
+    "Se abre por defecto en un panel de navegador nuevo.",
+  "settings.browser.colorScheme": "Esquema de color",
+  "settings.browser.colorScheme.dark": "Oscuro",
+  "settings.browser.colorScheme.light": "Claro",
+  "settings.browser.colorScheme.auto": "Seguir a macOS",
+  "settings.browser.colorScheme.theme": "Seguir el tema de Shirei",
+  "settings.browser.colorSchemeDesc":
+    "Fuerza el renderizado oscuro/claro propio de la página, cuando la página lo soporta.",
+  "settings.browser.autoHide": "Ocultar la barra de dirección automáticamente",
+  "settings.browser.autoHideDesc":
+    "Oculta la barra tras un momento de inactividad; pasa el mouse por el borde superior o presiona ⌘L para volver a mostrarla.",
+  "settings.browser.autoHideDelay": "Retardo para ocultar (segundos)",
   "settings.recording.group.output": "Salida",
   "settings.recording.group.quality": "Calidad",
   "settings.recording.group.capture": "Captura",
@@ -399,6 +422,8 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
     "pestañas tabs antigüedad tiempo último uso pin pinear fijar layout plantilla yagura directorio carpeta proyectos home cwd",
   "settings.recording.search":
     "grabacion grabar pantalla screencast video gif mp4 carpeta formato fps cursor compartir portapapeles finder cuenta regresiva",
+  "settings.browser.search":
+    "navegador browser webview vista web pagina url youtube video reproductor previsualizacion localhost servidor desarrollo oscuro claro color esquema ocultar barra direccion",
   "settings.performance.search":
     "rendimiento performance barra estado cpu ram memoria disco red network monitor uso pestaña app total umbral webgl contextos",
   "settings.advanced.search":

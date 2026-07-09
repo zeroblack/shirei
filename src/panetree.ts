@@ -10,6 +10,13 @@ export interface PaneLeafFileContent {
   path: string;
 }
 
+export interface PaneLeafBrowserContent {
+  kind: "browser";
+  url: string;
+}
+
+export type PaneLeafContent = PaneLeafFileContent | PaneLeafBrowserContent;
+
 export interface PaneLeaf {
   kind: "leaf";
   id: string;
@@ -22,7 +29,7 @@ export interface PaneLeaf {
    */
   lastCommand?: string | null;
   cwd?: string;
-  contents?: PaneLeafFileContent[];
+  contents?: PaneLeafContent[];
   /** Active stack index: 0 = terminal, i = contents[i-1]. */
   activeContent?: number;
   /**
@@ -142,10 +149,12 @@ export function instantiate(
   };
 }
 
-export function readLeafContents(leaf: PaneLeaf): PaneLeafFileContent[] {
+export function readLeafContents(leaf: PaneLeaf): PaneLeafContent[] {
   if (!Array.isArray(leaf.contents)) return [];
   return leaf.contents.filter(
-    (c): c is PaneLeafFileContent =>
-      !!c && c.kind === "file" && typeof c.path === "string",
+    (c): c is PaneLeafContent =>
+      !!c &&
+      ((c.kind === "file" && typeof c.path === "string") ||
+        (c.kind === "browser" && typeof c.url === "string")),
   );
 }

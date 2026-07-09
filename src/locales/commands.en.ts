@@ -49,4 +49,9 @@ export const commandsEn = {
   "cmd.tree.focus": "Focus/collapse directory tree",
   "cmd.todo.focus": "Focus/collapse TODO panel",
   "cmd.todo.capture": "Quick TODO capture",
+  "cmd.browser.open": "Open browser in pane",
+  "cmd.browser.focus-url": "Focus browser URL bar",
+  "cmd.browser.back": "Browser back",
+  "cmd.browser.forward": "Browser forward",
+  "cmd.browser.reload": "Reload browser",
 };

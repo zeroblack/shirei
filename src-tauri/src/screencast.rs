@@ -83,7 +83,7 @@ pub fn screencast_start(
 
     let recorder = config.current().recorder;
     let scale = app
-        .get_webview_window("main")
+        .get_window("main")
         .and_then(|w| w.scale_factor().ok())
         .unwrap_or(1.0);
     let crop = match args.mode {
@@ -927,7 +927,7 @@ mod imp {
         use objc2_foundation::{NSArray, NSRectEdge};
 
         let window = app
-            .get_webview_window("main")
+            .get_window("main")
             .ok_or_else(|| Error::Os("main window not found".into()))?;
         let ns_window = window.ns_window().map_err(|e| Error::Os(e.to_string()))?;
         if ns_window.is_null() {

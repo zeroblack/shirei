@@ -3,8 +3,18 @@ import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { homeDir } from "@tauri-apps/api/path";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { BrowserSession } from "./browser";
+import { resolveColorScheme, shouldShowBrowser } from "./browser-core";
 import { alpha, mix } from "./colors";
-import { ptyCwd, ptySnapshot, revealInFinder, revealLogs } from "./commands";
+import {
+  browserBack,
+  browserForward,
+  browserReload,
+  ptyCwd,
+  ptySnapshot,
+  revealInFinder,
+  revealLogs,
+} from "./commands";
 import {
   allTemplates,
   binaryOnPath,
@@ -18,6 +28,7 @@ import {
 import { choiceDialog, confirmDialog, messageDialog } from "./confirm";
 import { attachDrag } from "./drag";
 import type { EditorSession as EditorSessionType } from "./editor";
+import { errorMessage } from "./errors";
 import { FileTree } from "./filetree";
 import { fontStack, isFontLoaded, registerFont } from "./fonts";
 import { GitHistory } from "./githistory";
@@ -27,7 +38,7 @@ import { ImageSession } from "./image";
 import { Keymap } from "./keymap";
 import { eventToKeystroke, formatKeystroke, resolveBindings } from "./keys";
 import { MediaSession } from "./media";
-import { createOverlay } from "./overlay";
+import { createOverlay, overlaysOpen, setOverlayObserver } from "./overlay";
 import { pickFileTarget } from "./panecontent";
 import { PaneFileChooser } from "./panefilechooser";
 import { type FocusDir, type LeafSpawn, PaneGrid } from "./panegrid";
@@ -101,6 +112,18 @@ const TERMINAL_CONTENT_ACTIONS = new Set([
   "terminal.paste",
   "scroll.up",
   "scroll.down",
+]);
+
+// The inverse of TERMINAL_CONTENT_ACTIONS: these belong to a browser pane
+// content and must fire only when one is frontmost, otherwise fall through
+// unhandled (no preventDefault) so the terminal/editor underneath gets the
+// keystroke. Also dead while the native page itself holds focus — there is
+// no DOM event to intercept in that case.
+const BROWSER_CONTENT_ACTIONS = new Set([
+  "browser.focus-url",
+  "browser.back",
+  "browser.forward",
+  "browser.reload",
 ]);
 
 // Row height of the TODO panel, used to convert `todo_min_rows` to pixels when
@@ -325,6 +348,10 @@ export class App {
       if (this.todoFocused) this.blurTodoPanel();
     });
     this.setActiveProject(null);
+    setOverlayObserver(() => this.syncBrowserVisibility());
+    window
+      .matchMedia?.("(prefers-color-scheme: dark)")
+      .addEventListener("change", () => this.applyBrowserSessionsConfig());
     this.panelEl.classList.add("hidden");
     this.applyMotionVars(config.motion);
     this.applyTodoRatio(config.layout.todo_region_ratio);
@@ -729,6 +756,8 @@ export class App {
             session instanceof MediaSession
           ) {
             session.setBg(c.theme.editor.bg);
+          } else if (session instanceof BrowserSession) {
+            this.applyBrowserSessionConfig(session);
           }
         });
       } else if (EditorSession !== null && s instanceof EditorSession) {
@@ -776,6 +805,10 @@ export class App {
     const paneId = active.activePaneId();
     if (active.activeContentIsChooser(paneId)) {
       this.statusbar.setContextHint(t("ui.statusbar.hintChooser"));
+      return;
+    }
+    if (active.activeContentIsBrowser(paneId)) {
+      this.statusbar.setContextHint(t("ui.statusbar.hintBrowser"));
       return;
     }
     if (active.activeContentIsFile(paneId)) {
@@ -959,7 +992,11 @@ export class App {
     for (const leaf of leaves(tree)) {
       const contents = readLeafContents(leaf);
       for (const c of contents) {
-        await this.switchPaneToFile(grid, leaf.id, c.path, true);
+        if (c.kind === "browser") {
+          await this.switchPaneToBrowser(grid, leaf.id, c.url);
+        } else {
+          await this.switchPaneToFile(grid, leaf.id, c.path, true);
+        }
       }
       // A template's dedicated file pane is born showing the chooser; leave it
       // active rather than snapping back to the terminal underneath.
@@ -1024,6 +1061,7 @@ export class App {
         this.refreshTreeIfVisible();
         this.persist();
         this.updateContextHint();
+        this.syncBrowserVisibility();
       },
       onPickContent: (paneId) => {
         const g = this.sessions.get(id);
@@ -1316,6 +1354,95 @@ export class App {
     if (placed && !silent) this.teachPaneFileOnce();
   }
 
+  private async switchPaneToBrowser(
+    grid: PaneGrid,
+    paneId: string,
+    url?: string,
+  ): Promise<void> {
+    const container = document.createElement("div");
+    container.className = "terminal-host browser-host pane-content";
+    const session = new BrowserSession(
+      paneId,
+      url ?? this.config.browser.home_url,
+      container,
+    );
+    const added = grid.addFileContent(paneId, {
+      session,
+      container,
+      path: session.path,
+      title: t("ui.browser.title"),
+      kind: "browser",
+    });
+    if (!added) {
+      session.dispose();
+      this.notify(t("ui.pane.paneFull"));
+      return;
+    }
+    // A native child webview swallows key events once its page content (not
+    // the chrome bar) holds focus, so ⌘W cannot be relied on to close it —
+    // give it an always-clickable close button instead.
+    session.onCloseRequest = () => void this.closeActiveContentGuarded(grid);
+    try {
+      await session.open();
+    } catch (e) {
+      grid.closeActiveContent();
+      this.notify(errorMessage(e));
+      return;
+    }
+    this.applyBrowserSessionConfig(session);
+    this.syncBrowserVisibility();
+  }
+
+  private resolveBrowserColorScheme(): "dark" | "light" {
+    const prefersDark = window.matchMedia?.(
+      "(prefers-color-scheme: dark)",
+    ).matches;
+    return resolveColorScheme(
+      this.config.browser.color_scheme,
+      this.config.theme.preset,
+      !!prefersDark,
+    );
+  }
+
+  private applyBrowserSessionConfig(session: BrowserSession): void {
+    session.setColorScheme(this.resolveBrowserColorScheme());
+    session.configureAutoHide(
+      this.config.browser.auto_hide_chrome,
+      this.config.browser.auto_hide_delay_ms,
+    );
+  }
+
+  private applyBrowserSessionsConfig(): void {
+    for (const s of this.sessions.values()) {
+      if (!(s instanceof PaneGrid)) continue;
+      for (const b of s.browserSessions()) {
+        if (b.session instanceof BrowserSession)
+          this.applyBrowserSessionConfig(b.session);
+      }
+    }
+  }
+
+  // The single authority a native child webview's visibility answers to: it
+  // fails safe to hidden whenever the pane is inactive, the browser is not
+  // its pane's frontmost content, or any overlay/dialog/settings-adjacent
+  // surface is open (a native view renders above all DOM and cannot be
+  // clipped, so it must be told explicitly to get out of the way).
+  private syncBrowserVisibility(): void {
+    const overlayOpen = overlaysOpen();
+    for (const [id, s] of this.sessions) {
+      if (!(s instanceof PaneGrid)) continue;
+      const paneActive = id === this.activeId;
+      for (const b of s.browserSessions()) {
+        const contentFrontmost = s.activeContentSession(b.paneId) === b.session;
+        if (b.session instanceof BrowserSession) {
+          b.session.show(
+            shouldShowBrowser({ paneActive, contentFrontmost, overlayOpen }),
+          );
+        }
+      }
+    }
+  }
+
   private teachPaneFileOnce(): void {
     if (localStorage.getItem("shirei.taught.paneFile")) return;
     localStorage.setItem("shirei.taught.paneFile", "1");
@@ -1350,7 +1477,11 @@ export class App {
       row(t("ui.pane.addFile"), "⌘⌥T", () => {
         void this.switchPaneToFile(grid, paneId);
       }),
-      row(t("ui.pane.addBrowser"), t("ui.pane.soon")),
+      this.config.browser.enabled
+        ? row(t("ui.pane.addBrowser"), "⌘⌥B", () => {
+            void this.switchPaneToBrowser(grid, paneId);
+          })
+        : row(t("ui.pane.addBrowser"), t("ui.pane.soon")),
     );
     document.body.appendChild(overlay);
     box
@@ -1369,6 +1500,7 @@ export class App {
     const tab = this.tab(id);
     const projectId = tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
     this.setActiveProject(projectId);
+    this.syncBrowserVisibility();
   }
 
   closeTab(id: string): Promise<void> {
@@ -1999,6 +2131,15 @@ export class App {
     ) {
       return;
     }
+    if (
+      BROWSER_CONTENT_ACTIONS.has(action) &&
+      !(
+        active instanceof PaneGrid &&
+        active.activeContentIsBrowser(active.activePaneId())
+      )
+    ) {
+      return;
+    }
     e.preventDefault();
     this.dispatch(action, active);
   }
@@ -2160,7 +2301,34 @@ export class App {
       case "todo.capture":
         this.openTodoCapture();
         break;
+      case "browser.open":
+        if (pane) void this.switchPaneToBrowser(pane, pane.activePaneId());
+        break;
+      case "browser.focus-url":
+        this.activeBrowserSession(pane)?.focus();
+        break;
+      case "browser.back": {
+        const s = this.activeBrowserSession(pane);
+        if (s) void browserBack(s.label);
+        break;
+      }
+      case "browser.forward": {
+        const s = this.activeBrowserSession(pane);
+        if (s) void browserForward(s.label);
+        break;
+      }
+      case "browser.reload": {
+        const s = this.activeBrowserSession(pane);
+        if (s) void browserReload(s.label);
+        break;
+      }
     }
+  }
+
+  private activeBrowserSession(pane?: PaneGrid): BrowserSession | undefined {
+    if (!pane) return undefined;
+    const session = pane.activeContentSession(pane.activePaneId());
+    return session instanceof BrowserSession ? session : undefined;
   }
 
   private async guardDirtyContent(

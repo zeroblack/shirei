@@ -40,6 +40,7 @@ type Item =
 export class QuickOpen {
   private readonly cb: QuickOpenCallbacks;
   private overlay: HTMLElement | null = null;
+  private overlayClose: (() => Promise<void>) | null = null;
   private input!: HTMLInputElement;
   private list!: HTMLElement;
   private scopeChip!: HTMLButtonElement;
@@ -159,11 +160,12 @@ export class QuickOpen {
 
   private render(): void {
     this.close();
-    const { overlay, box } = createOverlay({
+    const { overlay, box, close } = createOverlay({
       className: "quickopen",
       label: "Quick open",
       onDismiss: () => this.close(),
     });
+    this.overlayClose = close;
 
     const row = document.createElement("div");
     row.className = "qo-input-row";
@@ -500,7 +502,11 @@ export class QuickOpen {
       clearTimeout(this.filterTimer);
       this.filterTimer = null;
     }
-    this.overlay?.remove();
+    // Must go through the overlay's own close so the global overlay count is
+    // decremented; a bare remove() leaks the count and permanently gates the
+    // native browser pane's visibility off (it stays hidden -> black).
+    void this.overlayClose?.();
+    this.overlayClose = null;
     this.overlay = null;
     this.entries = [];
   }

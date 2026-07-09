@@ -12,6 +12,7 @@ import { SECTION_LAYOUT, type SectionId } from "./settings/registry";
 import { aboutSection } from "./settings/section-about";
 import { advancedSection } from "./settings/section-advanced";
 import { appearanceSection } from "./settings/section-appearance";
+import { browserSection } from "./settings/section-browser";
 import { editorSection } from "./settings/section-editor";
 import { gitSection } from "./settings/section-git";
 import { homeSection } from "./settings/section-home";
@@ -36,6 +37,7 @@ const BY_ID: Record<SectionId, SettingsSection> = {
   sessions: sessionSection,
   tabs: tabsSection,
   recording: recordingSection,
+  browser: browserSection,
   performance: performanceSection,
   about: aboutSection,
   advanced: advancedSection,
