@@ -82,3 +82,50 @@ export const shareFile = (path: string) =>
   invoke<void>("screencast_share", { path });
 
 export const revealLogs = () => invoke<void>("log_reveal");
+
+export const browserOpen = (
+  label: string,
+  url: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) => invoke<void>("browser_open", { label, url, x, y, width, height });
+
+export const browserNavigate = (label: string, url: string) =>
+  invoke<void>("browser_navigate", { label, url });
+
+export const browserBack = (label: string) =>
+  invoke<void>("browser_back", { label });
+
+export const browserForward = (label: string) =>
+  invoke<void>("browser_forward", { label });
+
+export const browserReload = (label: string) =>
+  invoke<void>("browser_reload", { label });
+
+export const browserSetBounds = (
+  label: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) => invoke<void>("browser_set_bounds", { label, x, y, width, height });
+
+export const browserUrl = (label: string) =>
+  invoke<string>("browser_url", { label });
+
+export const browserShow = (label: string) =>
+  invoke<void>("browser_show", { label });
+
+export const browserHide = (label: string) =>
+  invoke<void>("browser_hide", { label });
+
+export const browserFocus = (label: string) =>
+  invoke<void>("browser_focus", { label });
+
+export const browserClose = (label: string) =>
+  invoke<void>("browser_close", { label });
+
+export const browserSetColorScheme = (label: string, scheme: string) =>
+  invoke<void>("browser_set_color_scheme", { label, scheme });

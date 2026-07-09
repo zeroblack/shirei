@@ -170,6 +170,16 @@ export interface RecorderConfig {
   highlight_frame: boolean;
 }
 
+export type BrowserColorSchemeMode = "dark" | "light" | "auto" | "theme";
+
+export interface BrowserConfig {
+  home_url: string;
+  enabled: boolean;
+  color_scheme: BrowserColorSchemeMode;
+  auto_hide_chrome: boolean;
+  auto_hide_delay_ms: number;
+}
+
 export interface Config {
   locale: Locale;
   font: { family: string; size: number };
@@ -238,6 +248,7 @@ export interface Config {
   updates: { auto_check: boolean; last_seen: string };
   performance: PerformanceConfig;
   recorder: RecorderConfig;
+  browser: BrowserConfig;
   projects: Project[];
   templates: LayoutTemplate[];
   user_templates: LayoutTemplate[];

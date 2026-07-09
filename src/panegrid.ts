@@ -44,7 +44,7 @@ function nextPaneId(): string {
 }
 
 interface PaneStackEntry {
-  kind: "file";
+  kind: "file" | "browser";
   session: PaneContentSession;
   container: HTMLElement;
   path?: string;
@@ -441,6 +441,7 @@ export class PaneGrid {
       container: HTMLElement;
       path?: string;
       title: string;
+      kind?: "file" | "browser";
     },
   ): boolean {
     const pane = this.panes.get(paneId);
@@ -449,7 +450,7 @@ export class PaneGrid {
     entry.container.classList.add("pane-content");
     pane.el.appendChild(entry.container);
     pane.contents.push({
-      kind: "file",
+      kind: entry.kind ?? "file",
       session: entry.session,
       container: entry.container,
       path: entry.path,
@@ -467,6 +468,7 @@ export class PaneGrid {
       container: HTMLElement;
       path?: string;
       title: string;
+      kind?: "file" | "browser";
     },
   ): void {
     const pane = this.panes.get(paneId);
@@ -480,7 +482,7 @@ export class PaneGrid {
     entry.container.classList.add("pane-content");
     pane.el.appendChild(entry.container);
     pane.contents[pane.activeIndex - 1] = {
-      kind: "file",
+      kind: entry.kind ?? "file",
       session: entry.session,
       container: entry.container,
       path: entry.path,
@@ -493,6 +495,25 @@ export class PaneGrid {
   activeContentIsFile(paneId: string): boolean {
     const pane = this.panes.get(paneId);
     return !!pane && pane.activeIndex > 0;
+  }
+
+  activeContentIsBrowser(paneId: string): boolean {
+    const pane = this.panes.get(paneId);
+    if (!pane || pane.activeIndex === 0) return false;
+    return pane.contents[pane.activeIndex - 1].kind === "browser";
+  }
+
+  // Every browser stack entry across every pane, active or not: the caller
+  // (the visibility authority) must be able to hide a browser that was just
+  // demoted behind a terminal, which only enumerating active ones would miss.
+  browserSessions(): { paneId: string; session: PaneContentSession }[] {
+    const out: { paneId: string; session: PaneContentSession }[] = [];
+    for (const [paneId, pane] of this.panes) {
+      for (const c of pane.contents) {
+        if (c.kind === "browser") out.push({ paneId, session: c.session });
+      }
+    }
+    return out;
   }
 
   cycleContent(dir: 1 | -1): void {
@@ -585,10 +606,9 @@ export class PaneGrid {
   }
 
   private activeIsChooser(pane: Pane): boolean {
-    return (
-      pane.activeIndex > 0 &&
-      pane.contents[pane.activeIndex - 1].path === undefined
-    );
+    if (pane.activeIndex === 0) return false;
+    const active = pane.contents[pane.activeIndex - 1];
+    return active.kind === "file" && active.path === undefined;
   }
 
   // Whether a file open can land in this pane: replacing an empty chooser slot
@@ -643,7 +663,11 @@ export class PaneGrid {
         if (pane) {
           node.contents = pane.contents
             .filter((c) => c.path)
-            .map((c) => ({ kind: "file" as const, path: c.path as string }));
+            .map((c) => {
+              if (c.kind === "browser")
+                return { kind: "browser" as const, url: c.path as string };
+              return { kind: "file" as const, path: c.path as string };
+            });
           node.activeContent = pane.activeIndex;
         }
         return;

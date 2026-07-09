@@ -37,6 +37,8 @@ pub enum Error {
     Db(String),
     #[error("git error: {0}")]
     Git(String),
+    #[error("browser pane error: {0}")]
+    Browser(String),
 }
 
 impl Error {
@@ -61,6 +63,7 @@ impl Error {
             Error::Screencast(_) => "screencast",
             Error::Db(_) => "db",
             Error::Git(_) => "git",
+            Error::Browser(_) => "browser",
         }
     }
 }
@@ -120,6 +123,7 @@ mod tests {
             Error::Screencast(String::new()).code(),
             Error::Db(String::new()).code(),
             Error::Git(String::new()).code(),
+            Error::Browser(String::new()).code(),
         ];
         let unique: std::collections::HashSet<_> = codes.iter().collect();
         assert_eq!(unique.len(), codes.len());

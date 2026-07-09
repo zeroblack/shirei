@@ -1,5 +1,5 @@
 import { t } from "./i18n";
-import { FILE_GLYPH, TERMINAL_GLYPH } from "./icons";
+import { BROWSER_GLYPH, FILE_GLYPH, TERMINAL_GLYPH } from "./icons";
 import type { PaneContentKind } from "./panecontent";
 
 export interface ClusterItem {
@@ -51,7 +51,12 @@ export class PaneCluster {
         item.kind === "terminal" ? t("ui.pane.terminalSeg") : item.title;
       const glyph = document.createElement("span");
       glyph.className = "pane-cluster-glyph";
-      glyph.innerHTML = item.kind === "terminal" ? TERMINAL_GLYPH : FILE_GLYPH;
+      glyph.innerHTML =
+        item.kind === "terminal"
+          ? TERMINAL_GLYPH
+          : item.kind === "browser"
+            ? BROWSER_GLYPH
+            : FILE_GLYPH;
       seg.appendChild(glyph);
       if (item.kind !== "terminal") {
         const label = document.createElement("span");

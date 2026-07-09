@@ -1,4 +1,4 @@
-export type PaneContentKind = "terminal" | "file";
+export type PaneContentKind = "terminal" | "file" | "browser";
 
 export interface PaneContentSession {
   open(): Promise<void>;

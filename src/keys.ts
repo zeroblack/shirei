@@ -392,6 +392,37 @@ export const ACTIONS: ActionDef[] = [
     scope: "global",
     defaults: [{ key: "a", meta: true, shift: true }],
   },
+  {
+    id: "browser.open",
+    category: "panes",
+    scope: "global",
+    defaults: [{ key: "b", meta: true, alt: true }],
+  },
+  {
+    id: "browser.focus-url",
+    category: "panes",
+    scope: "global",
+    defaults: [{ key: "l", meta: true }],
+  },
+  {
+    id: "browser.back",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "[", meta: true }],
+  },
+  {
+    id: "browser.forward",
+    category: "panes",
+    scope: "pane",
+    defaults: [{ key: "]", meta: true }],
+  },
+  {
+    id: "browser.reload",
+    category: "panes",
+    scope: "pane",
+    // Plain Cmd+R is the global tree.refresh; do not collide with it.
+    defaults: [{ key: "r", meta: true, alt: true, shift: true }],
+  },
 ];
 
 export function resolveBindings(

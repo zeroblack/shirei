@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Browser pane (`⌘⌥B`): a native web pane inside the terminal that holds a
+  persistent page — a video, a stream, a `localhost` dev preview — with its own
+  address bar (`⌘L`), back/forward (`⌘[` / `⌘]`), reload (`⌘⇧⌥R`), and a chrome
+  bar that auto-hides while idle. Home URL, color scheme (dark/light/auto/follow
+  theme), auto-hide delay, and an on/off toggle live in Settings → Browser.
+
+### Fixed
+- A development build no longer disconnects the persistent-session daemon of an
+  installed, running copy of Shirei — each gets its own daemon.
+
 ## [0.14.10] - 2026-07-06
 
 ### Fixed

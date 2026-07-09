@@ -1,3 +1,4 @@
+mod browser;
 mod config;
 mod dialog;
 #[cfg(target_os = "macos")]
@@ -13,6 +14,8 @@ mod pty;
 #[cfg(target_os = "macos")]
 mod screencast;
 mod session;
+#[cfg(target_os = "macos")]
+mod shortcuts;
 mod todos;
 mod watch;
 
@@ -24,22 +27,42 @@ fn is_app_window(label: &str) -> bool {
     label == "main" || label.starts_with("win-")
 }
 
+// A focused child webview (the browser pane) leaves its owning window reporting
+// unfocused, so a menu shortcut fired while it holds focus has no "focused
+// window" to route to. Remembering the last app window that actually took focus
+// gives that window back as the target — it is still the one the user is in.
+static LAST_FOCUSED_WINDOW: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
 fn dispatch_focused<P: serde::Serialize + Clone>(app: &tauri::AppHandle, event: &str, payload: P) {
-    if let Some(win) = app
-        .webview_windows()
-        .into_values()
-        .find(|w| is_app_window(w.label()) && w.is_focused().unwrap_or(false))
-    {
-        let _ = win.emit(event, payload);
+    // webview_windows() silently drops any window that owns child webviews, and
+    // the browser pane makes "main" multi-webview — so it disappears from that
+    // map and every lookup through it fails while a browser pane is open. Use
+    // the window list instead, whose focus tracks NSWindow key state (true even
+    // when a child webview holds first responder), and emit by label.
+    let label = app
+        .windows()
+        .into_iter()
+        .find(|(label, w)| is_app_window(label) && w.is_focused().unwrap_or(false))
+        .map(|(label, _)| label)
+        .or_else(|| {
+            LAST_FOCUSED_WINDOW
+                .lock()
+                .ok()
+                .and_then(|l| l.clone())
+                .filter(|l| is_app_window(l) && app.get_window(l).is_some())
+        })
+        .or_else(|| app.windows().into_keys().find(|label| is_app_window(label)));
+    if let Some(label) = label {
+        let _ = app.emit_to(label.as_str(), event, payload);
     }
 }
 
 #[tauri::command]
 fn close_active_window(app: tauri::AppHandle, window: tauri::WebviewWindow) {
     let remaining = app
-        .webview_windows()
-        .into_values()
-        .filter(|w| is_app_window(w.label()))
+        .windows()
+        .into_keys()
+        .filter(|label| is_app_window(label))
         .count();
     // Closing the last tab empties the window; with no other app window left
     // there is nothing to keep alive, so quit. Otherwise drop just this window
@@ -53,7 +76,10 @@ fn close_active_window(app: tauri::AppHandle, window: tauri::WebviewWindow) {
 }
 
 fn open_window(app: &tauri::AppHandle) -> tauri::Result<()> {
-    let windows = app.webview_windows();
+    // windows(), not webview_windows(): a window that owns a browser pane is
+    // multi-webview and vanishes from the latter, which would let its label be
+    // reused and collide.
+    let windows = app.windows();
     let label = (1..)
         .map(|n| format!("win-{n}"))
         .find(|candidate| !windows.contains_key(candidate))
@@ -325,8 +351,25 @@ pub fn run() {
             screencast::screencast_copy_to_clipboard,
             #[cfg(target_os = "macos")]
             screencast::screencast_share,
+            browser::browser_open,
+            browser::browser_navigate,
+            browser::browser_back,
+            browser::browser_forward,
+            browser::browser_reload,
+            browser::browser_set_bounds,
+            browser::browser_url,
+            browser::browser_show,
+            browser::browser_hide,
+            browser::browser_focus,
+            browser::browser_close,
+            browser::browser_set_color_scheme,
         ])
         .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Focused(true) = event
+                && is_app_window(window.label())
+            {
+                *LAST_FOCUSED_WINDOW.lock().unwrap() = Some(window.label().to_string());
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event
                 && window.label() == "main"
             {
@@ -339,9 +382,12 @@ pub fn run() {
         .expect("failed to build the Tauri application")
         .run(|app, event| match event {
             #[cfg(target_os = "macos")]
-            tauri::RunEvent::Ready => dock::install(app),
+            tauri::RunEvent::Ready => {
+                dock::install(app);
+                shortcuts::install();
+            }
             tauri::RunEvent::Reopen { .. } => {
-                if let Some(window) = app.get_webview_window("main") {
+                if let Some(window) = app.get_window("main") {
                     let _ = window.show();
                     let _ = window.set_focus();
                 }

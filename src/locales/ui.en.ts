@@ -129,6 +129,7 @@ export const uiEn = {
   "ui.statusbar.hintFile": "⌘W close file · ⌘⌥1 terminal · ⌘⌥↵ cycle",
   "ui.statusbar.hintTerminal": "⌘⌥2 file · ⌘⌥T add file · ⌘W close pane",
   "ui.statusbar.hintChooser": "↵ open · ⌘P find · ⎋ back",
+  "ui.statusbar.hintBrowser": "⌘L url · ⌘[ back · ⌘] forward · ⌘W close",
 
   "ui.todomodal.noProject": "No project — can't save",
   "ui.todomodal.titlePlaceholder": "What needs doing?",
@@ -181,6 +182,13 @@ export const uiEn = {
   "ui.screencast.finishReveal": "Reveal",
   "ui.screencast.finishShare": "Share",
   "ui.screencast.hudStop": "Stop",
+
+  "ui.browser.title": "Browser",
+  "ui.browser.back": "Back",
+  "ui.browser.forward": "Forward",
+  "ui.browser.reload": "Reload",
+  "ui.browser.close": "Close",
+  "ui.browser.urlPlaceholder": "Enter a URL",
 
   "ui.cmd.recordPanel": "Record panel",
   "ui.cmd.recordApp": "Record app",

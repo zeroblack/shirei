@@ -132,6 +132,7 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.statusbar.hintFile": "⌘W cerrar archivo · ⌘⌥1 terminal · ⌘⌥↵ ciclar",
   "ui.statusbar.hintTerminal": "⌘⌥2 archivo · ⌘⌥T agregar · ⌘W cerrar panel",
   "ui.statusbar.hintChooser": "↵ abrir · ⌘P buscar · ⎋ volver",
+  "ui.statusbar.hintBrowser": "⌘L url · ⌘[ atrás · ⌘] adelante · ⌘W cerrar",
 
   "ui.todomodal.noProject": "Sin proyecto — no se puede guardar",
   "ui.todomodal.titlePlaceholder": "¿Qué hay que hacer?",
@@ -183,6 +184,13 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.screencast.finishReveal": "Mostrar",
   "ui.screencast.finishShare": "Compartir",
   "ui.screencast.hudStop": "Detener",
+
+  "ui.browser.title": "Navegador",
+  "ui.browser.back": "Atrás",
+  "ui.browser.forward": "Adelante",
+  "ui.browser.reload": "Recargar",
+  "ui.browser.close": "Cerrar",
+  "ui.browser.urlPlaceholder": "Escribe una URL",
 
   "ui.cmd.recordPanel": "Grabar panel",
   "ui.cmd.recordApp": "Grabar app",

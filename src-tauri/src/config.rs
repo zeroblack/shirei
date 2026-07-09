@@ -678,6 +678,31 @@ impl Default for RecorderConfig {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct BrowserConfig {
+    pub home_url: String,
+    pub enabled: bool,
+    /// "dark" | "light" | "auto" (follow the OS) | "theme" (follow
+    /// theme.preset). Resolved to a concrete "dark"/"light" on the frontend
+    /// before it reaches the backend, which only ever sets what it is told.
+    pub color_scheme: String,
+    pub auto_hide_chrome: bool,
+    pub auto_hide_delay_ms: u32,
+}
+
+impl Default for BrowserConfig {
+    fn default() -> Self {
+        BrowserConfig {
+            home_url: "https://www.youtube.com".to_string(),
+            enabled: true,
+            color_scheme: "dark".to_string(),
+            auto_hide_chrome: true,
+            auto_hide_delay_ms: 2000,
+        }
+    }
+}
+
 fn tpl_leaf(command: Option<&str>) -> serde_json::Value {
     match command {
         Some(c) => serde_json::json!({ "kind": "leaf", "id": "", "command": c }),
@@ -967,6 +992,8 @@ pub struct Config {
     pub quickopen: QuickOpenConfig,
     pub recorder: RecorderConfig,
     #[serde(default)]
+    pub browser: BrowserConfig,
+    #[serde(default)]
     pub projects: Vec<serde_json::Value>,
     #[serde(skip_deserializing, default = "default_templates")]
     pub templates: Vec<serde_json::Value>,
@@ -1000,6 +1027,7 @@ impl Default for Config {
             files: FilesConfig::default(),
             quickopen: QuickOpenConfig::default(),
             recorder: RecorderConfig::default(),
+            browser: BrowserConfig::default(),
             projects: Vec::new(),
             templates: default_templates(),
             user_templates: Vec::new(),
@@ -1223,6 +1251,16 @@ mod tests {
         assert_eq!(c.font.size, 20);
         assert_eq!(c.font.family, "meslo");
         assert_eq!(c.limits.index_cap, 50_000);
+    }
+
+    #[test]
+    fn browser_defaults_are_sane() {
+        let b = Config::default().browser;
+        assert_eq!(b.home_url, "https://www.youtube.com");
+        assert!(b.enabled);
+        assert_eq!(b.color_scheme, "dark");
+        assert!(b.auto_hide_chrome);
+        assert_eq!(b.auto_hide_delay_ms, 2000);
     }
 
     #[test]
