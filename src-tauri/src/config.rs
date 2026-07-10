@@ -393,6 +393,10 @@ pub struct LayoutConfig {
     pub default_template: String,
     pub new_tab_dir: String,
     pub pane_content_cap: u8,
+    pub pin_width_fraction: f32,
+    pub pin_min_fraction: f32,
+    pub pin_max_fraction: f32,
+    pub pin_split_fraction: f32,
 }
 
 impl Default for LayoutConfig {
@@ -407,6 +411,10 @@ impl Default for LayoutConfig {
             default_template: String::new(),
             new_tab_dir: String::new(),
             pane_content_cap: 3,
+            pin_width_fraction: 0.28,
+            pin_min_fraction: 0.15,
+            pin_max_fraction: 0.55,
+            pin_split_fraction: 0.5,
         }
     }
 }

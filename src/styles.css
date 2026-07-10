@@ -666,6 +666,87 @@ body {
   min-width: 0;
 }
 
+/* The pinned dock lives outside the tab grids so it survives tab switches: a
+   reserved right column the grids reflow to the left of, never under. Its width
+   is a proportion of the window, and it is split into two stacked cells. */
+#pinslot {
+  position: relative;
+  flex: 0 0 var(--pin-width, 28%);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+}
+
+#pinslot.hidden,
+#pin-divider.hidden {
+  display: none;
+}
+
+.pin-cell {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pin-cell[data-cell="0"] {
+  flex: 0 0 var(--pin-split, 50%);
+}
+
+.pin-cell[data-cell="1"] {
+  flex: 1 1 auto;
+}
+
+#pin-divider {
+  flex: 0 0 4px;
+  background: var(--border);
+  cursor: col-resize;
+}
+
+#pin-split-divider {
+  flex: 0 0 4px;
+  background: var(--border);
+  cursor: row-resize;
+}
+
+#pin-divider:hover,
+#pin-split-divider:hover {
+  background: var(--tab-color, var(--fg-dim));
+}
+
+/* Empty-cell affordance: a centered "+" with an inviting hint; opens the
+   pinned-content picker (browser or terminal). */
+.pin-cell-add {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease;
+}
+
+.pin-cell-add:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+
+.pin-cell-add-plus {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.pin-cell-add-hint {
+  font-size: var(--type-sm, 12px);
+}
+
 .terminal-host {
   position: absolute;
   inset: 0;
@@ -680,6 +761,13 @@ body {
 
 :root[data-term-smoothing="subpixel"] .terminal-host {
   -webkit-font-smoothing: subpixel-antialiased;
+}
+
+/* A container promoted into a pinned cell is always shown; it no longer answers
+   to the grid's per-tab visibility toggle. Placed after the base .terminal-host
+   rules so specificity ascends. */
+.pin-cell > .terminal-host {
+  display: block;
 }
 
 .terminal-host.active {

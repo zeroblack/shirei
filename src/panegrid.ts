@@ -52,6 +52,14 @@ interface PaneStackEntry {
   dirty: boolean;
 }
 
+export interface DetachedContent {
+  kind: "file" | "browser";
+  session: PaneContentSession;
+  container: HTMLElement;
+  path?: string;
+  title: string;
+}
+
 interface Pane {
   el: HTMLElement;
   terminal: TerminalSession;
@@ -541,6 +549,29 @@ export class PaneGrid {
     void removed.session.dispose();
     removed.container.remove();
     this.activate(pane, 0);
+  }
+
+  // Lifts the active content out of the pane without disposing it, so the caller
+  // can re-parent its live session elsewhere (the pinned dock). If that leaves
+  // the pane empty and it is one of several, the pane collapses so the grid
+  // reflows; the sole pane of a tab is kept alive, reverting to its terminal.
+  detachActiveContent(): DetachedContent | null {
+    const pane = this.panes.get(this.activeLeafId);
+    if (!pane || pane.activeIndex === 0) return null;
+    const [removed] = pane.contents.splice(pane.activeIndex - 1, 1);
+    const detached: DetachedContent = {
+      session: removed.session,
+      container: removed.container,
+      path: removed.path,
+      title: removed.title,
+      kind: removed.kind,
+    };
+    if (pane.contents.length === 0 && leaves(this.tree).length > 1) {
+      this.closePane(this.activeLeafId);
+    } else {
+      this.activate(pane, 0);
+    }
+    return detached;
   }
 
   setContentDirty(paneId: string, dirty: boolean): void {

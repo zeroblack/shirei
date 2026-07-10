@@ -399,6 +399,24 @@ export const ACTIONS: ActionDef[] = [
     defaults: [{ key: "b", meta: true, alt: true }],
   },
   {
+    id: "pane.pin",
+    category: "panes",
+    scope: "global",
+    defaults: [{ key: "p", meta: true, ctrl: true }],
+  },
+  {
+    id: "pin.terminal",
+    category: "panes",
+    scope: "global",
+    defaults: [{ key: "t", meta: true, ctrl: true }],
+  },
+  {
+    id: "pin.browser",
+    category: "panes",
+    scope: "global",
+    defaults: [{ key: "b", meta: true, ctrl: true }],
+  },
+  {
     id: "browser.focus-url",
     category: "panes",
     scope: "global",

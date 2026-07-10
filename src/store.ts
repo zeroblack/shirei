@@ -13,11 +13,20 @@ export type SavedTab =
     }
   | { kind: "editor"; path: string; lastUsedAt?: number; pinned?: boolean };
 
+export type PinnedCellSave =
+  | { kind: "browser"; url: string }
+  | { kind: "terminal" };
+
 const SESSION_KEY_BASE = "shirei.session.v1";
+const PIN_KEY_BASE = "shirei.pindock.v1";
+
+function scopedKey(base: string): string {
+  const { label } = getCurrentWindow();
+  return label === "main" ? base : `${base}:${label}`;
+}
 
 function sessionKey(): string {
-  const { label } = getCurrentWindow();
-  return label === "main" ? SESSION_KEY_BASE : `${SESSION_KEY_BASE}:${label}`;
+  return scopedKey(SESSION_KEY_BASE);
 }
 
 function isPaneNode(n: unknown): n is PaneNode {
@@ -56,4 +65,24 @@ export function saveSession(tabs: SavedTab[]): void {
 
 export function clearSession(): void {
   localStorage.removeItem(sessionKey());
+}
+
+export function savePinDock(cells: (PinnedCellSave | null)[]): void {
+  localStorage.setItem(scopedKey(PIN_KEY_BASE), JSON.stringify(cells));
+}
+
+export function loadPinDock(): (PinnedCellSave | null)[] {
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(scopedKey(PIN_KEY_BASE)) ?? "[]",
+    );
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((c) => {
+      if (c?.kind === "browser" && typeof c.url === "string") return c;
+      if (c?.kind === "terminal") return { kind: "terminal" as const };
+      return null;
+    });
+  } catch {
+    return [];
+  }
 }

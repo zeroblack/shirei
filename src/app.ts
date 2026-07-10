@@ -9,6 +9,7 @@ import { alpha, mix } from "./colors";
 import {
   browserBack,
   browserForward,
+  browserReleaseFocus,
   browserReload,
   ptyCwd,
   ptySnapshot,
@@ -39,7 +40,11 @@ import { Keymap } from "./keymap";
 import { eventToKeystroke, formatKeystroke, resolveBindings } from "./keys";
 import { MediaSession } from "./media";
 import { createOverlay, overlaysOpen, setOverlayObserver } from "./overlay";
-import { pickFileTarget } from "./panecontent";
+import {
+  type PaneContentKind,
+  type PaneContentSession,
+  pickFileTarget,
+} from "./panecontent";
 import { PaneFileChooser } from "./panefilechooser";
 import { type FocusDir, type LeafSpawn, PaneGrid } from "./panegrid";
 import {
@@ -57,7 +62,14 @@ import type { Screencast } from "./screencast";
 import type { CssRect } from "./screencast-core";
 import { resolveSearchRoot, type ScopeRoots } from "./searchscope";
 import { StatusBar } from "./statusbar";
-import { clearSession, loadSession, type SavedTab, saveSession } from "./store";
+import {
+  clearSession,
+  loadPinDock,
+  loadSession,
+  type SavedTab,
+  savePinDock,
+  saveSession,
+} from "./store";
 import { TabBar } from "./tabbar";
 import { TerminalSession } from "./terminal";
 import { showToast } from "./toast";
@@ -79,6 +91,16 @@ async function loadEditor(): Promise<typeof EditorSessionType> {
     EditorSession = mod.EditorSession;
   }
   return EditorSession;
+}
+
+// A filled pinned cell. Closing it (the × button) always disposes the session —
+// the source pane, if any, was already collapsed when the content was pinned.
+interface PinnedCell {
+  session: PaneContentSession | TerminalSession;
+  container: HTMLElement;
+  kind: PaneContentKind;
+  path?: string;
+  title: string;
 }
 
 let seq = 0;
@@ -280,6 +302,14 @@ export class App {
   private readonly todoPanelEl: HTMLElement;
   private readonly todoPanel: TodoPanel;
   private readonly todoDividerEl: HTMLElement;
+  private readonly pinSlotEl: HTMLElement;
+  private readonly pinDividerEl: HTMLElement;
+  private readonly pinSplitDividerEl: HTMLElement;
+  private readonly pinCellEls: HTMLElement[];
+  private readonly pinCells: (PinnedCell | null)[] = [null, null];
+  // Guards against the tab-restore persist storm wiping the saved dock before
+  // restorePinDock has read it back.
+  private pinDockRestored = false;
   private todoFocused = false;
   private panelVisible = false;
   private lastRoot: string | null = null;
@@ -347,6 +377,29 @@ export class App {
       if (this.todoPanelEl.contains(e.relatedTarget as Node | null)) return;
       if (this.todoFocused) this.blurTodoPanel();
     });
+    this.pinSlotEl = document.querySelector<HTMLElement>(
+      "#pinslot",
+    ) as HTMLElement;
+    this.pinDividerEl = document.querySelector<HTMLElement>(
+      "#pin-divider",
+    ) as HTMLElement;
+    this.pinSplitDividerEl = document.querySelector<HTMLElement>(
+      "#pin-split-divider",
+    ) as HTMLElement;
+    this.pinCellEls = [
+      ...this.pinSlotEl.querySelectorAll<HTMLElement>(".pin-cell"),
+    ];
+    this.mainEl.style.setProperty(
+      "--pin-width",
+      `${(config.layout.pin_width_fraction * 100).toFixed(2)}%`,
+    );
+    this.pinSlotEl.style.setProperty(
+      "--pin-split",
+      `${(config.layout.pin_split_fraction * 100).toFixed(2)}%`,
+    );
+    this.attachPinResize();
+    this.attachPinSplitResize();
+    this.renderPinCells();
     this.setActiveProject(null);
     setOverlayObserver(() => this.syncBrowserVisibility());
     window
@@ -552,6 +605,7 @@ export class App {
       });
       this.renderTabs();
     }
+    await this.restorePinDock();
     if (this.panelVisible) await this.openWorkspaceTree();
     if (this.config.updates.auto_check) {
       // Two rAFs so the check starts only after the boot frame has painted:
@@ -571,6 +625,15 @@ export class App {
     await listen("menu-zoom-out", () => this.setFontSize(this.fontSize - 1));
     await listen("menu-zoom-reset", () => this.setFontSize(DEFAULT_FONT_SIZE));
     await listen<number>("menu-goto-tab", (e) => this.gotoTab(e.payload));
+    // Pane actions routed through the menu so they work over a focused browser
+    // pane; they resolve through the same dispatch as their JS keybindings.
+    const paneAction = (action: string) =>
+      this.dispatch(action, this.sessions.get(this.activeId ?? ""));
+    await listen("menu-pane-pin", () => paneAction("pane.pin"));
+    await listen("menu-pane-focus-left", () => paneAction("focus.left"));
+    await listen("menu-pane-focus-right", () => paneAction("focus.right"));
+    await listen("menu-pane-focus-up", () => paneAction("focus.up"));
+    await listen("menu-pane-focus-down", () => paneAction("focus.down"));
   }
 
   // The daemon connection can die between any two keystrokes (idle-exit, a
@@ -1391,6 +1454,11 @@ export class App {
     }
     this.applyBrowserSessionConfig(session);
     this.syncBrowserVisibility();
+    // Creating the native webview steals first responder; pull keyboard focus
+    // back into the app (its address bar, a DOM field in the main webview) so
+    // shortcuts like pin and pane-switch keep working without a mouse click.
+    session.focus();
+    void browserReleaseFocus();
   }
 
   private resolveBrowserColorScheme(): "dark" | "light" {
@@ -1441,6 +1509,312 @@ export class App {
         }
       }
     }
+    // Pinned browsers live outside the grids and stay visible across every tab;
+    // only an overlay (which paints over a native view) hides them.
+    for (const cell of this.pinCells) {
+      if (cell?.session instanceof BrowserSession) {
+        cell.session.show(!overlayOpen);
+      }
+    }
+  }
+
+  private async restorePinDock(): Promise<void> {
+    const saved = loadPinDock();
+    for (let i = 0; i < saved.length && i < this.pinCells.length; i++) {
+      const c = saved[i];
+      if (!c) continue;
+      if (c.kind === "browser") await this.openBrowserInCell(i, c.url);
+      else await this.openTerminalInCell(i);
+    }
+    // Only now may persist() write the dock — before this, an empty pinCells
+    // would clobber the state we just read.
+    this.pinDockRestored = true;
+    this.persist();
+  }
+
+  private isActiveContentPinnable(): boolean {
+    const grid = this.sessions.get(this.activeId ?? "");
+    if (!(grid instanceof PaneGrid)) return false;
+    const paneId = grid.activePaneId();
+    return (
+      grid.activeContentIsBrowser(paneId) || grid.activeContentIsFile(paneId)
+    );
+  }
+
+  // ⌘⌃P sends the active pane's content to the first free pinned cell, or —
+  // when nothing pinnable is focused — seeds that cell with a fresh browser, so
+  // the shortcut always opens the dock with something useful.
+  private pinActiveContent(): void {
+    const index = this.pinCells.indexOf(null);
+    if (index < 0) {
+      this.notify(t("ui.pin.full"));
+      return;
+    }
+    const grid = this.sessions.get(this.activeId ?? "");
+    if (grid instanceof PaneGrid && this.isActiveContentPinnable()) {
+      const detached = grid.detachActiveContent();
+      if (detached) {
+        this.placeInCell(index, detached);
+        this.refreshTreeIfVisible();
+        // Showing the pinned browser re-grabs first responder; hand keyboard
+        // focus back to the grid (natively, since DOM focus alone does not
+        // cross back over the child webview) so pane navigation keeps working.
+        grid.focus();
+        void browserReleaseFocus();
+        return;
+      }
+    }
+    void this.openBrowserInCell(index);
+  }
+
+  private placeInCell(index: number, cell: PinnedCell): void {
+    this.pinCells[index] = cell;
+    const host = this.pinCellEls[index];
+    host.querySelector(".pin-cell-add")?.remove();
+    host.appendChild(cell.container);
+    this.showPinDock();
+    if (cell.session instanceof BrowserSession) {
+      // Out of every grid now, so its own close button must unpin the cell.
+      cell.session.onCloseRequest = () => this.unpinCell(index);
+      // Persist the dock as the pinned browser navigates, so a restart restores
+      // the page it was left on, not its home URL.
+      cell.session.onTitle = () => this.persist();
+      cell.session.syncBounds();
+    }
+    this.syncBrowserVisibility();
+    this.persist();
+  }
+
+  private addToPinDock(kind: "terminal" | "browser"): void {
+    const index = this.pinCells.indexOf(null);
+    if (index < 0) {
+      this.notify(t("ui.pin.full"));
+      return;
+    }
+    if (kind === "terminal") void this.openTerminalInCell(index);
+    else void this.openBrowserInCell(index);
+  }
+
+  // The empty-cell picker: choose what independent content to place there.
+  private openCellPicker(index: number): void {
+    const { overlay, box, close } = createOverlay({
+      className: "pane-picker",
+      label: t("ui.pin.pickTitle"),
+      onDismiss: () => void close(),
+    });
+    const row = (label: string, hint: string, onClick: () => void) => {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "pane-picker-row";
+      const name = document.createElement("span");
+      name.textContent = label;
+      const tag = document.createElement("span");
+      tag.className = "pane-picker-hint";
+      tag.textContent = hint;
+      el.append(name, tag);
+      el.addEventListener("click", () => {
+        void close();
+        onClick();
+      });
+      return el;
+    };
+    box.append(
+      row(
+        t("ui.pane.terminalSeg"),
+        "⌘⌃T",
+        () => void this.openTerminalInCell(index),
+      ),
+      row(
+        t("ui.pane.addBrowser"),
+        "⌘⌃B",
+        () => void this.openBrowserInCell(index),
+      ),
+    );
+    document.body.appendChild(overlay);
+    box.querySelector<HTMLButtonElement>(".pane-picker-row")?.focus();
+  }
+
+  private async openBrowserInCell(index: number, url?: string): Promise<void> {
+    const container = document.createElement("div");
+    container.className = "terminal-host browser-host pane-content";
+    const session = new BrowserSession(
+      `pin-browser-${index}`,
+      url ?? this.config.browser.home_url,
+      container,
+    );
+    this.placeInCell(index, {
+      kind: "browser",
+      session,
+      container,
+      path: session.path,
+      title: t("ui.browser.title"),
+    });
+    try {
+      await session.open();
+    } catch (e) {
+      this.unpinCell(index);
+      this.notify(errorMessage(e));
+      return;
+    }
+    this.applyBrowserSessionConfig(session);
+    this.syncBrowserVisibility();
+    // A dock browser is background content; keep keyboard focus on the pane the
+    // user is actually working in so shortcuts keep working.
+    this.sessions.get(this.activeId ?? "")?.focus();
+    void browserReleaseFocus();
+  }
+
+  private async openTerminalInCell(index: number): Promise<void> {
+    const container = document.createElement("div");
+    container.className = "terminal-host pane-content";
+    const session = new TerminalSession(
+      `pin-term-${index}-${crypto.randomUUID().slice(0, 8)}`,
+      container,
+      {
+        fontFamily: fontStack(this.config.font.family, this.config.fonts),
+        fontSize: this.config.font.size,
+        render: this.config.render,
+        theme: this.config.theme.terminal,
+        keepAlive: this.config.session.keep_alive,
+        activityThrottleMs:
+          Math.max(1, this.config.tabs.activity_throttle_secs) * 1000,
+        appOwnsKeystroke: (e) => this.keymap.ownsMetaKeystroke(e),
+      },
+    );
+    session.onExit = () => this.unpinCell(index);
+    this.placeInCell(index, {
+      kind: "terminal",
+      session,
+      container,
+      title: t("ui.pane.terminalSeg"),
+    });
+    await session.open();
+    session.setVisible(true);
+    session.fitAndResize();
+  }
+
+  private unpinCell(index: number): void {
+    const cell = this.pinCells[index];
+    if (!cell) return;
+    this.pinCells[index] = null;
+    void cell.session.dispose();
+    cell.container.remove();
+    this.showPinDock();
+    this.syncBrowserVisibility();
+    this.refreshTreeIfVisible();
+    this.persist();
+  }
+
+  // Empty cells invite content with a "+" and a hint; a filled cell shows its
+  // content. The dock hides entirely when both cells are empty.
+  private renderPinCells(): void {
+    this.pinCellEls.forEach((host, index) => {
+      if (this.pinCells[index]) {
+        host.querySelector(".pin-cell-add")?.remove();
+        return;
+      }
+      if (host.querySelector(".pin-cell-add")) return;
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "pin-cell-add";
+      add.title = t("ui.pin.add");
+      const plus = document.createElement("span");
+      plus.className = "pin-cell-add-plus";
+      plus.textContent = "+";
+      const hint = document.createElement("span");
+      hint.className = "pin-cell-add-hint";
+      hint.textContent = t("ui.pin.addHint");
+      add.append(plus, hint);
+      add.addEventListener("click", () => this.openCellPicker(index));
+      host.appendChild(add);
+    });
+  }
+
+  private showPinDock(): void {
+    const any = this.pinCells.some((c) => c !== null);
+    this.pinSlotEl.classList.toggle("hidden", !any);
+    this.pinDividerEl.classList.toggle("hidden", !any);
+    this.renderPinCells();
+    this.current()?.fitAndResize();
+    this.syncPinBounds();
+  }
+
+  private attachPinResize(): void {
+    attachDrag(this.pinDividerEl, {
+      cursor: "col-resize",
+      onMove: (ev) => {
+        const rect = this.mainEl.getBoundingClientRect();
+        if (!rect.width) return;
+        const fraction = Math.max(
+          this.config.layout.pin_min_fraction,
+          Math.min(
+            this.config.layout.pin_max_fraction,
+            (rect.right - ev.clientX) / rect.width,
+          ),
+        );
+        this.mainEl.style.setProperty(
+          "--pin-width",
+          `${(fraction * 100).toFixed(2)}%`,
+        );
+        this.current()?.fitAndResize();
+        this.syncPinBounds();
+      },
+      onEnd: () => this.persistPinFraction(),
+    });
+  }
+
+  private attachPinSplitResize(): void {
+    attachDrag(this.pinSplitDividerEl, {
+      cursor: "row-resize",
+      onMove: (ev) => {
+        const rect = this.pinSlotEl.getBoundingClientRect();
+        if (!rect.height) return;
+        const fraction = Math.max(
+          0.2,
+          Math.min(0.8, (ev.clientY - rect.top) / rect.height),
+        );
+        this.pinSlotEl.style.setProperty(
+          "--pin-split",
+          `${(fraction * 100).toFixed(2)}%`,
+        );
+        this.syncPinBounds();
+      },
+      onEnd: () => this.persistPinSplit(),
+    });
+  }
+
+  private syncPinBounds(): void {
+    for (const cell of this.pinCells) {
+      if (cell?.session instanceof BrowserSession) cell.session.syncBounds();
+      else if (cell?.session instanceof TerminalSession) {
+        cell.session.fitAndResize();
+      }
+    }
+  }
+
+  private persistPinFraction(): void {
+    const rect = this.mainEl.getBoundingClientRect();
+    const slot = this.pinSlotEl.getBoundingClientRect();
+    const fraction = rect.width ? slot.width / rect.width : 0.28;
+    this.config = {
+      ...this.config,
+      layout: { ...this.config.layout, pin_width_fraction: fraction },
+    };
+    void configSet(this.config);
+    this.current()?.fitAndResize();
+    this.syncPinBounds();
+  }
+
+  private persistPinSplit(): void {
+    const slot = this.pinSlotEl.getBoundingClientRect();
+    const top = this.pinCellEls[0].getBoundingClientRect();
+    const fraction = slot.height ? top.height / slot.height : 0.5;
+    this.config = {
+      ...this.config,
+      layout: { ...this.config.layout, pin_split_fraction: fraction },
+    };
+    void configSet(this.config);
+    this.syncPinBounds();
   }
 
   private teachPaneFileOnce(): void {
@@ -2304,6 +2678,15 @@ export class App {
       case "browser.open":
         if (pane) void this.switchPaneToBrowser(pane, pane.activePaneId());
         break;
+      case "pane.pin":
+        this.pinActiveContent();
+        break;
+      case "pin.terminal":
+        this.addToPinDock("terminal");
+        break;
+      case "pin.browser":
+        this.addToPinDock("browser");
+        break;
       case "browser.focus-url":
         this.activeBrowserSession(pane)?.focus();
         break;
@@ -2585,6 +2968,16 @@ export class App {
         pinned: t.pinned,
       };
     });
+    const dock = this.pinCells.map((cell) => {
+      if (cell?.session instanceof BrowserSession) {
+        return { kind: "browser" as const, url: cell.session.path };
+      }
+      if (cell?.session instanceof TerminalSession) {
+        return { kind: "terminal" as const };
+      }
+      return null;
+    });
+    if (this.pinDockRestored) savePinDock(dock);
     const json = JSON.stringify(session);
     if (json === this.lastSessionJson) return;
     this.lastSessionJson = json;
