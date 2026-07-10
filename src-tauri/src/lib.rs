@@ -252,6 +252,34 @@ pub fn run() {
                 .item(&zoom_reset)
                 .build()?;
 
+            // Pane actions live in the menu (not only the JS keymap) so their
+            // accelerators reach the app even while a native browser pane holds
+            // keyboard focus: the shortcut monitor gives the menu the first
+            // crack, which a focused webview cannot intercept.
+            let pin_pane = MenuItemBuilder::with_id("pane-pin", "Pin / Unpin Pane")
+                .accelerator("CmdOrCtrl+Control+P")
+                .build(handle)?;
+            let focus_left = MenuItemBuilder::with_id("pane-focus-left", "Focus Pane Left")
+                .accelerator("CmdOrCtrl+Shift+ArrowLeft")
+                .build(handle)?;
+            let focus_right = MenuItemBuilder::with_id("pane-focus-right", "Focus Pane Right")
+                .accelerator("CmdOrCtrl+Shift+ArrowRight")
+                .build(handle)?;
+            let focus_up = MenuItemBuilder::with_id("pane-focus-up", "Focus Pane Up")
+                .accelerator("CmdOrCtrl+Shift+ArrowUp")
+                .build(handle)?;
+            let focus_down = MenuItemBuilder::with_id("pane-focus-down", "Focus Pane Down")
+                .accelerator("CmdOrCtrl+Shift+ArrowDown")
+                .build(handle)?;
+            let pane_menu = SubmenuBuilder::new(handle, "Pane")
+                .item(&pin_pane)
+                .separator()
+                .item(&focus_left)
+                .item(&focus_right)
+                .item(&focus_up)
+                .item(&focus_down)
+                .build()?;
+
             let mut tab_items = Vec::with_capacity(9);
             for i in 1..=9u8 {
                 tab_items.push(
@@ -267,7 +295,14 @@ pub fn run() {
             let window_menu = window_builder.build()?;
 
             MenuBuilder::new(handle)
-                .items(&[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])
+                .items(&[
+                    &app_menu,
+                    &file_menu,
+                    &edit_menu,
+                    &view_menu,
+                    &pane_menu,
+                    &window_menu,
+                ])
                 .build()
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -285,6 +320,11 @@ pub fn run() {
             "close-tab" => dispatch_focused(app, "menu-close-tab", ()),
             "palette" => dispatch_focused(app, "menu-palette", ()),
             "toggle-sidebar" => dispatch_focused(app, "menu-toggle-sidebar", ()),
+            "pane-pin" => dispatch_focused(app, "menu-pane-pin", ()),
+            "pane-focus-left" => dispatch_focused(app, "menu-pane-focus-left", ()),
+            "pane-focus-right" => dispatch_focused(app, "menu-pane-focus-right", ()),
+            "pane-focus-up" => dispatch_focused(app, "menu-pane-focus-up", ()),
+            "pane-focus-down" => dispatch_focused(app, "menu-pane-focus-down", ()),
             "zoom-in" => dispatch_focused(app, "menu-zoom-in", ()),
             "zoom-out" => dispatch_focused(app, "menu-zoom-out", ()),
             "zoom-reset" => dispatch_focused(app, "menu-zoom-reset", ()),
@@ -361,6 +401,7 @@ pub fn run() {
             browser::browser_show,
             browser::browser_hide,
             browser::browser_focus,
+            browser::browser_release_focus,
             browser::browser_close,
             browser::browser_set_color_scheme,
         ])

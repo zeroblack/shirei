@@ -241,6 +241,10 @@ export interface Config {
     default_template: string;
     new_tab_dir: string;
     pane_content_cap: number;
+    pin_width_fraction: number;
+    pin_min_fraction: number;
+    pin_max_fraction: number;
+    pin_split_fraction: number;
   };
   motion: MotionConfig;
   tabs: TabsConfig;

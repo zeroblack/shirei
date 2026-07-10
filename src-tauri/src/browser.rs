@@ -175,18 +175,45 @@ pub fn browser_focus(app: AppHandle, label: String) -> Result<()> {
         .map_err(|e| Error::Browser(e.to_string()))
 }
 
+// A focused child browser webview holds the window's first responder, so the
+// main webview stops receiving key events and its JS shortcuts (pane nav, pin)
+// go dead. DOM focus() from the main webview does not reliably wrest it back
+// across the native boundary, so make the main webview first responder outright.
+#[tauri::command]
+pub fn browser_release_focus(app: AppHandle, window: Window) -> Result<()> {
+    let label = window.label().to_string();
+    let Some(wv) = app.get_webview(&label) else {
+        return Ok(());
+    };
+    wv.with_webview(move |platform| {
+        use objc2_app_kit::{NSResponder, NSView};
+        // SAFETY: PlatformWebview::inner() is the WKWebView (an NSView) for the
+        // duration of this callback, which wry runs on the main thread.
+        let view: &NSView = unsafe { &*(platform.inner() as *const NSView) };
+        if let Some(win) = view.window() {
+            let responder: &NSResponder = view;
+            win.makeFirstResponder(Some(responder));
+        }
+    })
+    .map_err(|e| Error::Browser(e.to_string()))
+}
+
 // wry's macOS backend re-retains the WKWebView after removeFromSuperview as a
 // workaround for an Objective-C crash (see InnerWebView::drop in wry's
 // wkwebview/mod.rs), so the object is deliberately leaked: closing alone
 // detaches it from the window but never unloads its page, leaving any playing
-// audio/video running indefinitely. Navigating to about:blank first (allowed
-// through the on_navigation guard above for exactly this) unloads the page and
-// stops playback regardless of the leak. Closing a child webview also doesn't
-// reliably resign first responder, so focus is handed back to the owning
-// window explicitly.
+// audio/video running indefinitely. Navigating to about:blank alone races the
+// close and often loses, so first pause and detach every media element in the
+// page (webview messages run in order, and the eval runs even on the leaked
+// object), then unload with about:blank, then close. Closing a child webview
+// also doesn't reliably resign first responder, so focus is handed back to the
+// owning window explicitly.
+const STOP_MEDIA_JS: &str = "try{document.querySelectorAll('video,audio').forEach(function(m){m.pause();m.muted=true;m.removeAttribute('src');try{m.load()}catch(e){}})}catch(e){}";
+
 #[tauri::command]
 pub fn browser_close(app: AppHandle, window: Window, label: String) -> Result<()> {
     let wv = webview(&app, &label)?;
+    let _ = wv.eval(STOP_MEDIA_JS);
     let _ = wv.navigate("about:blank".parse().expect("valid url"));
     wv.close().map_err(|e| Error::Browser(e.to_string()))?;
     let _ = window.set_focus();

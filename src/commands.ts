@@ -124,6 +124,8 @@ export const browserHide = (label: string) =>
 export const browserFocus = (label: string) =>
   invoke<void>("browser_focus", { label });
 
+export const browserReleaseFocus = () => invoke<void>("browser_release_focus");
+
 export const browserClose = (label: string) =>
   invoke<void>("browser_close", { label });
 

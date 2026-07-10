@@ -1,7 +1,15 @@
+// Local dev servers run over plain http, so a scheme-less local address must
+// not be forced to https (which would fail to connect); everything else
+// defaults to https.
+const LOCAL_HOST =
+  /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|[^/]+\.localhost)(:|\/|$)/i;
+
 export function normalizeUrl(input: string): string | null {
   const raw = input.trim();
   if (!raw) return null;
-  const withScheme = /^[a-z]+:\/\//i.test(raw) ? raw : `https://${raw}`;
+  const hasScheme = /^[a-z]+:\/\//i.test(raw);
+  const scheme = LOCAL_HOST.test(raw) ? "http" : "https";
+  const withScheme = hasScheme ? raw : `${scheme}://${raw}`;
   let url: URL;
   try {
     url = new URL(withScheme);

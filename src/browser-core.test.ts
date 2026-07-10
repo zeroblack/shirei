@@ -15,6 +15,13 @@ describe("normalizeUrl", () => {
       "http://localhost:5173/",
     );
   });
+  it("defaults a bare local dev address to http", () => {
+    expect(normalizeUrl("localhost:3000")).toBe("http://localhost:3000/");
+    expect(normalizeUrl("127.0.0.1:8080")).toBe("http://127.0.0.1:8080/");
+    expect(normalizeUrl("app.localhost:3000")).toBe(
+      "http://app.localhost:3000/",
+    );
+  });
   it("rejects non-http schemes and empty", () => {
     expect(normalizeUrl("file:///etc/passwd")).toBeNull();
     expect(normalizeUrl("tauri://x")).toBeNull();
