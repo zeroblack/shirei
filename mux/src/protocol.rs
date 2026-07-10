@@ -2,6 +2,8 @@ use std::io::Read;
 
 use serde::{Deserialize, Serialize};
 
+use crate::detect::{AgentState, Confidence};
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum ClientMsg {
     Attach {
@@ -64,6 +66,13 @@ pub enum ServerMsg {
         cwd: Option<String>,
         command: Option<String>,
         pid: Option<u32>,
+    },
+    State {
+        id: String,
+        state: AgentState,
+        confidence: Confidence,
+        command: Option<String>,
+        payload: Option<String>,
     },
     Welcome {
         build_id: String,
@@ -135,6 +144,23 @@ mod tests {
         let msg = ServerMsg::Output {
             id: "p1".into(),
             data: vec![27, 91, 48, 109],
+        };
+        let frame = encode(&msg).unwrap();
+        let mut cursor = std::io::Cursor::new(frame);
+        let body = read_frame(&mut cursor).unwrap().expect("frame");
+        let back: ServerMsg = decode(&body).unwrap();
+        assert_eq!(msg, back);
+    }
+
+    #[test]
+    fn state_msg_round_trip() {
+        use crate::detect::{AgentState, Confidence, WaitKind};
+        let msg = ServerMsg::State {
+            id: "p1".into(),
+            state: AgentState::Waiting(WaitKind::Approval),
+            confidence: Confidence::High,
+            command: Some("claude".into()),
+            payload: Some("git push --force".into()),
         };
         let frame = encode(&msg).unwrap();
         let mut cursor = std::io::Cursor::new(frame);

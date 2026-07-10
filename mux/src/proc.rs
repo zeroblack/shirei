@@ -1,5 +1,7 @@
+use libproc::bsd_info::BSDInfo;
 use libproc::proc_pid::{PIDInfo, PidInfoFlavor, pidinfo};
 use libproc::processes::{ProcFilter, pids_by_type};
+use libproc::task_info::TaskInfo;
 use serde::{Deserialize, Serialize};
 
 /// What a shell session is doing right now: its cwd and the command in the
@@ -15,6 +17,43 @@ pub fn snapshot_of(shell_pid: u32) -> Snapshot {
         cwd: cwd_of_pid(shell_pid),
         command: foreground_command(shell_pid),
     }
+}
+
+/// Coarse run state of a process, the authoritative lifecycle ground truth the
+/// agent-state detector fuses on top of the output heuristics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProcStatus {
+    Running,
+    Sleeping,
+    Stopped,
+    Zombie,
+    Gone,
+}
+
+/// XNU `proc.h` p_stat values carried in `proc_bsdinfo.pbi_status`.
+const SSLEEP: u32 = 3;
+const SSTOP: u32 = 4;
+const SZOMB: u32 = 5;
+
+pub fn proc_status(pid: u32) -> ProcStatus {
+    match pidinfo::<BSDInfo>(pid as i32, 0) {
+        Ok(info) => match info.pbi_status {
+            SZOMB => ProcStatus::Zombie,
+            SSTOP => ProcStatus::Stopped,
+            SSLEEP => ProcStatus::Sleeping,
+            _ => ProcStatus::Running,
+        },
+        Err(_) => ProcStatus::Gone,
+    }
+}
+
+/// Total CPU time (user+system, nanoseconds) charged to the process so far.
+/// Monotonic while the process lives; a flat delta between ticks is the second
+/// vote (besides output silence) that a session is genuinely idle, not just
+/// quiet on the pty.
+pub fn cpu_ticks(pid: u32) -> Option<u64> {
+    let info = pidinfo::<TaskInfo>(pid as i32, 0).ok()?;
+    Some(info.pti_total_user.saturating_add(info.pti_total_system))
 }
 
 #[repr(C)]
@@ -115,7 +154,7 @@ pub fn foreground_command(shell_pid: u32) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{cwd_of_pid, parse_procargs};
+    use super::{ProcStatus, cpu_ticks, cwd_of_pid, parse_procargs, proc_status};
     use portable_pty::{CommandBuilder, PtySize, native_pty_system};
     use std::io::{Read, Write};
     use std::time::Duration;
@@ -177,5 +216,49 @@ mod tests {
         buf.extend_from_slice(b"claude\0");
         buf.extend_from_slice(b"--foo\0");
         assert_eq!(parse_procargs(&buf).as_deref(), Some("claude --foo"));
+    }
+
+    #[test]
+    fn proc_status_of_self_is_alive() {
+        assert!(matches!(
+            proc_status(std::process::id()),
+            ProcStatus::Running | ProcStatus::Sleeping
+        ));
+    }
+
+    #[test]
+    fn proc_status_of_absent_pid_is_gone() {
+        assert_eq!(proc_status(u32::MAX - 1), ProcStatus::Gone);
+    }
+
+    #[test]
+    fn proc_status_tracks_a_sleeping_child() {
+        let mut child = std::process::Command::new("sleep")
+            .arg("3")
+            .spawn()
+            .expect("spawn sleep");
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let got = proc_status(child.id());
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(
+            matches!(got, ProcStatus::Sleeping | ProcStatus::Running),
+            "a live `sleep` child read as {got:?}"
+        );
+    }
+
+    #[test]
+    fn cpu_ticks_are_monotonic() {
+        let before = cpu_ticks(std::process::id()).expect("cpu_ticks returned None");
+        let mut acc = 0u64;
+        for i in 0..5_000_000u64 {
+            acc = acc.wrapping_add(i);
+        }
+        std::hint::black_box(acc);
+        let after = cpu_ticks(std::process::id()).expect("cpu_ticks returned None");
+        assert!(
+            after >= before,
+            "cpu ticks went backwards: {before} -> {after}"
+        );
     }
 }

@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 
 use shirei_mux::lock::MutexExt;
 use shirei_mux::paths::socket_path;
+use shirei_mux::detect::{AgentState, Confidence};
 use shirei_mux::proc::Snapshot;
 use shirei_mux::protocol::{ClientMsg, ServerMsg, decode, encode, read_frame};
 use tauri::ipc::{Channel, Response};
@@ -174,6 +175,19 @@ pub fn autostart(app: &AppHandle) {
 
 type ProbeReply = (Option<String>, Option<String>, Option<u32>);
 
+/// The agent-state event pushed to the frontend on every detector transition.
+/// `state`/`confidence` reuse the mux enums (they serialize to the same shape
+/// the TS side mirrors); `command` lets the frontend gate by the CLI registry
+/// and `payload` carries the verbatim pending thing for a notification.
+#[derive(Clone, serde::Serialize)]
+struct SessionStateEvent {
+    id: String,
+    state: AgentState,
+    confidence: Confidence,
+    command: Option<String>,
+    payload: Option<String>,
+}
+
 /// One live connection to the daemon. Each concern has its own lock so the
 /// reader thread routing output never contends with command writes.
 struct Conn {
@@ -298,6 +312,24 @@ fn spawn_reader(mut read: UnixStream, conn: Arc<Conn>, app: AppHandle) {
                     {
                         let _ = waiter.send(pid);
                     }
+                }
+                ServerMsg::State {
+                    id,
+                    state,
+                    confidence,
+                    command,
+                    payload,
+                } => {
+                    let _ = app.emit(
+                        "session://state",
+                        SessionStateEvent {
+                            id,
+                            state,
+                            confidence,
+                            command,
+                            payload,
+                        },
+                    );
                 }
                 ServerMsg::Sessions { .. } => {}
                 // The handshake consumes Welcome synchronously before this reader

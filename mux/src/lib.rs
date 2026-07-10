@@ -1,3 +1,4 @@
+pub mod detect;
 pub mod lock;
 pub mod modes;
 pub mod paths;
