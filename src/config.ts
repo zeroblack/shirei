@@ -188,6 +188,15 @@ export interface DetectionConfig {
   term_program: string;
 }
 
+export interface MetricsConfig {
+  enabled: boolean;
+  retention_days: number;
+  flush_interval_ms: number;
+  activity_ping_ms: number;
+  idle_after_ms: number;
+  dormant_after_ms: number;
+}
+
 export type NotifyChannel = "os" | "in-app" | "off";
 
 export interface NotificationChannels {
@@ -311,6 +320,7 @@ export interface Config {
   recorder: RecorderConfig;
   browser: BrowserConfig;
   detection: DetectionConfig;
+  metrics: MetricsConfig;
   notifications: NotificationsConfig;
   cli_registry: CliRegistryEntry[];
   projects: Project[];

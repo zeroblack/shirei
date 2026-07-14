@@ -11,6 +11,7 @@ import {
   browserForward,
   browserReleaseFocus,
   browserReload,
+  metricsLog,
   ptyCwd,
   ptySnapshot,
   revealInFinder,
@@ -39,6 +40,13 @@ import { ImageSession } from "./image";
 import { Keymap } from "./keymap";
 import { eventToKeystroke, formatKeystroke, resolveBindings } from "./keys";
 import { MediaSession } from "./media";
+import {
+  type DormancyInput,
+  type DormancyState,
+  dormancyTransition,
+  MetricsLogger,
+  makeEvent,
+} from "./metrics";
 import { isTrackedAgent, NotificationCenter } from "./notifications";
 import {
   type BoardHints,
@@ -371,10 +379,22 @@ export class App {
   private readonly updateIndicator: UpdateIndicator;
   private updateModal: UpdateModalHandle | null = null;
   private appVersion = "";
+  private readonly metrics: MetricsLogger;
+  private readonly metricsSessionId = crypto.randomUUID();
+  private readonly tabDormancy = new Map<string, DormancyState>();
+  private readonly agentMetricsState = new Map<string, SessionState>();
+  private readonly seenProjectIds = new Set<string>();
+  private activeProjectId: string | null = null;
+  private metricsTimer: ReturnType<typeof setInterval> | null = null;
+  private lastActivityAt = Date.now();
+  private lastActivityPingAt = 0;
+  private systemIdle = false;
+  private disposed = false;
 
   constructor(tabbarEl: HTMLElement, host: HTMLElement, config: Config) {
     this.host = host;
     this.config = config;
+    this.metrics = new MetricsLogger(config.metrics, metricsLog);
     this.notifications.setConfig(config.notifications, config.cli_registry);
     this.keymap = new Keymap(config.keybindings ?? {});
     this.projects = config.projects ?? [];
@@ -482,11 +502,22 @@ export class App {
     webglPool.setCap(config.render.webgl_pool_cap);
     window.addEventListener("resize", () => this.queueFit());
     window.addEventListener("keydown", (e) => this.onKey(e));
+    // Best-effort only: a real Cmd+Q / Quit-menu terminate calls NSApplication
+    // directly and skips both the window CloseRequested pipeline and this handler's
+    // async work, so the visibilitychange/blur flushes below are the actual
+    // mitigation, keeping the buffer near-empty before that can happen.
     window.addEventListener("beforeunload", () => this.dispose());
     document.addEventListener("visibilitychange", () => this.onVisibility());
     window.addEventListener("focus", () => {
       this.cmdAvailable.clear();
       this.current()?.recoverRenderers(false);
+    });
+    window.addEventListener("pointerdown", () => this.noteActivity(), {
+      capture: true,
+    });
+    void getCurrentWindow().onFocusChanged(({ payload }) => {
+      this.logMetric(payload ? "app_focus" : "app_blur");
+      if (!payload && this.config.metrics.enabled) void this.metrics.flush();
     });
     this.setupTitlebarSearch();
     document.addEventListener("focusin", () => this.refreshFocusSurface());
@@ -579,6 +610,7 @@ export class App {
   private onVisibility(): void {
     if (document.hidden) {
       this.hiddenAt = Date.now();
+      if (this.config.metrics.enabled) void this.metrics.flush();
       return;
     }
     const hard =
@@ -607,6 +639,12 @@ export class App {
       this.tabbar.refreshAges();
       this.orchestration.refreshAges();
     }, Math.max(1, this.config.tabs.age_refresh_secs) * 1000);
+    if (this.config.metrics.enabled) {
+      this.metricsTimer = setInterval(
+        () => this.tickMetrics(),
+        Math.max(1000, this.config.metrics.activity_ping_ms),
+      );
+    }
   }
 
   private stopTimers(): void {
@@ -618,17 +656,217 @@ export class App {
       clearInterval(this.ageTimer);
       this.ageTimer = null;
     }
+    if (this.metricsTimer !== null) {
+      clearInterval(this.metricsTimer);
+      this.metricsTimer = null;
+    }
+  }
+
+  private logMetric(
+    kind: string,
+    fields: Omit<Parameters<typeof makeEvent>[1], never> = {},
+  ): void {
+    if (!this.config.metrics.enabled) return;
+    this.metrics.log(
+      makeEvent(kind, { sessionId: this.metricsSessionId, ...fields }),
+    );
+  }
+
+  private trackNewTabDormancy(tabId: string): void {
+    if (!this.config.metrics.enabled) return;
+    this.tabDormancy.set(tabId, {
+      state: "active",
+      shown: true,
+      lastActiveAt: Date.now(),
+    });
+  }
+
+  private untrackTabMetrics(tabId: string): void {
+    if (!this.config.metrics.enabled) return;
+    this.tabDormancy.delete(tabId);
+    this.agentMetricsState.delete(tabId);
+  }
+
+  private feedDormancy(tabId: string, input: DormancyInput): void {
+    if (!this.config.metrics.enabled) return;
+    const prev = this.tabDormancy.get(tabId);
+    if (!prev) return;
+    const { next, emit } = dormancyTransition(
+      prev,
+      input,
+      Date.now(),
+      this.config.metrics.dormant_after_ms,
+    );
+    this.tabDormancy.set(tabId, next);
+    if (!emit) return;
+    const tab = this.tab(tabId);
+    const projectId = tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
+    this.logMetric(emit, { tabId, projectId });
+  }
+
+  // Coarse presence ping: throttled to the config cadence and carrying no
+  // keystroke/click counts, only that the user is here. Also keeps the active
+  // tab's dormancy alive and clears a running system-idle span.
+  private noteActivity(): void {
+    if (!this.config.metrics.enabled) return;
+    const now = Date.now();
+    if (now - this.lastActivityPingAt >= this.config.metrics.activity_ping_ms) {
+      this.lastActivityPingAt = now;
+      this.logMetric("input_activity");
+    }
+    if (this.activeId) this.feedDormancy(this.activeId, "activity");
+    if (this.systemIdle) {
+      this.systemIdle = false;
+      this.logMetric("system_idle_end");
+    }
+    this.lastActivityAt = now;
+  }
+
+  private tickMetrics(): void {
+    if (!this.config.metrics.enabled) return;
+    const now = Date.now();
+    const states = this.tabSessionStates();
+    for (const [tabId, state] of this.tabDormancy) {
+      const entry = states.get(tabId);
+      const input: DormancyInput =
+        entry &&
+        (entry.state.kind === "working" || entry.state.kind === "waiting")
+          ? "activity"
+          : "tick";
+      const { next, emit } = dormancyTransition(
+        state,
+        input,
+        now,
+        this.config.metrics.dormant_after_ms,
+      );
+      this.tabDormancy.set(tabId, next);
+      if (!emit) continue;
+      const tab = this.tab(tabId);
+      const projectId =
+        tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
+      this.logMetric(emit, { tabId, projectId });
+    }
+    if (
+      !this.systemIdle &&
+      now - this.lastActivityAt >= this.config.metrics.idle_after_ms
+    ) {
+      this.systemIdle = true;
+      this.logMetric("system_idle_start");
+    }
+  }
+
+  // Session-state events arrive per pane leaf, but a tab surfaces only its most
+  // urgent tracked session (tabSessionStates, shared with the tabbar/bell UI);
+  // agent metrics follow that same per-tab primary state so the two never
+  // disagree. Dormancy is kept alive here on every state-change poll while a
+  // tab is working/waiting; tickMetrics reads that same primary state on its
+  // own periodic timer so a hidden tab whose agent works silently between
+  // state changes (e.g. a long build with no output) never crosses to dormant.
+  private emitAgentMetrics(): void {
+    if (!this.config.metrics.enabled) return;
+    const states = this.tabSessionStates();
+    for (const tab of this.tabs) {
+      const entry = states.get(tab.id);
+      if (
+        entry &&
+        (entry.state.kind === "working" || entry.state.kind === "waiting")
+      ) {
+        this.feedDormancy(tab.id, "activity");
+      }
+      const prev = this.agentMetricsState.get(tab.id);
+      if (entry && prev && sameKind(prev, entry.state)) continue;
+      if (prev) this.endAgentState(tab, prev);
+      if (entry) {
+        this.beginAgentState(tab, entry);
+        this.agentMetricsState.set(tab.id, entry.state);
+      } else {
+        this.agentMetricsState.delete(tab.id);
+      }
+    }
+  }
+
+  private endAgentState(tab: TabState, state: SessionState): void {
+    const projectId = tab.kind === "terminal" ? (tab.projectId ?? null) : null;
+    if (state.kind === "working")
+      this.logMetric("working_end", { tabId: tab.id, projectId });
+    else if (state.kind === "waiting")
+      this.logMetric("waiting_end", { tabId: tab.id, projectId });
+  }
+
+  private beginAgentState(tab: TabState, entry: SessionStateEntry): void {
+    const projectId = tab.kind === "terminal" ? (tab.projectId ?? null) : null;
+    const cliName = entry.command ?? undefined;
+    switch (entry.state.kind) {
+      case "working":
+        this.logMetric("working_start", { tabId: tab.id, projectId, cliName });
+        break;
+      case "waiting":
+        this.logMetric("waiting_start", {
+          tabId: tab.id,
+          projectId,
+          cliName,
+          payload: JSON.stringify({ wait: entry.state.wait }),
+        });
+        break;
+      case "done":
+        this.logMetric("done", {
+          tabId: tab.id,
+          projectId,
+          cliName,
+          payload: JSON.stringify({ code: entry.state.code }),
+        });
+        break;
+      case "errored":
+        this.logMetric("errored", {
+          tabId: tab.id,
+          projectId,
+          cliName,
+          payload: JSON.stringify({ code: entry.state.code }),
+        });
+        break;
+    }
+  }
+
+  // Single funnel for project focus: every path that changes which project is
+  // active (opening/creating a project tab, switching tabs, opening a plain
+  // file/terminal tab) routes through setActiveProject, so this is the one
+  // place that needs to emit project_opened/focused/unfocused.
+  private emitProjectFocusMetrics(projectId: string | null): void {
+    if (!this.config.metrics.enabled) return;
+    const previous = this.activeProjectId;
+    if (previous === projectId) return;
+    this.activeProjectId = projectId;
+    if (previous !== null)
+      this.logMetric("project_unfocused", { projectId: previous });
+    if (projectId === null) return;
+    if (!this.seenProjectIds.has(projectId)) {
+      this.seenProjectIds.add(projectId);
+      const project = this.projects.find((p) => p.id === projectId);
+      this.logMetric("project_opened", {
+        projectId,
+        payload: JSON.stringify({
+          name: project?.name,
+          path: project?.path,
+        }),
+      });
+    }
+    this.logMetric("project_focused", { projectId });
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.logMetric("session_end");
     this.stopTimers();
     if (getCurrentWindow().label === "main") this.persist();
     else clearSession();
     this.statusbar.dispose();
     for (const session of this.sessions.values()) void session.dispose();
+    void this.metrics.dispose();
   }
 
   async init(): Promise<void> {
+    this.logMetric("session_start");
     this.tree.setHome(await homeDir());
     const saved = loadSession();
     if (saved.length === 0) {
@@ -693,6 +931,12 @@ export class App {
     await listen("menu-pane-focus-down", () => paneAction("focus.down"));
     await listen("menu-browser-reload", () => paneAction("browser.reload"));
     await listen("menu-browser-url", () => paneAction("browser.focus-url"));
+    // Cmd+Q / the "Quit Shirei" menu item terminate via NSApplication directly,
+    // skipping beforeunload's async dispose — the backend holds native exit for
+    // a short grace period after this fires, giving dispose() (guarded by
+    // `disposed`, so session_end never logs twice) its one guaranteed chance to
+    // flush the metrics buffer before the process actually goes away.
+    await listen("metrics://flush-on-exit", () => this.dispose());
   }
 
   // The daemon connection can die between any two keystrokes (idle-exit, a
@@ -725,6 +969,7 @@ export class App {
         active instanceof PaneGrid ? active.leafIds() : [],
       );
       this.notifications.sync(this.notificationRows());
+      this.emitAgentMetrics();
     });
   }
 
@@ -826,6 +1071,7 @@ export class App {
     const previous = this.config;
     this.config = c;
     this.notifications.setConfig(c.notifications, c.cli_registry);
+    this.metrics.setConfig(c.metrics);
     setLocale(c.locale);
     this.applyTitlebarLabels();
     this.keymap = new Keymap(c.keybindings ?? {});
@@ -848,7 +1094,9 @@ export class App {
     if (
       previous.session.snapshot_interval_secs !==
         c.session.snapshot_interval_secs ||
-      previous.tabs.age_refresh_secs !== c.tabs.age_refresh_secs
+      previous.tabs.age_refresh_secs !== c.tabs.age_refresh_secs ||
+      previous.metrics.enabled !== c.metrics.enabled ||
+      previous.metrics.activity_ping_ms !== c.metrics.activity_ping_ms
     ) {
       this.startTimers();
     }
@@ -1166,6 +1414,15 @@ export class App {
       lastUsedAt: Date.now(),
       pinned: false,
     });
+    this.logMetric("tab_created", {
+      tabId: id,
+      projectId: projectId ?? null,
+      payload: JSON.stringify({
+        paneKind: "terminal",
+        has_project: projectId != null,
+      }),
+    });
+    this.trackNewTabDormancy(id);
     const container = document.createElement("div");
     container.className = "terminal-host";
     this.host.appendChild(container);
@@ -1365,10 +1622,13 @@ export class App {
     this.host.appendChild(container);
 
     let session: EditorSessionType | ImageSession | MediaSession;
+    let paneKind: "image" | "media" | "editor";
     if (isImage(name)) {
       session = new ImageSession(id, path, container);
+      paneKind = "image";
     } else if (mediaKind(name)) {
       session = new MediaSession(id, path, container);
+      paneKind = "media";
     } else {
       const ES = await loadEditor();
       session = new ES(id, path, container, {
@@ -1382,8 +1642,15 @@ export class App {
       session.onDirtyChange = (dirty) => this.setDirty(id, dirty);
       const editorSession = session;
       editorSession.onHistory = () => void this.openHistory(editorSession);
+      paneKind = "editor";
     }
     this.sessions.set(id, session);
+    this.logMetric("tab_created", {
+      tabId: id,
+      projectId: null,
+      payload: JSON.stringify({ paneKind, has_project: false }),
+    });
+    this.trackNewTabDormancy(id);
 
     this.activeId = id;
     this.showActive();
@@ -2021,14 +2288,29 @@ export class App {
 
   activate(id: string): void {
     if (id === this.activeId || !this.sessions.has(id)) return;
+    const previousId = this.activeId;
     this.activeId = id;
     this.showActive();
     this.renderTabs();
     this.focusActive();
     this.persist();
     if (this.panelVisible) void this.openWorkspaceTree();
+    if (previousId) {
+      const previousTab = this.tab(previousId);
+      const previousProjectId =
+        previousTab?.kind === "terminal"
+          ? (previousTab.projectId ?? null)
+          : null;
+      this.logMetric("tab_deactivated", {
+        tabId: previousId,
+        projectId: previousProjectId,
+      });
+    }
     const tab = this.tab(id);
     const projectId = tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
+    this.logMetric("tab_activated", { tabId: id, projectId });
+    this.feedDormancy(id, "shown");
+    if (previousId) this.feedDormancy(previousId, "hidden");
     this.setActiveProject(projectId);
     this.syncBrowserVisibility();
   }
@@ -2052,8 +2334,18 @@ export class App {
     if (!session) return;
     const index = this.tabs.findIndex((t) => t.id === id);
 
+    const projectId = tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
+    this.logMetric("tab_closed", { tabId: id, projectId });
+    this.untrackTabMetrics(id);
+
     this.sessions.delete(id);
     this.tabs = this.tabs.filter((t) => t.id !== id);
+    if (projectId !== null) {
+      const projectStillOpen = this.tabs.some(
+        (t) => t.kind === "terminal" && t.projectId === projectId,
+      );
+      if (!projectStillOpen) this.logMetric("project_closed", { projectId });
+    }
 
     if (session instanceof PaneGrid) await session.dispose();
     else session.dispose();
@@ -2277,6 +2569,7 @@ export class App {
     this.todoPanelEl.classList.toggle("hidden", !hasProject);
     this.todoDividerEl.classList.toggle("hidden", !hasProject);
     void this.todoPanel.setProject(projectId);
+    this.emitProjectFocusMetrics(projectId);
   }
 
   togglePanel(): void {
@@ -2636,6 +2929,7 @@ export class App {
   }
 
   private onKey(e: KeyboardEvent): void {
+    this.noteActivity();
     const active = this.sessions.get(this.activeId ?? "");
     if (
       active instanceof MediaSession &&
@@ -3145,7 +3439,20 @@ export class App {
       });
       if (!ok) return;
     }
+    this.logKillMetric(grid);
     grid.killActive();
+  }
+
+  // Logged ahead of the actual kill so a user-initiated kill is distinguishable
+  // in the timeline from the done/errored transition the kill itself produces.
+  private logKillMetric(grid: PaneGrid): void {
+    if (!this.config.metrics.enabled) return;
+    const tabId = [...this.sessions].find(([, s]) => s === grid)?.[0];
+    if (!tabId) return;
+    const tab = this.tab(tabId);
+    const projectId = tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
+    const cliName = getSessionState(grid.activePtyId())?.command ?? undefined;
+    this.logMetric("killed", { tabId, projectId, cliName });
   }
 
   private async runningProc(ptyId: string): Promise<string | null> {

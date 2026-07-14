@@ -747,6 +747,30 @@ impl Default for DetectionConfig {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct MetricsConfig {
+    pub enabled: bool,
+    pub retention_days: u32,
+    pub flush_interval_ms: u32,
+    pub activity_ping_ms: u32,
+    pub idle_after_ms: u32,
+    pub dormant_after_ms: u32,
+}
+
+impl Default for MetricsConfig {
+    fn default() -> Self {
+        MetricsConfig {
+            enabled: true,
+            retention_days: 0,
+            flush_interval_ms: 5000,
+            activity_ping_ms: 30000,
+            idle_after_ms: 120000,
+            dormant_after_ms: 900000,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum NotifyChannel {
@@ -1225,6 +1249,8 @@ pub struct Config {
     #[serde(default)]
     pub detection: DetectionConfig,
     #[serde(default)]
+    pub metrics: MetricsConfig,
+    #[serde(default)]
     pub notifications: NotificationsConfig,
     #[serde(default = "default_cli_registry")]
     pub cli_registry: Vec<CliRegistryEntry>,
@@ -1264,6 +1290,7 @@ impl Default for Config {
             recorder: RecorderConfig::default(),
             browser: BrowserConfig::default(),
             detection: DetectionConfig::default(),
+            metrics: MetricsConfig::default(),
             notifications: NotificationsConfig::default(),
             cli_registry: default_cli_registry(),
             projects: Vec::new(),
@@ -1610,6 +1637,20 @@ mod tests {
         let c = Config::from_json_or_default(r#"{"notifications":{"coalescing_ms":5000}}"#);
         assert_eq!(c.notifications.coalescing_ms, 5000);
         assert_eq!(c.notifications.truncation_length, 140);
+    }
+
+    #[test]
+    fn metrics_defaults_are_sane() {
+        let m = MetricsConfig::default();
+        assert!(m.enabled);
+        assert_eq!(m.retention_days, 0);
+        assert_eq!(m.flush_interval_ms, 5000);
+        assert_eq!(m.activity_ping_ms, 30000);
+        assert_eq!(m.idle_after_ms, 120000);
+        assert_eq!(m.dormant_after_ms, 900000);
+        // idle must trip before a tab is considered dormant
+        assert!(m.idle_after_ms < m.dormant_after_ms);
+        assert_eq!(Config::default().metrics, m);
     }
 
     #[test]

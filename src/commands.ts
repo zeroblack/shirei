@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { RecordFormat } from "./config";
+import type { MetricEvent } from "./metrics";
 import type { PhysicalRect, RecordTarget } from "./screencast-core";
 import type { DirListing, FileContent, FileIndex } from "./types";
 
@@ -137,3 +138,6 @@ export const browserClose = (label: string) =>
 
 export const browserSetColorScheme = (label: string, scheme: string) =>
   invoke<void>("browser_set_color_scheme", { label, scheme });
+
+export const metricsLog = (events: MetricEvent[]) =>
+  invoke<void>("metrics_log", { events });
