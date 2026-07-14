@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.12] - 2026-07-14
+
+### Added
+- Pinned dock keyboard reach: ⌘⇧↑/↓ move to empty cells, Enter adds content to
+  the focused cell, ⌘L and ⌘⌥⇧R drive the focused browser while it holds focus.
+
+### Fixed
+- ⌘W closes the browser you're on — layered over a pane or in the pinned dock —
+  and returns to the pane.
+
+## [0.15.11] - 2026-07-14
+
+### Added
+- Keyboard navigation for the pinned dock: ⌘⇧→ enters it, ⌘⇧↑/↓ move between
+  cells, ⌘⇧← returns to the grid, ⌘W unpins the focused cell.
+
+### Fixed
+- Cmd+A then Cmd+C copies the whole file in the editor, not only the on-screen
+  lines.
+
+## [0.15.10] - 2026-07-12
+
+### Changed
+- Agent tracking covers Claude Code. The other CLIs in Settings under Agents are
+  marked "Soon" and stay off.
+
+### Fixed
+- Reopening the app returns to the tab that was focused on quit.
+
+## [0.15.8] - 2026-07-11
+
+### Changed
+- The tentative "maybe waiting" tab mark is a breathing blue "Zzz".
+
+### Fixed
+- A calm colored tab no longer prints its name flush against the identity bar.
+
+## [0.15.7] - 2026-07-11
+
+### Added
+- Plan and selection prompts (numbered menu, "would you like to proceed",
+  shift+tab footer) raise the needs-you mark and notification immediately.
+
+## [0.15.6] - 2026-07-11
+
+### Added
+- Tentative "maybe waiting" tab mark after a long idle, configurable in Settings
+  under Agents.
+- "Action Required" window titles (Codex) count as needs-you.
+
+### Changed
+- Smaller needs-you bell.
+
+## [0.15.5] - 2026-07-10
+
+### Added
+- Agent orchestration: Shirei tracks the state of every AI CLI session — working,
+  waiting, done, or errored — the same way for any CLI (Claude Code, Codex,
+  OpenCode, Gemini, and more). Each tab carries its state as a glyph and color,
+  rendered honestly about how sure the detection is. A calm board (`⌘⌃A`) lists
+  every session with the ones waiting on you at the top, and `⌘⌃G` jumps straight
+  to whichever needs you. When a session needs you while Shirei is in the
+  background, it raises a notification that names the session and shows the real
+  pending command or error, with secrets masked. Which CLIs are tracked, the
+  detection thresholds, and notification behavior live in Settings under Agents.
+
 ## [0.15.0] - 2026-07-10
 
 ### Added
@@ -225,7 +291,15 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.14.5...HEAD
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.15.12...HEAD
+[0.15.12]: https://github.com/zeroblack/shirei/compare/v0.15.11...v0.15.12
+[0.15.11]: https://github.com/zeroblack/shirei/compare/v0.15.10...v0.15.11
+[0.15.10]: https://github.com/zeroblack/shirei/compare/v0.15.8...v0.15.10
+[0.15.8]: https://github.com/zeroblack/shirei/compare/v0.15.7...v0.15.8
+[0.15.7]: https://github.com/zeroblack/shirei/compare/v0.15.6...v0.15.7
+[0.15.6]: https://github.com/zeroblack/shirei/compare/v0.15.5...v0.15.6
+[0.15.5]: https://github.com/zeroblack/shirei/compare/v0.15.0...v0.15.5
+[0.15.0]: https://github.com/zeroblack/shirei/compare/v0.14.10...v0.15.0
 [0.14.5]: https://github.com/zeroblack/shirei/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/zeroblack/shirei/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/zeroblack/shirei/compare/v0.13.4...v0.14.3
