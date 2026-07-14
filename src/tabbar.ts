@@ -1,4 +1,11 @@
 import { t } from "./i18n";
+import {
+  buildWorkingMark,
+  maybeWaiting,
+  needsYou,
+  type SessionStateEntry,
+  stateTitle,
+} from "./sessionstate";
 import type { TabState } from "./types";
 
 export interface TabBarCallbacks {
@@ -17,6 +24,16 @@ const DRAG_THRESHOLD_PX = 4;
 // Must match the .tab-shifting transition duration in styles.css.
 const TAB_SETTLE_MS = 180;
 const POPOVER_OFFSET_PX = 4;
+// Lucide "bell": the single needs-you mark. One meaning — this session is
+// blocked waiting for you to advance it.
+const BELL =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg>';
+// Sleeping "Zzz": the tentative "quiet a while — maybe waiting" mark. A
+// different silhouette from the bell so a glance never confuses certain (bell)
+// with maybe (this); three ascending z's that breathe softly, carrying no
+// urgency — the session has gone quiet, it might want you.
+const ZZZ =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 14 H8.5 L4.5 18.5 H8.5" stroke-width="1.9"/><path d="M9.5 9 H14 L9.5 14 H14" stroke-width="2.1"/><path d="M14.5 3 H20.5 L14.5 9 H20.5" stroke-width="2.3"/></svg>';
 
 function formatAge(lastUsedAt: number): string {
   const secs = Math.max(0, Math.floor((Date.now() - lastUsedAt) / 1000));
@@ -55,6 +72,11 @@ export class TabBar {
   private drag: DragState | null = null;
   private suppressClick = false;
   private showAge = false;
+  // The Bell fades in once, on the render where a tab first earns it, then
+  // holds still until it clears. render() rebuilds the tab DOM on every call,
+  // so the set of tabs already wearing a Bell is carried across renders to gate
+  // the one-shot entrance.
+  private bellShown = new Set<string>();
 
   constructor(root: HTMLElement, cb: TabBarCallbacks, palette: string[]) {
     this.root = root;
@@ -88,7 +110,12 @@ export class TabBar {
     }
   }
 
-  render(tabs: TabState[], activeId: string | null): void {
+  render(
+    tabs: TabState[],
+    activeId: string | null,
+    states: Map<string, SessionStateEntry>,
+    attention: Set<string>,
+  ): void {
     this.root.replaceChildren();
 
     const activeTab = tabs.find((t) => t.id === activeId);
@@ -99,9 +126,36 @@ export class TabBar {
       rootStyle.removeProperty("--active-accent");
     }
 
+    const nextBellShown = new Set<string>();
     for (const tab of tabs) {
-      this.root.appendChild(this.renderTab(tab, tab.id === activeId));
+      const state = states.get(tab.id);
+      const showBell =
+        tab.kind === "terminal" &&
+        state !== undefined &&
+        attention.has(tab.id) &&
+        needsYou(state);
+      // The tentative ring is live and never latched: it shows only while a
+      // background tab is quiet-but-maybe-waiting, and clears the instant that
+      // tab becomes active. Working (Atom) and the certain Bell take priority.
+      const showRing =
+        tab.kind === "terminal" &&
+        state !== undefined &&
+        tab.id !== activeId &&
+        !showBell &&
+        maybeWaiting(state);
+      if (showBell) nextBellShown.add(tab.id);
+      this.root.appendChild(
+        this.renderTab(
+          tab,
+          tab.id === activeId,
+          state,
+          showBell,
+          showBell && !this.bellShown.has(tab.id),
+          showRing,
+        ),
+      );
     }
+    this.bellShown = nextBellShown;
 
     const add = document.createElement("button");
     add.className = "tab-add";
@@ -114,9 +168,18 @@ export class TabBar {
     this.root.appendChild(add);
   }
 
-  private renderTab(tab: TabState, active: boolean): HTMLElement {
+  private renderTab(
+    tab: TabState,
+    active: boolean,
+    state: SessionStateEntry | undefined,
+    showBell: boolean,
+    animateBell: boolean,
+    showRing: boolean,
+  ): HTMLElement {
     const el = document.createElement("div");
     el.className = active ? "tab active" : "tab";
+    if (showBell) el.classList.add("attn");
+    if (showRing) el.classList.add("maybe");
     el.dataset.tabId = tab.id;
     if (tab.kind === "terminal" && tab.color) {
       el.style.setProperty("--tab-color", tab.color);
@@ -143,14 +206,8 @@ export class TabBar {
     }
 
     if (tab.kind === "terminal") {
-      const dot = document.createElement("button");
-      dot.className = "tab-dot";
-      dot.title = t("ui.tabbar.color");
-      dot.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.openPalette(el, tab.id, tab.pinned);
-      });
-      el.appendChild(dot);
+      const mark = this.buildStateMark(state, showBell, animateBell, showRing);
+      if (mark) el.appendChild(mark);
     } else {
       const icon = document.createElement("span");
       icon.className = "tab-icon";
@@ -188,6 +245,42 @@ export class TabBar {
     return el;
   }
 
+  // The tab carries exactly one mark: the Atom while output flows, the Bell
+  // when the session is blocked waiting for the user (needs-you, held until the
+  // tab is visited), and nothing otherwise — idle, done, and errored are calm.
+  // The mark renders on every tab regardless of project color; identity lives
+  // in the separate always-on left-edge bar.
+  private buildStateMark(
+    state: SessionStateEntry | undefined,
+    showBell: boolean,
+    animateBell: boolean,
+    showRing: boolean,
+  ): HTMLElement | null {
+    if (state?.state.kind === "working") {
+      const mark = document.createElement("span");
+      mark.className = "tab-state";
+      mark.title = stateTitle(state);
+      buildWorkingMark(mark);
+      return mark;
+    }
+    if (showBell && state) {
+      const mark = document.createElement("span");
+      mark.className = "tab-mark tab-bell";
+      if (animateBell) mark.classList.add("mark-in");
+      mark.title = stateTitle(state);
+      mark.innerHTML = BELL;
+      return mark;
+    }
+    if (showRing && state) {
+      const mark = document.createElement("span");
+      mark.className = "tab-mark tab-zzz";
+      mark.title = stateTitle(state);
+      mark.innerHTML = ZZZ;
+      return mark;
+    }
+    return null;
+  }
+
   private startRename(label: HTMLElement, tab: TabState): void {
     const input = document.createElement("input");
     input.className = "tab-rename";
@@ -207,7 +300,7 @@ export class TabBar {
   private onPointerDown(e: PointerEvent, el: HTMLElement, id: string): void {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
-    if (target.closest(".tab-close, .tab-dot, .tab-rename")) return;
+    if (target.closest(".tab-close, .tab-rename")) return;
     const els = Array.from(this.root.querySelectorAll<HTMLElement>(".tab"));
     const fromIndex = els.indexOf(el);
     if (fromIndex === -1) return;

@@ -27,6 +27,10 @@ const DEFAULT_HYSTERESIS: u32 = 2;
 const CPU_IDLE_DELTA_NS: u64 = 15_000_000;
 // How much trailing scrollback the prompt classifier (Layer 3) inspects.
 const TAIL_BYTES: usize = 2048;
+// Output within this window of the user's last keystroke is the CLI echoing or
+// repainting the input line as the user types, not the agent working — it must
+// not read as "working".
+const ECHO_WINDOW: Duration = Duration::from_millis(1000);
 
 struct Sub {
     client: u64,
@@ -41,6 +45,7 @@ struct Inner {
     modes: ModeTracker,
     detector: Detector,
     last_output: Instant,
+    last_input: Instant,
     last_cpu: Option<u64>,
     command: Option<String>,
     subs: Vec<Sub>,
@@ -162,6 +167,7 @@ impl Session {
             modes: ModeTracker::default(),
             detector: Detector::new(DEFAULT_HYSTERESIS),
             last_output: Instant::now(),
+            last_input: Instant::now(),
             last_cpu: None,
             command: None,
             subs: Vec::new(),
@@ -183,8 +189,10 @@ impl Session {
                             let mut g = reader_inner.lock_ignore_poison();
                             g.ring.push(&buf[..n]);
                             g.modes.feed(&buf[..n]);
-                            g.last_output = Instant::now();
-                            let change = g.detector.on_output(&buf[..n]);
+                            let now = Instant::now();
+                            let is_echo = now.duration_since(g.last_input) < ECHO_WINDOW;
+                            g.last_output = now;
+                            let change = g.detector.on_output(&buf[..n], is_echo);
                             g.broadcast(ServerMsg::Output {
                                 id: id.clone(),
                                 data: buf[..n].to_vec(),
@@ -290,6 +298,10 @@ impl Session {
         let mut g = self.inner.lock_ignore_poison();
         let _ = g.writer.write_all(data);
         let _ = g.writer.flush();
+        g.last_input = Instant::now();
+        if let Some(change) = g.detector.on_input() {
+            g.broadcast_state(&self.id, change);
+        }
     }
 
     pub fn resize(&self, cols: u16, rows: u16) {
@@ -354,7 +366,7 @@ impl Session {
     /// One periodic re-evaluation of the agent state (Layers 0+1+3). Broadcasts
     /// a `State` message to this session's subscribers only when the state or
     /// confidence actually changed, so the wire carries transitions, not ticks.
-    pub fn tick(&self, idle_threshold: Duration, now: Instant) {
+    pub fn tick(&self, idle_threshold: Duration, tentative_threshold: Duration, now: Instant) {
         let mut g = self.inner.lock_ignore_poison();
         if !g.alive {
             return;
@@ -373,9 +385,11 @@ impl Session {
             }
             None => (ProcStatus::Gone, true),
         };
-        let idle = now.duration_since(g.last_output) >= idle_threshold;
+        let silence = now.duration_since(g.last_output);
+        let idle = silence >= idle_threshold;
+        let long_idle = silence >= tentative_threshold;
         let tail = tail_text(&g.ring.snapshot(), TAIL_BYTES);
-        if let Some(change) = g.detector.tick(idle, status, cpu_idle, &tail) {
+        if let Some(change) = g.detector.tick(idle, long_idle, status, cpu_idle, &tail) {
             g.broadcast_state(&self.id, change);
         }
     }
@@ -523,7 +537,7 @@ mod tests {
         let deadline = Instant::now() + Duration::from_secs(4);
         let mut saw_waiting = false;
         while Instant::now() < deadline {
-            session.tick(Duration::ZERO, Instant::now());
+            session.tick(Duration::ZERO, Duration::from_secs(45), Instant::now());
             if let Ok(ServerMsg::State {
                 state: AgentState::Waiting(_),
                 ..

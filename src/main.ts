@@ -41,6 +41,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   await app.bindMenu();
   await app.bindUpdateEvents();
   await app.bindMuxEvents();
+  await app.bindSessionStateEvents();
   void app.init();
   const title = document.querySelector<HTMLElement>("#app-title");
   if (title)

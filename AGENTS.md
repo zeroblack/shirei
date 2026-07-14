@@ -1,28 +1,28 @@
 # Shirei
 
-**CLI-first cockpit for AI coding** — the workflow of using AI CLIs (Claude Code) at its fullest. Keyboard-first terminal on Tauri 2 + Rust + xterm.js + TS, macOS-only. For personal use and CLI-native developers.
+**CLI-first cockpit for AI coding** — the workflow of using AI CLIs (Claude Code, OpenCode, Codex, Gemini CLI, and others) at its fullest. Keyboard-first terminal on Tauri 2 + Rust + xterm.js + TS, macOS-only. For personal use and CLI-native developers.
 
 ## Product — north star and scope
 
 The AI CLI session is the center; the editor, the files, and search are satellites that exist so you never leave it. **It's not an editor with a terminal — it's a terminal where the editor exists only so it doesn't break the flow of the session.**
 
 - **What it is:** the inverse of an IDE. VS Code/Cursor are editor-first (files at the center, AI grafted on); Shirei is CLI-first. They aren't rivals: they're opposite categories.
-- **Thesis:** sustain long sessions with Claude without leaving the window or touching the mouse — see, open, edit, search, and review everything the session produces inside Shirei.
+- **Thesis:** sustain long sessions with your AI CLI without leaving the window or touching the mouse — see, open, edit, search, and review everything the session produces inside Shirei.
 - **Shirei ships no AI of its own** — it's the optimal environment to run external AI CLIs. The tab identity (persistent name/color) is support for telling projects apart, not the main course.
 
-**Pillars (cathedral).** Shipped: per-project layouts · command palette (`Cmd+P`). Roadmap, not built yet: output→file loop · "what Claude touched" panel · cross-session output search.
+**Pillars (cathedral).** Shipped: per-project layouts · command palette (`Cmd+P`). Roadmap, not built yet: output→file loop · "what the session touched" panel · cross-session output search · agent orchestration (state detection + notifications across sessions).
 
-**Master pillar / next up:** *output→file loop* — from a `file:line` in Claude's output you jump to the editor (with diff) and back to the session, pure keyboard. Not built yet; everything else hangs off it.
+**Master pillar / next up:** *output→file loop* — from a `file:line` in the session's output you jump to the editor (with diff) and back to the session, pure keyboard. Not built yet; everything else hangs off it.
 
 **The fence (what is NOT built, so it doesn't degenerate into an IDE):** no LSP/IntelliSense, debugger, extension marketplace, git GUI, test-runner UI, SSH, or profiles. The editor serves to read and touch what the AI produces, not to write features by hand. (Splits/panes and per-project layouts did ship: they're support for the CLI session, not an IDE.)
 
-**Notifications / "which session is waiting for you":** outside the core — Claude Code's native hooks (`Notification`/`Stop`) solve it trivially when wanted; it's retention, not core.
+**Agent orchestration — "which session is waiting for you":** core, not a bolt-on. Shirei is a multi-CLI host (Claude Code, OpenCode, Codex, Gemini CLI, and others); state detection (working / waiting / done / errored) works the same across all of them and drives confidence-gated notifications so you always know which session needs you. In active development, not shipped yet.
 
 ## High-impact rules
 
 - **Keyboard-first.** Every frequent action needs its shortcut, following standard terminal/editor conventions (`Cmd+T`/`Cmd+W` tabs, `Cmd+1-9` jump, `Cmd+←/→` cycle, `Cmd +/-/0` font). A feature isn't complete without a shortcut.
 - **Nothing hardcoded — everything via config/setup.** Fonts, colors, shortcuts, paths, limits, themes, etc. are configurable and persistable, not embedded in the code. Before hardcoding any value, ask: hardcode it or make it configurable? By default, configurable.
-- **Impeccable terminal render.** Rendering is part of the product. xterm.js with the **WebGL** renderer and automatic fallback to DOM. The DOM renderer clips box-drawing and breaks Claude's UI (prompt box, tool-call tree, progress bars) — that's why WebGL is the default. Glyphs, contrast, cursor, line height, scrollback, smoothing, and padding live in `config.render`, configurable and persistable. The default theme is **Pure black** (#000/#fff) by the user's choice; there's also a theme catalog (`src/settings/themes.ts`: Tokyo Night, Catppuccin Mocha/Latte, Dracula, Nord, Gruvbox, One Dark, Rosé Pine, Kanagawa, and the in-house neon **Japan Night**) that on selection applies `theme.preset` + `theme.terminal` and **tints the chrome** by deriving it from the palette (`src/colors.ts` + `applyChrome` in `app.ts`).
+- **Impeccable terminal render.** Rendering is part of the product. xterm.js with the **WebGL** renderer and automatic fallback to DOM. The DOM renderer clips box-drawing and breaks an AI CLI's UI (prompt box, tool-call tree, progress bars) — that's why WebGL is the default. Glyphs, contrast, cursor, line height, scrollback, smoothing, and padding live in `config.render`, configurable and persistable. The default theme is **Pure black** (#000/#fff) by the user's choice; there's also a theme catalog (`src/settings/themes.ts`: Tokyo Night, Catppuccin Mocha/Latte, Dracula, Nord, Gruvbox, One Dark, Rosé Pine, Kanagawa, and the in-house neon **Japan Night**) that on selection applies `theme.preset` + `theme.terminal` and **tints the chrome** by deriving it from the palette (`src/colors.ts` + `applyChrome` in `app.ts`).
 - **Premium UI, bounded screens.** The UI uses the **Geist** typeface (self-hosted OFL in `src/assets/fonts`, `--font-ui` + semantic `--type-*` tokens in `tokens.css`). No Settings screen should grow infinitely downward: it's bounded with per-category sub-tabs and/or a 2-column grid (`.section-fields`, with a center divider), and the content panel is fixed-height with internal scroll. Hierarchical order, grouping by function, a single accent per screen. Premium through restraint + consistency, no AI footprint (no em-dash, no generic copy).
 - **Per-surface focus model.** The active surface (terminal/tree/TODO) is exposed in `#main[data-focus]` (derived from real DOM focus): the active one highlights and the rest dim. Dedicated shortcuts: tree `⌘E` (`tree.focus`), TODO `⌘J` (`todo.focus`). Configurable via `config.chrome` (dim inactive ones, active pane accent, color bar under the tabs, active tab highlight) — opt-out with `no-*` classes on the root.
 - **pnpm always.** Never npm/yarn.

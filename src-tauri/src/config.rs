@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
@@ -711,6 +711,227 @@ impl Default for BrowserConfig {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct DetectionConfig {
+    pub idle_threshold_ms: u32,
+    /// After this much unbroken silence a calm session becomes a *tentative*
+    /// hint (a soft "maybe waiting" mark), distinct from and never as loud as a
+    /// confirmed needs-you. Longer than `idle_threshold_ms`.
+    pub tentative_threshold_ms: u32,
+    pub hysteresis_samples: u8,
+    pub poll_interval_ms: u32,
+    /// Advertised to child CLIs via `TERM_PROGRAM`. Some emitters (Qwen
+    /// confirmed) route their OSC notifications based on this value, so
+    /// changing it is a lever over how much Layer 2 signal Shirei receives.
+    pub term_program: String,
+}
+
+impl Default for DetectionConfig {
+    fn default() -> Self {
+        DetectionConfig {
+            // How long after the last output a session still reads as "working"
+            // (Atom moving). Long enough to bridge the short gaps within an active
+            // turn (observed 1-3s), short enough that a genuinely idle agent goes
+            // calm quickly instead of trailing the Atom for many seconds. Real
+            // "needs you" is caught instantly by the prompt classifier, not here.
+            idle_threshold_ms: 5000,
+            // ~45s of silence with no prompt on screen: long enough that a busy
+            // agent bridging tool calls never trips it, short enough to surface a
+            // plausibly-stuck session as a soft hint the eye can find.
+            tentative_threshold_ms: 45000,
+            hysteresis_samples: 2,
+            poll_interval_ms: 250,
+            term_program: "shirei".into(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum NotifyChannel {
+    #[default]
+    Os,
+    InApp,
+    Off,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct NotificationChannels {
+    pub waiting: NotifyChannel,
+    pub done: NotifyChannel,
+    pub errored: NotifyChannel,
+}
+
+impl Default for NotificationChannels {
+    fn default() -> Self {
+        NotificationChannels {
+            // The only default interruption is a session blocked on the user's
+            // input to advance (a waiting session, gated to high confidence in the
+            // notification layer). Finishing and erroring are opt-in — a user who
+            // wants a done/failed ping turns it on in Settings.
+            waiting: NotifyChannel::Os,
+            done: NotifyChannel::Off,
+            errored: NotifyChannel::Off,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SoundTimbre {
+    #[default]
+    Soft,
+    Deep,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct SoundConfig {
+    pub enabled: bool,
+    pub waiting_timbre: SoundTimbre,
+    pub error_timbre: SoundTimbre,
+}
+
+impl Default for SoundConfig {
+    fn default() -> Self {
+        SoundConfig {
+            enabled: true,
+            waiting_timbre: SoundTimbre::Soft,
+            error_timbre: SoundTimbre::Deep,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct QuietHours {
+    pub enabled: bool,
+    pub start: String,
+    pub end: String,
+}
+
+impl Default for QuietHours {
+    fn default() -> Self {
+        QuietHours {
+            enabled: false,
+            start: "22:00".into(),
+            end: "08:00".into(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum PayloadVerbosity {
+    #[default]
+    Full,
+    Redacted,
+    IdentityOnly,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct IdentityConfig {
+    pub append_cli: bool,
+    pub append_branch: bool,
+}
+
+impl Default for IdentityConfig {
+    fn default() -> Self {
+        IdentityConfig {
+            append_cli: true,
+            append_branch: true,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct NotificationsConfig {
+    pub channels: NotificationChannels,
+    pub sound: SoundConfig,
+    pub coalescing_ms: u32,
+    pub quiet_hours: QuietHours,
+    pub payload_verbosity: PayloadVerbosity,
+    pub identity: IdentityConfig,
+    pub truncation_length: u16,
+}
+
+impl Default for NotificationsConfig {
+    fn default() -> Self {
+        NotificationsConfig {
+            channels: NotificationChannels::default(),
+            sound: SoundConfig::default(),
+            coalescing_ms: 3000,
+            quiet_hours: QuietHours::default(),
+            payload_verbosity: PayloadVerbosity::Full,
+            identity: IdentityConfig::default(),
+            truncation_length: 140,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(default)]
+pub struct CliRegistryEntry {
+    pub id: String,
+    pub label: String,
+    /// Substring matched against the pty's foreground process name (Layer 0).
+    pub process_match: String,
+    /// Seeds Layer 2 (which OSC an emitter uses) for entries with a known
+    /// shape; unset entries fall back to the fully generic layers.
+    pub profile: Option<String>,
+    pub enabled: bool,
+    /// Whether state detection is verified for this CLI. Only ready entries can
+    /// be enabled from the UI; the rest render as "Soon" and stay locked off, so
+    /// Shirei never claims to track a CLI whose behavior it hasn't validated.
+    pub ready: bool,
+    /// True for entries the user added; only those can be removed from the
+    /// registry, the shipped catalog is toggle-only.
+    pub custom: bool,
+}
+
+fn cli_entry(
+    id: &str,
+    label: &str,
+    process_match: &str,
+    profile: Option<&str>,
+    ready: bool,
+) -> CliRegistryEntry {
+    CliRegistryEntry {
+        id: id.into(),
+        label: label.into(),
+        process_match: process_match.into(),
+        profile: profile.map(Into::into),
+        // Only a ready CLI ships enabled; unverified ones are off until validated.
+        enabled: ready,
+        ready,
+        custom: false,
+    }
+}
+
+fn default_cli_registry() -> Vec<CliRegistryEntry> {
+    // Only Claude Code has had its state detection validated end to end, so it is
+    // the only CLI tracked by default. The rest are declared so the catalog shows
+    // what is coming, but stay off and locked ("Soon") until each is verified.
+    vec![
+        cli_entry("claude-code", "Claude Code", "claude", None, true),
+        cli_entry("codex", "Codex", "codex", Some("codex"), false),
+        cli_entry("opencode", "OpenCode", "opencode", None, false),
+        cli_entry("gemini", "Gemini CLI", "gemini", Some("gemini"), false),
+        cli_entry("aider", "Aider", "aider", None, false),
+        cli_entry("goose", "Goose", "goose", None, false),
+        cli_entry("qwen", "Qwen", "qwen", Some("qwen"), false),
+        cli_entry("crush", "Crush", "crush", Some("crush"), false),
+        cli_entry("cursor", "Cursor", "cursor-agent", None, false),
+        cli_entry("amp", "Amp", "amp", None, false),
+        cli_entry("continue", "Continue", "continue", None, false),
+        cli_entry("amazon-q", "Amazon Q", "q", None, false),
+    ]
+}
+
 fn tpl_leaf(command: Option<&str>) -> serde_json::Value {
     match command {
         Some(c) => serde_json::json!({ "kind": "leaf", "id": "", "command": c }),
@@ -1002,6 +1223,12 @@ pub struct Config {
     #[serde(default)]
     pub browser: BrowserConfig,
     #[serde(default)]
+    pub detection: DetectionConfig,
+    #[serde(default)]
+    pub notifications: NotificationsConfig,
+    #[serde(default = "default_cli_registry")]
+    pub cli_registry: Vec<CliRegistryEntry>,
+    #[serde(default)]
     pub projects: Vec<serde_json::Value>,
     #[serde(skip_deserializing, default = "default_templates")]
     pub templates: Vec<serde_json::Value>,
@@ -1036,6 +1263,9 @@ impl Default for Config {
             quickopen: QuickOpenConfig::default(),
             recorder: RecorderConfig::default(),
             browser: BrowserConfig::default(),
+            detection: DetectionConfig::default(),
+            notifications: NotificationsConfig::default(),
+            cli_registry: default_cli_registry(),
             projects: Vec::new(),
             templates: default_templates(),
             user_templates: Vec::new(),
@@ -1046,7 +1276,44 @@ impl Default for Config {
 
 impl Config {
     pub fn from_json_or_default(text: &str) -> Config {
-        serde_json::from_str(text).unwrap_or_default()
+        let mut cfg: Config = serde_json::from_str(text).unwrap_or_default();
+        cfg.reconcile_cli_registry();
+        cfg
+    }
+
+    /// The shipped CLI catalog is code-owned: its label, process match, profile,
+    /// readiness, and order always come from `default_cli_registry`, never from a
+    /// persisted config. Only the user's `enabled` choice is carried over (and a
+    /// CLI can never be enabled before it's ready). Custom entries the user added
+    /// are preserved. Without this, a config saved before the `ready` field
+    /// existed would deserialize every entry as not-ready and hide Claude behind
+    /// "Soon".
+    fn reconcile_cli_registry(&mut self) {
+        let persisted_enabled: HashMap<String, bool> = self
+            .cli_registry
+            .iter()
+            .filter(|e| !e.custom)
+            .map(|e| (e.id.clone(), e.enabled))
+            .collect();
+        let customs: Vec<CliRegistryEntry> = self
+            .cli_registry
+            .iter()
+            .filter(|e| e.custom)
+            .cloned()
+            .map(|e| CliRegistryEntry { ready: true, ..e })
+            .collect();
+        let mut merged: Vec<CliRegistryEntry> = default_cli_registry()
+            .into_iter()
+            .map(|mut d| {
+                if let Some(&enabled) = persisted_enabled.get(&d.id) {
+                    d.enabled = enabled;
+                }
+                d.enabled = d.enabled && d.ready;
+                d
+            })
+            .collect();
+        merged.extend(customs);
+        self.cli_registry = merged;
     }
 }
 
@@ -1259,6 +1526,90 @@ mod tests {
         assert_eq!(c.font.size, 20);
         assert_eq!(c.font.family, "meslo");
         assert_eq!(c.limits.index_cap, 50_000);
+    }
+
+    #[test]
+    fn detection_defaults_are_sane() {
+        let d = Config::default().detection;
+        assert_eq!(d.idle_threshold_ms, 5000);
+        assert_eq!(d.tentative_threshold_ms, 45000);
+        assert!(d.tentative_threshold_ms > d.idle_threshold_ms);
+        assert_eq!(d.hysteresis_samples, 2);
+        assert_eq!(d.poll_interval_ms, 250);
+        assert_eq!(d.term_program, "shirei");
+    }
+
+    #[test]
+    fn notifications_defaults_are_sane() {
+        let n = Config::default().notifications;
+        assert_eq!(n.channels.waiting, NotifyChannel::Os);
+        assert_eq!(n.channels.done, NotifyChannel::Off);
+        assert_eq!(n.channels.errored, NotifyChannel::Off);
+        assert!(n.sound.enabled);
+        assert_eq!(n.sound.waiting_timbre, SoundTimbre::Soft);
+        assert_eq!(n.sound.error_timbre, SoundTimbre::Deep);
+        assert_eq!(n.coalescing_ms, 3000);
+        assert!(!n.quiet_hours.enabled);
+        assert_eq!(n.payload_verbosity, PayloadVerbosity::Full);
+        assert!(n.identity.append_cli);
+        assert!(n.identity.append_branch);
+        assert_eq!(n.truncation_length, 140);
+    }
+
+    #[test]
+    fn notify_channel_serializes_kebab_case() {
+        assert_eq!(
+            serde_json::to_string(&NotifyChannel::InApp).unwrap(),
+            "\"in-app\""
+        );
+        assert_eq!(
+            serde_json::to_string(&PayloadVerbosity::IdentityOnly).unwrap(),
+            "\"identity-only\""
+        );
+    }
+
+    #[test]
+    fn cli_registry_defaults_enable_only_validated_claude() {
+        let reg = Config::default().cli_registry;
+        let enabled: Vec<&str> = reg
+            .iter()
+            .filter(|e| e.enabled)
+            .map(|e| e.id.as_str())
+            .collect();
+        assert_eq!(enabled, ["claude-code"]);
+        // Only the validated CLI is ready; enabled never outruns ready.
+        assert!(reg.iter().all(|e| e.enabled == (e.enabled && e.ready)));
+        assert!(reg.iter().filter(|e| e.ready).all(|e| e.id == "claude-code"));
+        // The others still ship in the catalog, off and not custom, as "Soon".
+        assert!(reg.iter().any(|e| e.id == "codex" && !e.enabled && !e.ready));
+        assert!(reg.iter().all(|e| !e.custom));
+    }
+
+    #[test]
+    fn stale_registry_without_ready_reconciles_to_the_code_catalog() {
+        // A config saved before `ready` existed: every entry enabled, no readiness.
+        let stale = r#"{"cli_registry":[
+            {"id":"claude-code","label":"Claude Code","process_match":"claude","enabled":true,"custom":false},
+            {"id":"codex","label":"Codex","process_match":"codex","enabled":true,"custom":false},
+            {"id":"mine","label":"Mine","process_match":"mycli","enabled":true,"custom":true}
+        ]}"#;
+        let reg = Config::from_json_or_default(stale).cli_registry;
+        let claude = reg.iter().find(|e| e.id == "claude-code").unwrap();
+        assert!(claude.ready && claude.enabled);
+        let codex = reg.iter().find(|e| e.id == "codex").unwrap();
+        assert!(!codex.ready && !codex.enabled);
+        let custom = reg.iter().find(|e| e.id == "mine").unwrap();
+        assert!(custom.custom && custom.ready && custom.enabled);
+    }
+
+    #[test]
+    fn partial_json_fills_detection_and_notifications_defaults() {
+        let c = Config::from_json_or_default(r#"{"detection":{"idle_threshold_ms":900}}"#);
+        assert_eq!(c.detection.idle_threshold_ms, 900);
+        assert_eq!(c.detection.poll_interval_ms, 250);
+        let c = Config::from_json_or_default(r#"{"notifications":{"coalescing_ms":5000}}"#);
+        assert_eq!(c.notifications.coalescing_ms, 5000);
+        assert_eq!(c.notifications.truncation_length, 140);
     }
 
     #[test]

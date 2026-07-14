@@ -70,6 +70,7 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.terminal.label": "Terminal",
   "settings.sessions.label": "Sesiones",
   "settings.tabs.label": "Pestañas",
+  "settings.agents.label": "Agentes",
   "settings.recording.label": "Grabación",
   "settings.browser.label": "Navegador",
   "settings.performance.label": "Rendimiento",
@@ -234,6 +235,76 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.tabs.chooseFolder": "Elegir carpeta…",
   "settings.tabs.useHome": "Usar home",
   "settings.tabs.showAge": "Mostrar antigüedad en la pestaña",
+
+  "settings.agents.title": "Agentes",
+  "settings.agents.desc":
+    "Detecta qué hace cada sesión de CLI de IA y te notifica solo cuando es tu turno.",
+  "settings.agents.tab.clis": "CLIs",
+  "settings.agents.tab.detection": "Detección",
+  "settings.agents.tab.notifications": "Notificaciones",
+  "settings.agents.tab.shortcuts": "Atajos",
+  "settings.agents.clis.desc":
+    "Shirei trata una sesión como agente cuando su proceso en primer plano coincide con una entrada habilitada abajo. Hoy solo Claude Code está validado; el resto viene en camino y queda apagado hasta verificar cada uno.",
+  "settings.agents.clis.soon": "Pronto",
+  "settings.agents.clis.soonHint":
+    "La detección de estado para este CLI aún se está validando. Se activará cuando esté verificada.",
+  "settings.agents.clis.remove": "Quitar",
+  "settings.agents.clis.addCustom": "Agregar personalizado",
+  "settings.agents.clis.customLabelPlaceholder": "Nombre",
+  "settings.agents.clis.customMatchPlaceholder": "Nombre del proceso",
+  "settings.agents.detection.idleThreshold": "Umbral de inactividad (ms)",
+  "settings.agents.detection.idleThresholdDesc":
+    "Sin salida durante este tiempo inicia la cuenta regresiva hacia esperando.",
+  "settings.agents.detection.tentativeThreshold": "Umbral tentativo (ms)",
+  "settings.agents.detection.tentativeThresholdDesc":
+    'Tras este silencio ininterrumpido una sesión en calma muestra una señal tenue de "quizás esperando", nunca una notificación.',
+  "settings.agents.detection.hysteresis": "Muestras de histéresis",
+  "settings.agents.detection.hysteresisDesc":
+    "Ciclos de inactividad consecutivos requeridos antes de que una sesión pase a esperando.",
+  "settings.agents.detection.pollInterval": "Intervalo de sondeo (ms)",
+  "settings.agents.detection.pollIntervalDesc":
+    "Cada cuánto revisa el daemon el estado del proceso y la CPU de cada sesión.",
+  "settings.agents.detection.termProgram": "TERM_PROGRAM anunciado",
+  "settings.agents.detection.termProgramDesc":
+    "Se envía a las CLI hijas. Algunas emiten señales de estado más ricas cuando lo reconocen.",
+  "settings.agents.notifications.group.channels": "Canales",
+  "settings.agents.notifications.group.sound": "Sonido",
+  "settings.agents.notifications.group.quietHours": "Horario silencioso",
+  "settings.agents.notifications.group.payload": "Contenido",
+  "settings.agents.notifications.channelWaiting": "Esperando",
+  "settings.agents.notifications.channelDone": "Listo",
+  "settings.agents.notifications.channelErrored": "Con error",
+  "settings.agents.notifications.channel.os": "Notificación del sistema",
+  "settings.agents.notifications.channel.inApp": "Solo en la app",
+  "settings.agents.notifications.channel.off": "Apagado",
+  "settings.agents.notifications.soundEnabled": "Reproducir un sonido",
+  "settings.agents.notifications.soundEnabledDesc":
+    "Un pitido suave y no melódico cuando Shirei no tiene el foco. Nunca en working ni por token.",
+  "settings.agents.notifications.waitingTimbre": "Timbre de esperando",
+  "settings.agents.notifications.errorTimbre": "Timbre de error",
+  "settings.agents.notifications.timbre.soft": "Suave",
+  "settings.agents.notifications.timbre.deep": "Grave",
+  "settings.agents.notifications.coalescing":
+    "Ventana de agrupación (segundos)",
+  "settings.agents.notifications.coalescingDesc":
+    "Varias sesiones que terminan dentro de esta ventana se agrupan en una sola notificación.",
+  "settings.agents.notifications.quietHoursEnabled":
+    "Activar horario silencioso",
+  "settings.agents.notifications.quietHoursStart": "Desde",
+  "settings.agents.notifications.quietHoursEnd": "Hasta",
+  "settings.agents.notifications.payloadVerbosity": "Detalle del contenido",
+  "settings.agents.notifications.payloadVerbosityDesc":
+    "Los secretos siempre se enmascaran, incluso en completo. Redactado omite el texto del contenido; solo identidad envía solo el nombre de la sesión.",
+  "settings.agents.notifications.payload.full":
+    "Completo (textual, enmascarado)",
+  "settings.agents.notifications.payload.redacted": "Redactado",
+  "settings.agents.notifications.payload.identityOnly": "Solo identidad",
+  "settings.agents.notifications.appendCli": "Agregar nombre de la CLI",
+  "settings.agents.notifications.appendBranch": "Agregar rama",
+  "settings.agents.notifications.truncation":
+    "Truncar contenido a (caracteres)",
+  "settings.agents.shortcuts.note":
+    "Los atajos de triage (ir a quien me necesita, ciclar esperando, modo triage) viven en Ajustes → Atajos cuando se publiquen.",
 
   "settings.recording.title": "Grabación",
   "settings.recording.desc": "Captura la sesión en video o gif para compartir.",
@@ -420,6 +491,8 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
     "sesiones daemon mantener vivas confirmar matar cerrar auto-iniciar persistente restaurar comandos reejecutar",
   "settings.tabs.search":
     "pestañas tabs antigüedad tiempo último uso pin pinear fijar layout plantilla yagura directorio carpeta proyectos home cwd",
+  "settings.agents.search":
+    "agentes orquestación detección notificaciones cli registro claude codex gemini opencode aider goose qwen crush cursor amp continue amazon q esperando listo error estado inactividad histéresis sondeo term program sonido agrupación horario silencioso contenido detalle redactado enmascarar identidad rama truncar",
   "settings.recording.search":
     "grabacion grabar pantalla screencast video gif mp4 carpeta formato fps cursor compartir portapapeles finder cuenta regresiva",
   "settings.browser.search":

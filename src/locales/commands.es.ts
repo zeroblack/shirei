@@ -10,6 +10,7 @@ export const commandsEs: Record<keyof typeof commandsEn, string> = {
   "cmd.category.layouts": "Layouts",
   "cmd.category.recording": "Grabación",
   "cmd.category.git": "Git",
+  "cmd.category.orchestration": "Orquestación de agentes",
   "cmd.tab.new": "Nueva pestaña",
   "cmd.tab.close": "Cerrar terminal",
   "cmd.tab.close-tab": "Cerrar pestaña entera",
@@ -59,4 +60,8 @@ export const commandsEs: Record<keyof typeof commandsEn, string> = {
   "cmd.browser.back": "Navegador: atrás",
   "cmd.browser.forward": "Navegador: adelante",
   "cmd.browser.reload": "Recargar navegador",
+  "cmd.orchestration.open": "Abrir el panel de agentes",
+  "cmd.orchestration.goto-waiting": "Ir a quien te necesita",
+  "cmd.orchestration.next-waiting": "Siguiente sesión esperando",
+  "cmd.orchestration.prev-waiting": "Sesión esperando anterior",
 };

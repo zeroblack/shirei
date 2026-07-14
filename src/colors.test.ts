@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { apcaContrast, ensureContrast } from "./colors";
+import { apcaContrast, deriveStatusColors, ensureContrast } from "./colors";
+import { THEMES } from "./settings/themes";
 
 describe("apcaContrast", () => {
   it("reports near-maximum contrast for pure black and white", () => {
@@ -36,5 +37,37 @@ describe("ensureContrast", () => {
   it("returns a valid 6-digit hex", () => {
     const fixed = ensureContrast("#ff0000", "#000000", "#ffffff", 60);
     expect(fixed).toMatch(/^#[0-9a-f]{6}$/);
+  });
+});
+
+describe("deriveStatusColors", () => {
+  const backgrounds = ["#000000", ...THEMES.map((theme) => theme.terminal.bg)];
+
+  it.each(backgrounds)("clears the status floor against %s", (bg) => {
+    const roles = deriveStatusColors(bg);
+    for (const [token, hex] of Object.entries(roles)) {
+      expect(apcaContrast(hex, bg), `${token} on ${bg}`).toBeGreaterThanOrEqual(
+        42,
+      );
+    }
+  });
+
+  it("returns valid 6-digit hex for every role", () => {
+    const roles = deriveStatusColors("#000000");
+    for (const hex of Object.values(roles))
+      expect(hex).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it("lifts the error hairline on pure black toward the ~0.67 lightness the spec calls for", () => {
+    const roles = deriveStatusColors("#000000");
+    const baseErrorLc = apcaContrast("#ed4a49", "#000000");
+    const derivedErrorLc = apcaContrast(roles["--status-error"], "#000000");
+    expect(derivedErrorLc).toBeGreaterThan(baseErrorLc);
+    expect(derivedErrorLc).toBeGreaterThanOrEqual(42);
+  });
+
+  it("leaves an already-legible role untouched", () => {
+    const roles = deriveStatusColors("#000000");
+    expect(roles["--status-waiting"]).toBe("#edb333");
   });
 });

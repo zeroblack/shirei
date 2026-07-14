@@ -238,12 +238,16 @@ pub enum AgentState {
     Errored { code: i32 },
 }
 
-/// High = a ground-truth or escape signal (exit code, an OSC notify). Low = a
-/// heuristic guess (output idle, a matched prompt). Drives both the
-/// confidence-honest rendering and whether a notification is ever raised.
+/// How sure the state read is. High = a ground-truth or authoritative signal
+/// (exit code, an OSC notify, a matched prompt, a per-CLI "action required").
+/// Tentative = a long silence with no other signal — the session *might* be
+/// waiting, surfaced as a soft hint, never a hard alert. Low = a short idle
+/// guess, treated as calm. Drives both the render and whether a notification
+/// (High only) is raised.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Confidence {
     High,
+    Tentative,
     Low,
 }
 
@@ -282,18 +286,21 @@ impl Detector {
         }
     }
 
-    /// Feed a chunk of pty output. Output means the agent is producing, unless
-    /// the chunk carried a notify escape, which is a high-confidence "look at me".
-    pub fn on_output(&mut self, bytes: &[u8]) -> Option<StateChange> {
+    /// Feed a chunk of pty output. Non-echo output means the agent is producing;
+    /// a notify escape is a high-confidence "look at me". `is_echo` is true when
+    /// the chunk was provoked by the user's own keystrokes (the CLI repainting its
+    /// input line right after typing) — that is the user composing a prompt, not
+    /// the agent working, so it must not flip the state to Working or reset idle.
+    pub fn on_output(&mut self, bytes: &[u8], is_echo: bool) -> Option<StateChange> {
         if self.settled {
             return None;
         }
         let signals = self.scanner.feed(bytes);
-        self.idle_ticks = 0;
         if let Some(text) = signals.iter().rev().find_map(|s| match s {
             Signal::Notify { text, .. } => Some(text.clone()),
             _ => None,
         }) {
+            self.idle_ticks = 0;
             let payload = (!text.is_empty()).then_some(text);
             return self.transition(
                 AgentState::Waiting(WaitKind::Unknown),
@@ -301,7 +308,45 @@ impl Detector {
                 payload,
             );
         }
+        // A CLI that spells "action required" into the window title (Codex) is
+        // telling us it is blocked on the user — a first-party needs-you cue,
+        // authoritative even while the pane keeps repainting.
+        if signals.iter().rev().any(|s| match s {
+            Signal::Title(title) => title_needs_you(title),
+            _ => false,
+        }) {
+            self.idle_ticks = 0;
+            return self.transition(AgentState::Waiting(WaitKind::Approval), Confidence::High, None);
+        }
+        if is_echo {
+            return None;
+        }
+        self.idle_ticks = 0;
+        // A selector's own hint in the output is a reliable "needs you to pick",
+        // even while the menu repaints and would otherwise read as busy work.
+        if has_select_cue(&String::from_utf8_lossy(bytes).to_ascii_lowercase()) {
+            return self.transition(
+                AgentState::Waiting(WaitKind::Approval),
+                Confidence::High,
+                None,
+            );
+        }
         self.transition(AgentState::Working, Confidence::High, None)
+    }
+
+    /// The user sent input (typing at the prompt). Whatever the agent was doing,
+    /// it is now taking input, not working autonomously — drop out of Working so
+    /// the Atom stops while the user composes. No-op once the state is already calm.
+    pub fn on_input(&mut self) -> Option<StateChange> {
+        if self.settled || self.state != AgentState::Working {
+            return None;
+        }
+        self.idle_ticks = 0;
+        self.transition(
+            AgentState::Waiting(WaitKind::Unknown),
+            Confidence::Low,
+            None,
+        )
     }
 
     /// The process ended: the one authoritative Done/Errored, by exit code.
@@ -315,12 +360,14 @@ impl Detector {
         self.transition(state, Confidence::High, None)
     }
 
-    /// Periodic re-evaluation. `idle` = output has been silent past the
-    /// configured threshold; `cpu_idle` = the process is not burning CPU (the
-    /// second vote); `tail` = recent de-escaped output for prompt matching.
+    /// Periodic re-evaluation. `idle` = output has been silent past the short
+    /// threshold; `long_idle` = silent past the longer tentative threshold;
+    /// `cpu_idle` = the process is not burning CPU (the second vote); `tail` =
+    /// recent de-escaped output for prompt matching.
     pub fn tick(
         &mut self,
         idle: bool,
+        long_idle: bool,
         status: ProcStatus,
         cpu_idle: bool,
         tail: &str,
@@ -332,14 +379,36 @@ impl Detector {
             self.settled = true;
             return self.transition(AgentState::Done { code: 0 }, Confidence::High, None);
         }
-        if self.state != AgentState::Working {
+        // Re-evaluate while working, or while sitting in a bare idle guess: a
+        // Low idle-Waiting can ripen into a Tentative one after a long silence.
+        // A High Waiting (a matched prompt, an OSC notify) is authoritative and
+        // must not be downgraded by mere silence.
+        let idle_guess = self.state == AgentState::Working
+            || (matches!(self.state, AgentState::Waiting(_)) && self.confidence != Confidence::High);
+        if !idle_guess {
             return None;
         }
         if idle && cpu_idle {
             self.idle_ticks = self.idle_ticks.saturating_add(1);
             if self.idle_ticks >= self.hysteresis {
-                let kind = classify_prompt(tail).unwrap_or(WaitKind::Unknown);
-                return self.transition(AgentState::Waiting(kind), Confidence::Low, None);
+                // A matched prompt on screen is a real "needs you" signal, not a
+                // bare idle guess — confident enough to interrupt. Pure silence
+                // stays a soft hint: Low at first, ripening to Tentative once the
+                // session has been quiet long enough to plausibly be stuck waiting,
+                // yet never confident enough to raise a notification.
+                return match classify_prompt(tail) {
+                    Some(kind) => {
+                        self.transition(AgentState::Waiting(kind), Confidence::High, None)
+                    }
+                    None => {
+                        let confidence = if long_idle {
+                            Confidence::Tentative
+                        } else {
+                            Confidence::Low
+                        };
+                        self.transition(AgentState::Waiting(WaitKind::Unknown), confidence, None)
+                    }
+                };
             }
         } else {
             self.idle_ticks = 0;
@@ -370,34 +439,115 @@ impl Detector {
     }
 }
 
-/// Layer 3: a coarse, low-confidence read of whether the tail of the output is
-/// an input prompt. Anchored to the last non-empty line so a `(y/n)` quoted mid
-/// output does not trip it. A nudge, never authoritative.
+// Cues that appear only in an interactive prompt waiting for the user to pick or
+// approve (Claude's numbered menus and plan/approval box, inquirer-style
+// prompts) — never in an agent's plain numbered output. Their presence is a
+// reliable "needs you to choose", caught the instant the prompt paints.
+const SELECT_CUE: [&str; 7] = [
+    "esc to cancel",
+    "enter to select",
+    "to navigate",
+    "use arrow keys",
+    "↑/↓",
+    "shift+tab to approve",
+    "would you like to proceed",
+];
+
+fn has_select_cue(lower: &str) -> bool {
+    SELECT_CUE.iter().any(|c| lower.contains(c))
+}
+
+// Window-title phrases a CLI writes only when it is blocked on the user. Kept to
+// unambiguous "come back" wording so a working title (a spinner glyph, the cwd,
+// a task name) never reads as needs-you.
+const TITLE_ATTN: [&str; 3] = ["action required", "needs your input", "waiting for input"];
+
+fn title_needs_you(title: &str) -> bool {
+    let lower = title.to_ascii_lowercase();
+    TITLE_ATTN.iter().any(|c| lower.contains(c))
+}
+
+/// Layer 3: reads whether the tail of the output is an input prompt awaiting the
+/// user. Explicit y/n text, an interactive selector's own hint, or a spelled-out
+/// yes/no menu — kept tight so plain numbered output never trips it.
 pub fn classify_prompt(tail: &str) -> Option<WaitKind> {
-    const APPROVAL: [&str; 8] = [
+    // Only shapes explicit enough that they never occur in an agent's normal
+    // output. The earlier loose rules — a line starting with `>` (Claude's own
+    // input prompt), any numbered line (its tool output), any trailing `?` —
+    // fired a false "waiting for approval" on nearly every repaint, which is
+    // what produced the notification spam.
+    const APPROVAL: [&str; 7] = [
         "(y/n)",
         "[y/n]",
         "(y/n/a)",
+        "(yes/no)",
         "do you want to proceed",
-        "proceed?",
-        "allow?",
-        "continue?",
-        "overwrite?",
+        "do you want to continue",
+        "would you like to proceed",
     ];
-    let last = tail.lines().rev().find(|l| !l.trim().is_empty())?.trim();
-    let lower = last.to_ascii_lowercase();
-    if APPROVAL.iter().any(|p| lower.contains(p)) {
+    let last = tail
+        .lines()
+        .rev()
+        .find(|l| !l.trim().is_empty())?
+        .to_ascii_lowercase();
+    if APPROVAL.iter().any(|p| last.contains(p)) {
         return Some(WaitKind::Approval);
     }
-    let numbered = lower.starts_with(|c: char| c.is_ascii_digit())
-        && (lower.contains(". ") || lower.contains(") "));
-    if numbered || lower.starts_with(['❯', '>', '*']) {
+    let recent: String = tail
+        .to_ascii_lowercase()
+        .lines()
+        .rev()
+        .take(10)
+        .collect::<Vec<_>>()
+        .join("\n");
+    // The selector's own hints (footer, arrow legend, the plan-prompt question)
+    // often sit several rows above the input, so they are scanned across the
+    // recent tail, not just the last line.
+    if has_select_cue(&recent) {
         return Some(WaitKind::Approval);
     }
-    if lower.ends_with('?') && last.len() <= 200 {
-        return Some(WaitKind::Question);
+    // An interactive numbered menu (Claude's plan/approval list, inquirer-style
+    // choosers): the pointer glyph marks the highlighted option and at least one
+    // more numbered row sits below it. Requiring the pointer *and* a second
+    // option keeps ordinary numbered output (a step list, a table) from tripping.
+    if is_selection_menu(&recent) {
+        return Some(WaitKind::Approval);
+    }
+    let yes_no_menu = (recent.contains("1. yes") || recent.contains("1) yes"))
+        && (recent.contains("2. no") || recent.contains("2) no"));
+    yes_no_menu.then_some(WaitKind::Approval)
+}
+
+// A row like `❯ 1.` or `2)` — a numbered option, optionally led by a selector
+// pointer. Only a digit run terminated by `.`/`)` counts, so a prompt line such
+// as `❯ 1 plus one` (a user typing at the input) never reads as an option.
+fn numbered_option(line: &str) -> Option<bool> {
+    let body = line.trim_start();
+    let (body, pointed) = match body.strip_prefix('❯').or_else(|| body.strip_prefix('>')) {
+        Some(rest) => (rest.trim_start(), true),
+        None => (body, false),
+    };
+    let mut digits = 0;
+    for c in body.chars() {
+        if c.is_ascii_digit() {
+            digits += 1;
+        } else {
+            return (digits > 0 && (c == '.' || c == ')')).then_some(pointed);
+        }
     }
     None
+}
+
+fn is_selection_menu(lower: &str) -> bool {
+    let mut pointed = false;
+    let mut options = 0;
+    for line in lower.lines() {
+        if let Some(is_pointer) = numbered_option(line) {
+            options += 1;
+            pointed |= is_pointer;
+        }
+    }
+    pointed && options >= 2
 }
 
 #[cfg(test)]
@@ -525,7 +675,7 @@ mod detector_tests {
     fn output_reads_as_working_high() {
         let mut d = Detector::new(2);
         assert_eq!(
-            d.on_output(b"thinking..."),
+            d.on_output(b"thinking...", false),
             Some(StateChange {
                 state: AgentState::Working,
                 confidence: Confidence::High,
@@ -535,11 +685,34 @@ mod detector_tests {
     }
 
     #[test]
+    fn echo_output_does_not_read_as_working() {
+        let mut d = Detector::new(2);
+        d.on_output(b"agent output", false);
+        d.on_input(); // user starts typing at the prompt -> calm
+        assert!(matches!(d.state(), AgentState::Waiting(_)));
+        // The echo of the user's keystrokes must not flip it back to Working.
+        assert_eq!(d.on_output(b"git commit -m ", true), None);
+        assert!(matches!(d.state(), AgentState::Waiting(_)));
+    }
+
+    #[test]
+    fn user_input_drops_a_working_session_out_of_working() {
+        let mut d = Detector::new(2);
+        d.on_output(b"tool output", false); // agent working
+        assert_eq!(d.state(), AgentState::Working);
+        let change = d.on_input().expect("input should move out of working");
+        assert!(matches!(change.state, AgentState::Waiting(_)));
+        assert_eq!(change.confidence, Confidence::Low);
+        // A second keystroke while already calm is a no-op.
+        assert_eq!(d.on_input(), None);
+    }
+
+    #[test]
     fn a_notify_is_high_confidence_waiting_with_payload() {
         let mut d = Detector::new(2);
-        d.on_output(b"working");
+        d.on_output(b"working", false);
         assert_eq!(
-            d.on_output(b"\x1b]9;needs approval\x07"),
+            d.on_output(b"\x1b]9;needs approval\x07", false),
             Some(StateChange {
                 state: AgentState::Waiting(WaitKind::Unknown),
                 confidence: Confidence::High,
@@ -559,10 +732,10 @@ mod detector_tests {
     #[test]
     fn idle_needs_hysteresis_before_flipping_to_waiting() {
         let mut d = Detector::new(2);
-        d.on_output(b"go");
-        assert_eq!(d.tick(true, ProcStatus::Sleeping, true, ""), None);
+        d.on_output(b"go", false);
+        assert_eq!(d.tick(true, false, ProcStatus::Sleeping, true, ""), None);
         assert_eq!(
-            d.tick(true, ProcStatus::Sleeping, true, ""),
+            d.tick(true, false, ProcStatus::Sleeping, true, ""),
             Some(StateChange {
                 state: AgentState::Waiting(WaitKind::Unknown),
                 confidence: Confidence::Low,
@@ -572,23 +745,79 @@ mod detector_tests {
     }
 
     #[test]
-    fn a_matched_prompt_sets_the_wait_kind() {
+    fn a_matched_prompt_is_high_confidence_waiting() {
         let mut d = Detector::new(1);
-        d.on_output(b"run rm -rf? (y/n)");
-        assert_eq!(
-            d.tick(true, ProcStatus::Sleeping, true, "run rm -rf? (y/n)")
-                .unwrap()
-                .state,
-            AgentState::Waiting(WaitKind::Approval)
-        );
+        d.on_output(b"run rm -rf? (y/n)", false);
+        let change = d
+            .tick(true, false, ProcStatus::Sleeping, true, "run rm -rf? (y/n)")
+            .unwrap();
+        assert_eq!(change.state, AgentState::Waiting(WaitKind::Approval));
+        assert_eq!(change.confidence, Confidence::High);
+    }
+
+    #[test]
+    fn bare_idle_without_a_prompt_stays_low_confidence() {
+        let mut d = Detector::new(1);
+        d.on_output(b"thinking", false);
+        let change = d
+            .tick(true, false, ProcStatus::Sleeping, true, "still thinking")
+            .unwrap();
+        assert_eq!(change.state, AgentState::Waiting(WaitKind::Unknown));
+        assert_eq!(change.confidence, Confidence::Low);
+    }
+
+    #[test]
+    fn a_long_silence_ripens_a_low_wait_into_tentative() {
+        let mut d = Detector::new(1);
+        d.on_output(b"thinking", false);
+        let low = d.tick(true, false, ProcStatus::Sleeping, true, "").unwrap();
+        assert_eq!(low.confidence, Confidence::Low);
+        // The same bare-idle state, now past the longer threshold, ripens into a
+        // soft tentative hint without ever becoming a hard, notifiable Waiting.
+        let tentative = d.tick(true, true, ProcStatus::Sleeping, true, "").unwrap();
+        assert_eq!(tentative.state, AgentState::Waiting(WaitKind::Unknown));
+        assert_eq!(tentative.confidence, Confidence::Tentative);
+    }
+
+    #[test]
+    fn a_matched_prompt_overrides_a_tentative_wait() {
+        let mut d = Detector::new(1);
+        d.on_output(b"thinking", false);
+        d.tick(true, true, ProcStatus::Sleeping, true, "").unwrap();
+        // A real prompt appearing after the tentative hint must upgrade it to a
+        // confident, notifiable needs-you — the ring gives way to the bell.
+        let change = d
+            .tick(true, true, ProcStatus::Sleeping, true, "proceed? (y/n)")
+            .unwrap();
+        assert_eq!(change.state, AgentState::Waiting(WaitKind::Approval));
+        assert_eq!(change.confidence, Confidence::High);
+    }
+
+    #[test]
+    fn an_action_required_title_is_high_confidence_waiting() {
+        let mut d = Detector::new(2);
+        let change = d
+            .on_output(b"\x1b]0;Codex \xe2\x9c\xb3 Action Required\x07", false)
+            .unwrap();
+        assert_eq!(change.state, AgentState::Waiting(WaitKind::Approval));
+        assert_eq!(change.confidence, Confidence::High);
+    }
+
+    #[test]
+    fn an_ordinary_title_stays_working() {
+        let mut d = Detector::new(2);
+        let change = d
+            .on_output(b"\x1b]0;~/code/shirei\x07building", false)
+            .unwrap();
+        assert_eq!(change.state, AgentState::Working);
     }
 
     #[test]
     fn a_spinner_never_flips_to_idle() {
         let mut d = Detector::new(2);
         for _ in 0..10 {
-            d.on_output(b"."); // output resets the idle counter each frame
-            assert_eq!(d.tick(false, ProcStatus::Running, false, ""), None);
+            d.on_output(b".", false); // output resets the idle counter each frame
+            assert_eq!(d.tick(false, false, ProcStatus::Running, false, ""), None);
         }
         assert_eq!(d.state(), AgentState::Working);
     }
@@ -596,44 +825,103 @@ mod detector_tests {
     #[test]
     fn cpu_busy_blocks_the_idle_flip_even_on_output_silence() {
         let mut d = Detector::new(1);
-        d.on_output(b"go");
-        assert_eq!(d.tick(true, ProcStatus::Running, false, ""), None);
+        d.on_output(b"go", false);
+        assert_eq!(d.tick(true, false, ProcStatus::Running, false, ""), None);
     }
 
     #[test]
     fn once_exited_further_events_are_ignored() {
         let mut d = Detector::new(1);
         d.on_exit(0);
-        assert_eq!(d.on_output(b"late"), None);
-        assert_eq!(d.tick(true, ProcStatus::Gone, true, ""), None);
+        assert_eq!(d.on_output(b"late", false), None);
+        assert_eq!(d.tick(true, false, ProcStatus::Gone, true, ""), None);
     }
 
     #[test]
     fn a_vanished_process_settles_as_done() {
         let mut d = Detector::new(2);
-        d.on_output(b"go");
+        d.on_output(b"go", false);
         assert_eq!(
-            d.tick(true, ProcStatus::Zombie, true, "").unwrap().state,
+            d.tick(true, false, ProcStatus::Zombie, true, "").unwrap().state,
             AgentState::Done { code: 0 }
         );
     }
 
     #[test]
-    fn prompt_classifier_anchors_to_the_last_line() {
+    fn prompt_classifier_only_fires_on_explicit_approvals() {
         assert_eq!(classify_prompt("proceed? (y/n)"), Some(WaitKind::Approval));
         assert_eq!(
-            classify_prompt("Migrate rows or drop?"),
-            Some(WaitKind::Question)
+            classify_prompt("do you want to proceed?"),
+            Some(WaitKind::Approval)
         );
         assert_eq!(
             classify_prompt("❯ 1. Yes\n  2. No"),
             Some(WaitKind::Approval)
         );
-        // A `(y/n)` quoted mid-output is not the prompt line.
+        // Claude's own input prompt and normal output must never read as a prompt
+        // — these were the false-positive notification spam.
+        assert_eq!(classify_prompt("> "), None);
+        assert_eq!(classify_prompt("> tell me about the parser"), None);
+        assert_eq!(classify_prompt("Migrate rows or drop?"), None);
+        assert_eq!(classify_prompt("1. First, refactor the parser"), None);
         assert_eq!(
             classify_prompt("the docs mention (y/n) prompts\nrunning tests now"),
             None
         );
         assert_eq!(classify_prompt("just building the thing"), None);
+    }
+
+    #[test]
+    fn a_selection_menu_is_high_confidence_waiting() {
+        let menu = "Which focus?\n1. Ratings\n2. Motor\n3. Localia\n  Enter to select · ↑/↓ to navigate · Esc to cancel";
+        // Layer-3 (idle-tick) path.
+        assert_eq!(classify_prompt(menu), Some(WaitKind::Approval));
+        // Instant path: on_output flags it even while the menu keeps repainting.
+        let mut d = Detector::new(2);
+        let change = d
+            .on_output(menu.as_bytes(), false)
+            .expect("selection menu should transition");
+        assert_eq!(change.state, AgentState::Waiting(WaitKind::Approval));
+        assert_eq!(change.confidence, Confidence::High);
+        // A plain numbered list with no selector cue is not a prompt — it reads
+        // as ordinary working output, not needs-you.
+        let list = "Here is the plan:\n1. Refactor the parser\n2. Add tests\n3. Ship it";
+        assert_eq!(classify_prompt(list), None);
+        assert_eq!(
+            d.on_output(list.as_bytes(), false).map(|c| c.state),
+            Some(AgentState::Working)
+        );
+    }
+
+    #[test]
+    fn claude_plan_approval_prompt_is_needs_you() {
+        // The exact shape that only the tentative fallback used to catch: a plan
+        // menu whose question sits above the options and whose footer is the
+        // shift+tab hint, with no arrow legend or y/n text anywhere.
+        let prompt = "Claude has written up a plan and is ready to execute. Would you like to proceed?\n\
+             ❯ 1. Yes, and use auto mode\n\
+               2. Yes, manually approve edits\n\
+               3. No, refine on the web\n\
+               4. Tell Claude what to change\n\
+                 shift+tab to approve with this feedback";
+        assert_eq!(classify_prompt(prompt), Some(WaitKind::Approval));
+        let mut d = Detector::new(2);
+        let change = d
+            .on_output(prompt.as_bytes(), false)
+            .expect("plan prompt should transition");
+        assert_eq!(change.state, AgentState::Waiting(WaitKind::Approval));
+        assert_eq!(change.confidence, Confidence::High);
+    }
+
+    #[test]
+    fn a_numbered_menu_needs_its_pointer_to_count() {
+        // Two numbered options but no selector pointer and no cue: still just
+        // output, never a prompt (this is what keeps step lists quiet).
+        assert_eq!(classify_prompt("1. build\n2. deploy"), None);
+        // The pointer on an option is the signal a real chooser is up.
+        assert_eq!(
+            classify_prompt("pick one\n❯ 1. build\n  2. deploy"),
+            Some(WaitKind::Approval)
+        );
     }
 }

@@ -21,7 +21,7 @@ bolt AI on the side, Shirei puts the **AI CLI session at the center** and keeps 
 editor, files, and search as satellites — instruments arranged around the session so
 you never have to leave it.
 
-It's built for long sessions with CLIs like Claude Code: see, open, edit, search, and
+It's built for long sessions with CLIs like Claude Code, OpenCode, Codex, and Gemini CLI: see, open, edit, search, and
 review everything the session produces, all without touching the mouse. The friction
 in a long session is never the model — it's switching to an editor, hunting for a file,
 losing the thread. Shirei keeps you in the cockpit, with everything you need to act on

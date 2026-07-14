@@ -246,22 +246,6 @@ body {
   text-overflow: ellipsis;
 }
 
-.tab-dot {
-  flex-shrink: 0;
-  width: 9px;
-  height: 9px;
-  padding: 0;
-  border: 1.5px solid var(--fg-dim);
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-}
-
-.tab.colored .tab-dot {
-  border-color: var(--tab-color);
-  background: var(--tab-color);
-}
-
 .tab-age {
   flex-shrink: 0;
   color: var(--fg);
@@ -276,6 +260,264 @@ body {
   color: var(--fg);
   font-size: 10px;
   line-height: 1;
+}
+
+/* On a colored tab the identity bar sits at the very left edge, so the content
+   is nudged right to clear it — otherwise a calm tab (no state mark) prints its
+   name flush against the bar. */
+.tab.colored {
+  padding-left: 14px;
+}
+
+/* Identity = an always-on left-edge accent bar in the tab's project color,
+   present in every state (idle, working, needs-you). A tab with no project
+   color simply has no bar; its state mark still renders the same. */
+.tab.colored::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--tab-color);
+  transform: translateY(-50%);
+}
+
+.tab-state {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    opacity 220ms var(--ease-out),
+    transform 220ms var(--ease-out);
+}
+
+/* Working = two electrons on crossed elliptical orbits (the Atom mark). Any
+   still mark means not-working. Sized up here so the two electrons read at a
+   glance at real tab scale, then dimmed and slowed on background surfaces so N
+   live sessions never become an aquarium. The shared internals stay in status
+   working; the electron/nucleus bump is scoped to the tab so the board keeps
+   its own scale. */
+.tab-state.state-atom {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  color: var(--status-working);
+}
+
+.state-atom .atom-nucleus {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2.5px;
+  height: 2.5px;
+  margin: -1.25px 0 0 -1.25px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.32;
+}
+
+.state-atom .atom-orbit {
+  position: absolute;
+  inset: 0;
+}
+
+.state-atom .orbit-a {
+  transform: rotate(34deg) scaleY(0.4);
+}
+
+.state-atom .orbit-b {
+  transform: rotate(-34deg) scaleY(0.4);
+}
+
+.state-atom .atom-spin {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  animation: atom-orbit var(--atom-orbit-a) linear infinite;
+}
+
+.state-atom .orbit-b .atom-spin {
+  animation-duration: var(--atom-orbit-b);
+  animation-delay: calc(var(--atom-orbit-b) * -0.34);
+}
+
+.state-atom .atom-e {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 2px;
+  margin-left: -1px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.92;
+}
+
+.state-atom .atom-still {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+
+.state-atom .atom-ring {
+  position: absolute;
+  inset: 0.5px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  opacity: 0.26;
+}
+
+.state-atom .ring-a {
+  transform: rotate(34deg) scaleY(0.4);
+}
+
+.state-atom .ring-b {
+  transform: rotate(-34deg) scaleY(0.4);
+}
+
+@keyframes atom-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Electron and nucleus bumped for the tab only, so the two orbits stay
+   distinguishable at tab scale while the orchestration board keeps its own. */
+.tab-state.state-atom .atom-e {
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+}
+
+.tab-state.state-atom .atom-nucleus {
+  width: 3.5px;
+  height: 3.5px;
+  margin: -1.75px 0 0 -1.75px;
+}
+
+.tab:not(.active) .tab-state.state-atom {
+  opacity: var(--atom-bg-opacity);
+}
+
+.tab:not(.active) .tab-state.state-atom .atom-spin {
+  animation-duration: calc(var(--atom-orbit-a) * var(--atom-orbit-slow));
+}
+
+.tab:not(.active) .tab-state.state-atom .orbit-b .atom-spin {
+  animation-duration: calc(var(--atom-orbit-b) * var(--atom-orbit-slow));
+}
+
+/* Needs-you Bell: the single attention mark, warm gold, shown only when a
+   background session is blocked waiting for the user (held until the tab is
+   opened). Sized to match the Atom so it reads at a glance; it fades in once on
+   arrival and never loops. */
+.tab-mark {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+
+.tab-mark svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+.tab-bell {
+  color: var(--attn);
+}
+
+.tab-zzz {
+  color: var(--tentative);
+}
+
+.tab-zzz > svg {
+  animation:
+    tab-hint-in 420ms var(--ease-out) both,
+    tab-hint-breathe 3s ease-in-out 420ms infinite;
+}
+
+@keyframes tab-hint-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tab-hint-breathe {
+  0%,
+  100% {
+    opacity: 0.58;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.tab.maybe:not(.active) .tab-label,
+.tab.maybe:not(.active) .tab-age {
+  opacity: 0.6;
+}
+
+.tab-mark.mark-in > svg {
+  animation: tab-mark-in 260ms var(--ease-out) both;
+}
+
+@keyframes tab-mark-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A needs-you tab sheds the background dim so its Bell reads at full strength,
+   while the label and age stay held back so only the mark stands out. Clears
+   the moment the tab becomes active. */
+.tab.attn {
+  opacity: 1;
+}
+
+.tab.attn:not(.active) .tab-label,
+.tab.attn:not(.active) .tab-age {
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Motion off: freeze the Atom to its still crossed-ellipse silhouette,
+     distinct from the plain waiting disc. Shared by tab and board. */
+  .state-atom .live {
+    display: none;
+  }
+
+  .state-atom .still {
+    display: block;
+  }
+
+  /* The Bell appears without its fade-in; no motion, no pulse. */
+  .tab-mark.mark-in > svg {
+    animation: none;
+  }
+
+  /* The tentative Zzz holds static, mid-breath, instead of pulsing. */
+  .tab-zzz > svg {
+    animation: none;
+    opacity: 0.78;
+  }
+
+  .orch-row.state-tentative .orch-glyph {
+    animation: none;
+  }
 }
 
 #statusbar {
@@ -695,6 +937,22 @@ body {
 
 .pin-cell[data-cell="1"] {
   flex: 1 1 auto;
+}
+
+/* Persistent focus ring on the keyboard-focused pinned cell, so it's always
+   clear which cell the arrows moved to and which one the close key will unpin. */
+.pin-cell.pin-focused::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px
+    color-mix(in srgb, var(--tab-color, var(--accent)) 55%, transparent),
+    inset 0 0 20px -8px
+    color-mix(in srgb, var(--tab-color, var(--accent)) 60%, transparent);
 }
 
 #pin-divider {
@@ -1961,6 +2219,297 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .qo-scope-spin {
     animation: none;
+  }
+}
+
+.orchestration {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 10vh;
+  background: rgba(0, 0, 0, 0);
+  transition: background var(--modal-in, 200ms) var(--ease-out, ease);
+}
+
+.orchestration[data-mounted="true"] {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.orchestration[data-closing] {
+  background: rgba(0, 0, 0, 0);
+}
+
+.orchestration-box {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 88vw);
+  max-height: 72vh;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    var(--elev-shadow);
+  transform-origin: top center;
+  opacity: 0;
+  transform: scale(0.99) translateY(-6px);
+  transition:
+    opacity var(--modal-in, 200ms) var(--ease-out, ease),
+    transform var(--modal-in, 200ms) var(--ease-out, ease);
+}
+
+.orchestration[data-mounted="true"] .orchestration-box {
+  opacity: 1;
+  transform: none;
+}
+
+@starting-style {
+  .orchestration-box {
+    opacity: 0;
+    transform: scale(0.99) translateY(-6px);
+  }
+}
+
+.orch-title {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+  font:
+    13px -apple-system,
+    "SF Pro Text",
+    system-ui,
+    sans-serif;
+  font-weight: 600;
+}
+
+.orch-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px;
+}
+
+.orch-group-head {
+  display: block;
+  width: 100%;
+  padding: 8px 8px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.orch-toggle {
+  cursor: pointer;
+}
+
+.orch-toggle:hover {
+  color: var(--fg);
+}
+
+.orch-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.orch-row {
+  --row-color: var(--status-working);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: default;
+  font:
+    13px -apple-system,
+    "SF Pro Text",
+    system-ui,
+    sans-serif;
+}
+
+.orch-row.selected {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.orch-row.kind-waiting {
+  --row-color: var(--status-waiting);
+}
+
+.orch-row.kind-done {
+  --row-color: var(--status-done);
+}
+
+.orch-row.kind-errored {
+  --row-color: var(--status-error);
+}
+
+.orch-row.kind-working {
+  opacity: 0.62;
+}
+
+.orch-row.kind-working.selected {
+  opacity: 1;
+}
+
+.orch-glyph {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--row-color);
+}
+
+.orch-glyph.state-atom {
+  position: relative;
+  width: 13px;
+  height: 13px;
+}
+
+.orch-row.kind-working:not(.selected) .orch-glyph.state-atom .atom-spin {
+  animation-duration: calc(var(--atom-orbit-a) * var(--atom-orbit-slow));
+}
+
+.orch-row.kind-working:not(.selected)
+  .orch-glyph.state-atom
+  .orbit-b
+  .atom-spin {
+  animation-duration: calc(var(--atom-orbit-b) * var(--atom-orbit-slow));
+}
+
+.orch-row.state-low .orch-glyph {
+  color: transparent;
+  opacity: 0.75;
+  -webkit-text-stroke: 1px var(--row-color);
+}
+
+/* Waiting keeps its disc even when low-confidence, so it never reads like the
+   working ring; the dimming carries the "guess" instead of hollowing it. */
+.orch-row.kind-waiting.state-low .orch-glyph {
+  color: var(--row-color);
+  opacity: 0.6;
+  -webkit-text-stroke: 0;
+}
+
+/* Tentative on the board: the waiting disc is hollowed and warmed to the
+   drained-gold token, breathing so a long-quiet session reads as a soft maybe,
+   never a confirmed wait. */
+.orch-row.state-tentative .orch-glyph {
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--tentative);
+  animation: tab-hint-breathe 3s ease-in-out infinite;
+}
+
+.orch-tab {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 42%;
+  overflow: hidden;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.orch-chip {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fg-dim);
+}
+
+.orch-tabname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.orch-detail {
+  flex: 1;
+  overflow: hidden;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.orch-age {
+  flex-shrink: 0;
+  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* A row that just flipped into an attention-worthy state gets one quiet
+   flash before settling static: `forwards` ends the animation painted at
+   its final (transparent) frame, so the board never keeps pulsing. */
+.orch-row.flash {
+  animation: orch-flash 2600ms var(--ease-out) forwards;
+}
+
+@keyframes orch-flash {
+  from {
+    background: color-mix(in oklch, var(--row-color) 24%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+.orch-row.aged .orch-age {
+  color: var(--row-color);
+}
+
+.orch-empty {
+  padding: 32px 12px;
+  color: var(--fg-dim);
+  text-align: center;
+  font-size: 13px;
+}
+
+.orch-footer {
+  display: flex;
+  gap: 14px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
+.orch-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.orch-hint kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface-1);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orch-row.flash {
+    animation: none;
+    background: transparent;
   }
 }
 

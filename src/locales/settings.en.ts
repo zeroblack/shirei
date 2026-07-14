@@ -67,6 +67,7 @@ export const settingsEn = {
   "settings.terminal.label": "Terminal",
   "settings.sessions.label": "Sessions",
   "settings.tabs.label": "Tabs",
+  "settings.agents.label": "Agents",
   "settings.recording.label": "Recording",
   "settings.browser.label": "Browser",
   "settings.performance.label": "Performance",
@@ -226,6 +227,73 @@ export const settingsEn = {
   "settings.tabs.chooseFolder": "Choose folder…",
   "settings.tabs.useHome": "Use home",
   "settings.tabs.showAge": "Show age on the tab",
+
+  "settings.agents.title": "Agents",
+  "settings.agents.desc":
+    "Detect what each AI CLI session is doing and notify you only when it's your turn.",
+  "settings.agents.tab.clis": "CLIs",
+  "settings.agents.tab.detection": "Detection",
+  "settings.agents.tab.notifications": "Notifications",
+  "settings.agents.tab.shortcuts": "Shortcuts",
+  "settings.agents.clis.desc":
+    "Shirei tracks a session as an agent when its foreground process matches an enabled entry below. Only Claude Code is validated today; the rest are on the way and stay off until each is verified.",
+  "settings.agents.clis.soon": "Soon",
+  "settings.agents.clis.soonHint":
+    "State detection for this CLI is still being validated. It will switch on once verified.",
+  "settings.agents.clis.remove": "Remove",
+  "settings.agents.clis.addCustom": "Add custom",
+  "settings.agents.clis.customLabelPlaceholder": "Label",
+  "settings.agents.clis.customMatchPlaceholder": "Process name",
+  "settings.agents.detection.idleThreshold": "Idle threshold (ms)",
+  "settings.agents.detection.idleThresholdDesc":
+    "No output for this long starts the idle countdown toward waiting.",
+  "settings.agents.detection.tentativeThreshold": "Tentative threshold (ms)",
+  "settings.agents.detection.tentativeThresholdDesc":
+    'After this much unbroken silence a calm session shows a soft "maybe waiting" hint, never a notification.',
+  "settings.agents.detection.hysteresis": "Hysteresis samples",
+  "settings.agents.detection.hysteresisDesc":
+    "Consecutive idle ticks required before a session flips to waiting.",
+  "settings.agents.detection.pollInterval": "Poll interval (ms)",
+  "settings.agents.detection.pollIntervalDesc":
+    "How often the daemon checks process status and CPU for every session.",
+  "settings.agents.detection.termProgram": "Advertised TERM_PROGRAM",
+  "settings.agents.detection.termProgramDesc":
+    "Sent to child CLIs. Some emit richer state signals when they recognize it.",
+  "settings.agents.notifications.group.channels": "Channels",
+  "settings.agents.notifications.group.sound": "Sound",
+  "settings.agents.notifications.group.quietHours": "Quiet hours",
+  "settings.agents.notifications.group.payload": "Payload",
+  "settings.agents.notifications.channelWaiting": "Waiting",
+  "settings.agents.notifications.channelDone": "Done",
+  "settings.agents.notifications.channelErrored": "Errored",
+  "settings.agents.notifications.channel.os": "OS notification",
+  "settings.agents.notifications.channel.inApp": "In-app only",
+  "settings.agents.notifications.channel.off": "Off",
+  "settings.agents.notifications.soundEnabled": "Play a sound",
+  "settings.agents.notifications.soundEnabledDesc":
+    "A soft, non-melodic ping when Shirei is unfocused. Never on working or per-token.",
+  "settings.agents.notifications.waitingTimbre": "Waiting timbre",
+  "settings.agents.notifications.errorTimbre": "Error timbre",
+  "settings.agents.notifications.timbre.soft": "Soft",
+  "settings.agents.notifications.timbre.deep": "Deep",
+  "settings.agents.notifications.coalescing": "Coalescing window (seconds)",
+  "settings.agents.notifications.coalescingDesc":
+    "Several sessions finishing within this window become one notification.",
+  "settings.agents.notifications.quietHoursEnabled": "Enable quiet hours",
+  "settings.agents.notifications.quietHoursStart": "From",
+  "settings.agents.notifications.quietHoursEnd": "To",
+  "settings.agents.notifications.payloadVerbosity": "Payload verbosity",
+  "settings.agents.notifications.payloadVerbosityDesc":
+    "Secrets are always masked, even at full. Redacted drops the payload text; identity only sends the session name.",
+  "settings.agents.notifications.payload.full": "Full (verbatim, scrubbed)",
+  "settings.agents.notifications.payload.redacted": "Redacted",
+  "settings.agents.notifications.payload.identityOnly": "Identity only",
+  "settings.agents.notifications.appendCli": "Append CLI name",
+  "settings.agents.notifications.appendBranch": "Append branch",
+  "settings.agents.notifications.truncation":
+    "Truncate payload at (characters)",
+  "settings.agents.shortcuts.note":
+    "Triage shortcuts (go to who needs me, cycle waiting, triage mode) live in Settings → Shortcuts once they ship.",
 
   "settings.recording.title": "Recording",
   "settings.recording.desc": "Capture the session as video or gif to share.",
@@ -406,6 +474,8 @@ export const settingsEn = {
     "sessions daemon keep alive confirm kill close autostart persistent restore commands rerun",
   "settings.tabs.search":
     "tabs age time last used pin pinning fix layout template yagura directory folder projects home cwd",
+  "settings.agents.search":
+    "agents orchestration detection notifications cli registry claude codex gemini opencode aider goose qwen crush cursor amp continue amazon q waiting done errored state idle hysteresis poll term program sound coalescing quiet hours payload verbosity redacted scrub identity branch truncate",
   "settings.recording.search":
     "recording record screen screencast video gif mp4 folder format fps cursor share clipboard finder countdown",
   "settings.browser.search":

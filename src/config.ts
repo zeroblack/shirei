@@ -180,6 +180,63 @@ export interface BrowserConfig {
   auto_hide_delay_ms: number;
 }
 
+export interface DetectionConfig {
+  idle_threshold_ms: number;
+  tentative_threshold_ms: number;
+  hysteresis_samples: number;
+  poll_interval_ms: number;
+  term_program: string;
+}
+
+export type NotifyChannel = "os" | "in-app" | "off";
+
+export interface NotificationChannels {
+  waiting: NotifyChannel;
+  done: NotifyChannel;
+  errored: NotifyChannel;
+}
+
+export type SoundTimbre = "soft" | "deep";
+
+export interface SoundConfig {
+  enabled: boolean;
+  waiting_timbre: SoundTimbre;
+  error_timbre: SoundTimbre;
+}
+
+export interface QuietHours {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export type PayloadVerbosity = "full" | "redacted" | "identity-only";
+
+export interface IdentityConfig {
+  append_cli: boolean;
+  append_branch: boolean;
+}
+
+export interface NotificationsConfig {
+  channels: NotificationChannels;
+  sound: SoundConfig;
+  coalescing_ms: number;
+  quiet_hours: QuietHours;
+  payload_verbosity: PayloadVerbosity;
+  identity: IdentityConfig;
+  truncation_length: number;
+}
+
+export interface CliRegistryEntry {
+  id: string;
+  label: string;
+  process_match: string;
+  profile?: string;
+  enabled: boolean;
+  ready: boolean;
+  custom: boolean;
+}
+
 export interface Config {
   locale: Locale;
   font: { family: string; size: number };
@@ -253,6 +310,9 @@ export interface Config {
   performance: PerformanceConfig;
   recorder: RecorderConfig;
   browser: BrowserConfig;
+  detection: DetectionConfig;
+  notifications: NotificationsConfig;
+  cli_registry: CliRegistryEntry[];
   projects: Project[];
   templates: LayoutTemplate[];
   user_templates: LayoutTemplate[];

@@ -8,6 +8,7 @@ export const commandsEn = {
   "cmd.category.layouts": "Layouts",
   "cmd.category.recording": "Recording",
   "cmd.category.git": "Git",
+  "cmd.category.orchestration": "Agent orchestration",
   "cmd.tab.new": "New tab",
   "cmd.tab.close": "Close terminal",
   "cmd.tab.close-tab": "Close whole tab",
@@ -57,4 +58,8 @@ export const commandsEn = {
   "cmd.browser.back": "Browser back",
   "cmd.browser.forward": "Browser forward",
   "cmd.browser.reload": "Reload browser",
+  "cmd.orchestration.open": "Open the agent board",
+  "cmd.orchestration.goto-waiting": "Go to who needs you",
+  "cmd.orchestration.next-waiting": "Next waiting session",
+  "cmd.orchestration.prev-waiting": "Previous waiting session",
 };

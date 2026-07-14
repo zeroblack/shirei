@@ -56,6 +56,12 @@ export const gitFileAt = (path: string, sha: string) =>
 export const gitBlame = (path: string) =>
   invoke<GitBlameLine[]>("git_blame", { path });
 
+export const gitCurrentBranch = (path: string) =>
+  invoke<string | null>("git_current_branch", { path });
+
+export const notifyFire = (title: string, body: string) =>
+  invoke<void>("notify_fire", { title, body });
+
 export const ptyCwd = (id: string) =>
   invoke<string | null>("session_cwd", { id });
 

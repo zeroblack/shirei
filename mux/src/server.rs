@@ -161,14 +161,15 @@ fn env_millis(var: &str) -> Option<Duration> {
 /// idle threshold are env-overridable (the app passes them from config).
 fn spawn_ticker(reg: Registry) {
     let interval = env_millis("SHIREI_TICK_MS").unwrap_or(Duration::from_millis(250));
-    let threshold = env_millis("SHIREI_IDLE_MS").unwrap_or(Duration::from_millis(600));
+    let threshold = env_millis("SHIREI_IDLE_MS").unwrap_or(Duration::from_millis(5000));
+    let tentative = env_millis("SHIREI_TENTATIVE_MS").unwrap_or(Duration::from_millis(45000));
     thread::spawn(move || {
         loop {
             thread::sleep(interval);
             let now = Instant::now();
             let sessions: Vec<Arc<Session>> = reg.lock_ignore_poison().values().cloned().collect();
             for session in sessions {
-                session.tick(threshold, now);
+                session.tick(threshold, tentative, now);
             }
         }
     });
