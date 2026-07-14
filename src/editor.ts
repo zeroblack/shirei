@@ -32,6 +32,7 @@ import {
   scrollPastEnd,
 } from "@codemirror/view";
 import { vim } from "@replit/codemirror-vim";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { gitBlame, gitFileHead, readFile, writeFile } from "./commands";
 import type { Config, TerminalColors } from "./config";
 import { astro } from "./editor-astro";
@@ -501,6 +502,31 @@ export class EditorSession {
 
   focus(): void {
     this.view?.focus();
+  }
+
+  // Selection and copy operate on the CodeMirror document state, never the DOM.
+  // CodeMirror only renders the visible viewport, so a native "select all" and a
+  // DOM-selection copy would capture only the on-screen lines — this always sees
+  // the whole document.
+  selectAll(): void {
+    const view = this.view;
+    if (!view) return;
+    view.focus();
+    view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+  }
+
+  async copySelection(): Promise<void> {
+    const view = this.view;
+    if (!view) return;
+    const { state } = view;
+    const parts = state.selection.ranges
+      .filter((r) => !r.empty)
+      .map((r) => state.sliceDoc(r.from, r.to));
+    const text =
+      parts.length > 0
+        ? parts.join("\n")
+        : state.doc.lineAt(state.selection.main.head).text;
+    await writeText(text);
   }
 
   setVim(on: boolean): void {
