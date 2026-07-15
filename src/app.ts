@@ -1361,10 +1361,11 @@ export class App {
 
   /**
    * Resolves the command per pane (keyed by leaf id) for a tab being opened.
-   * Panes restored from a snapshot (`lastCommand` defined) that run `claude`
-   * come back with `--resume`, always: `--continue` attaches to the most recent
-   * conversation in the directory, so panes and tabs restoring at once would all
-   * race onto that same one and clobber each other's session.
+   * Every `claude` pane spawns with `--resume`, whether restored or freshly
+   * opened: bare `claude` starts a throwaway conversation, and `--continue`
+   * attaches to the most recent one in the directory, so panes and tabs opening
+   * at once race onto that same conversation and clobber each other. `--resume`
+   * lets each pane pick the session it belongs to.
    */
   private resolveSpawnCommands(
     tree: PaneNode,
@@ -1372,12 +1373,7 @@ export class App {
     return new Map(
       leaves(tree).map((leaf) => {
         const cmd = this.spawnCommandFor(leaf);
-        return [
-          leaf.id,
-          leaf.lastCommand !== undefined && isClaudeCommand(cmd)
-            ? withClaudeResume(cmd)
-            : cmd,
-        ];
+        return [leaf.id, isClaudeCommand(cmd) ? withClaudeResume(cmd) : cmd];
       }),
     );
   }
