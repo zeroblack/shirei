@@ -5,6 +5,7 @@ import { homeDir } from "@tauri-apps/api/path";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { BrowserSession } from "./browser";
 import { resolveColorScheme, shouldShowBrowser } from "./browser-core";
+import { isClaudeCommand, withClaudeResume } from "./claude-cmd";
 import { alpha, deriveStatusColors, mix } from "./colors";
 import {
   browserBack,
@@ -137,15 +138,6 @@ let seq = 0;
 function nextId(): string {
   seq += 1;
   return `t${Date.now().toString(36)}${seq}`;
-}
-
-function isClaudeCommand(cmd: string | undefined): cmd is string {
-  return cmd !== undefined && cmd.trim().split(/\s+/)[0] === "claude";
-}
-
-function withClaudeResume(cmd: string): string {
-  if (/(^|\s)(--continue|--resume|-c|-r)(\s|$)/.test(cmd)) return cmd;
-  return `${cmd} --resume`;
 }
 
 // Hidden longer than this on return is treated as a GPU sleep (rebuild renderers)
