@@ -28,28 +28,39 @@ type InterruptKind = "waiting" | "done" | "errored";
 // bounce. Temporary constant while we diagnose; moves to config once tuned.
 const RENOTIFY_COOLDOWN_MS = 5 * 60 * 1000;
 
+function matchCli(
+  command: string,
+  registry: readonly CliRegistryEntry[],
+): CliRegistryEntry | undefined {
+  const lower = command.toLowerCase();
+  return registry.find(
+    (entry) =>
+      entry.enabled && lower.includes(entry.process_match.toLowerCase()),
+  );
+}
+
 export function isTrackedAgent(
   command: string | null,
   registry: readonly CliRegistryEntry[],
 ): boolean {
-  if (!command) return false;
-  const lower = command.toLowerCase();
-  return registry.some(
-    (entry) =>
-      entry.enabled && lower.includes(entry.process_match.toLowerCase()),
-  );
+  return command !== null && matchCli(command, registry) !== undefined;
+}
+
+// The registry id of the CLI a command runs. Grouping activity by CLI needs this
+// rather than the raw command: flags like --continue/--resume would otherwise
+// split one CLI into several.
+export function resolveCliId(
+  command: string | null,
+  registry: readonly CliRegistryEntry[],
+): string | undefined {
+  return command ? matchCli(command, registry)?.id : undefined;
 }
 
 function cliLabelFor(
   command: string,
   registry: readonly CliRegistryEntry[],
 ): string {
-  const lower = command.toLowerCase();
-  const match = registry.find(
-    (entry) =>
-      entry.enabled && lower.includes(entry.process_match.toLowerCase()),
-  );
-  return match?.label ?? command;
+  return matchCli(command, registry)?.label ?? command;
 }
 
 function truncateMiddle(text: string, max: number): string {

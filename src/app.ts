@@ -47,7 +47,11 @@ import {
   MetricsLogger,
   makeEvent,
 } from "./metrics";
-import { isTrackedAgent, NotificationCenter } from "./notifications";
+import {
+  isTrackedAgent,
+  NotificationCenter,
+  resolveCliId,
+} from "./notifications";
 import {
   type BoardHints,
   type BoardRow,
@@ -139,9 +143,9 @@ function isClaudeCommand(cmd: string | undefined): cmd is string {
   return cmd !== undefined && cmd.trim().split(/\s+/)[0] === "claude";
 }
 
-function withClaudeFlag(cmd: string, flag: "--continue" | "--resume"): string {
+function withClaudeResume(cmd: string): string {
   if (/(^|\s)(--continue|--resume|-c|-r)(\s|$)/.test(cmd)) return cmd;
-  return `${cmd} ${flag}`;
+  return `${cmd} --resume`;
 }
 
 // Hidden longer than this on return is treated as a GPU sleep (rebuild renderers)
@@ -795,17 +799,23 @@ export class App {
 
   private beginAgentState(tab: TabState, entry: SessionStateEntry): void {
     const projectId = tab.kind === "terminal" ? (tab.projectId ?? null) : null;
-    const cliName = entry.command ?? undefined;
+    const cliName = resolveCliId(entry.command, this.config.cli_registry);
+    const command = entry.command ?? null;
     switch (entry.state.kind) {
       case "working":
-        this.logMetric("working_start", { tabId: tab.id, projectId, cliName });
+        this.logMetric("working_start", {
+          tabId: tab.id,
+          projectId,
+          cliName,
+          payload: JSON.stringify({ command }),
+        });
         break;
       case "waiting":
         this.logMetric("waiting_start", {
           tabId: tab.id,
           projectId,
           cliName,
-          payload: JSON.stringify({ wait: entry.state.wait }),
+          payload: JSON.stringify({ wait: entry.state.wait, command }),
         });
         break;
       case "done":
@@ -813,7 +823,7 @@ export class App {
           tabId: tab.id,
           projectId,
           cliName,
-          payload: JSON.stringify({ code: entry.state.code }),
+          payload: JSON.stringify({ code: entry.state.code, command }),
         });
         break;
       case "errored":
@@ -821,7 +831,7 @@ export class App {
           tabId: tab.id,
           projectId,
           cliName,
-          payload: JSON.stringify({ code: entry.state.code }),
+          payload: JSON.stringify({ code: entry.state.code, command }),
         });
         break;
     }
@@ -1352,26 +1362,23 @@ export class App {
   /**
    * Resolves the command per pane (keyed by leaf id) for a tab being opened.
    * Panes restored from a snapshot (`lastCommand` defined) that run `claude`
-   * come back continuing their conversation: `--continue` when the tab holds a
-   * single claude pane, `--resume` when several share it so each picks its own.
+   * come back with `--resume`, always: `--continue` attaches to the most recent
+   * conversation in the directory, so panes and tabs restoring at once would all
+   * race onto that same one and clobber each other's session.
    */
   private resolveSpawnCommands(
     tree: PaneNode,
   ): Map<string, string | undefined> {
-    const entries = leaves(tree).map((leaf) => ({
-      id: leaf.id,
-      cmd: this.spawnCommandFor(leaf),
-      restored: leaf.lastCommand !== undefined,
-    }));
-    const claude = entries.filter((e) => e.restored && isClaudeCommand(e.cmd));
-    const flag = claude.length > 1 ? "--resume" : "--continue";
     return new Map(
-      entries.map((e) => [
-        e.id,
-        e.restored && isClaudeCommand(e.cmd)
-          ? withClaudeFlag(e.cmd, flag)
-          : e.cmd,
-      ]),
+      leaves(tree).map((leaf) => {
+        const cmd = this.spawnCommandFor(leaf);
+        return [
+          leaf.id,
+          leaf.lastCommand !== undefined && isClaudeCommand(cmd)
+            ? withClaudeResume(cmd)
+            : cmd,
+        ];
+      }),
     );
   }
 
@@ -3451,8 +3458,13 @@ export class App {
     if (!tabId) return;
     const tab = this.tab(tabId);
     const projectId = tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
-    const cliName = getSessionState(grid.activePtyId())?.command ?? undefined;
-    this.logMetric("killed", { tabId, projectId, cliName });
+    const command = getSessionState(grid.activePtyId())?.command ?? null;
+    this.logMetric("killed", {
+      tabId,
+      projectId,
+      cliName: resolveCliId(command, this.config.cli_registry),
+      payload: JSON.stringify({ command }),
+    });
   }
 
   private async runningProc(ptyId: string): Promise<string | null> {
