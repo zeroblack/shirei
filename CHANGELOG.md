@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.14] - 2026-07-15
+
+### Fixed
+- Claude panes open with `--resume`, whether restored or newly opened.
+
+## [0.15.13] - 2026-07-14
+
+### Added
+- Local session logging: session, project, tab, and agent activity are recorded
+  to a database on your machine. No content and no keystrokes are recorded.
+
 ## [0.15.12] - 2026-07-14
 
 ### Added
@@ -291,7 +302,9 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.15.12...HEAD
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.15.14...HEAD
+[0.15.14]: https://github.com/zeroblack/shirei/compare/v0.15.13...v0.15.14
+[0.15.13]: https://github.com/zeroblack/shirei/compare/v0.15.12...v0.15.13
 [0.15.12]: https://github.com/zeroblack/shirei/compare/v0.15.11...v0.15.12
 [0.15.11]: https://github.com/zeroblack/shirei/compare/v0.15.10...v0.15.11
 [0.15.10]: https://github.com/zeroblack/shirei/compare/v0.15.8...v0.15.10
