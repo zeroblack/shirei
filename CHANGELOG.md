@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.15] - 2026-07-15
+
+### Fixed
+- Claude panes restored from an older session no longer come back with
+  `--continue`.
+
 ## [0.15.14] - 2026-07-15
 
 ### Fixed
@@ -302,7 +308,8 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.15.14...HEAD
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.15.15...HEAD
+[0.15.15]: https://github.com/zeroblack/shirei/compare/v0.15.14...v0.15.15
 [0.15.14]: https://github.com/zeroblack/shirei/compare/v0.15.13...v0.15.14
 [0.15.13]: https://github.com/zeroblack/shirei/compare/v0.15.12...v0.15.13
 [0.15.12]: https://github.com/zeroblack/shirei/compare/v0.15.11...v0.15.12
