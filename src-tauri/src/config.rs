@@ -593,6 +593,8 @@ fn default_exclude_dirs() -> Vec<String> {
         ".venv",
         "__pycache__",
         "vendor",
+        ".worktrees",
+        ".superpowers",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -1606,9 +1608,16 @@ mod tests {
         assert_eq!(enabled, ["claude-code"]);
         // Only the validated CLI is ready; enabled never outruns ready.
         assert!(reg.iter().all(|e| e.enabled == (e.enabled && e.ready)));
-        assert!(reg.iter().filter(|e| e.ready).all(|e| e.id == "claude-code"));
+        assert!(
+            reg.iter()
+                .filter(|e| e.ready)
+                .all(|e| e.id == "claude-code")
+        );
         // The others still ship in the catalog, off and not custom, as "Soon".
-        assert!(reg.iter().any(|e| e.id == "codex" && !e.enabled && !e.ready));
+        assert!(
+            reg.iter()
+                .any(|e| e.id == "codex" && !e.enabled && !e.ready)
+        );
         assert!(reg.iter().all(|e| !e.custom));
     }
 

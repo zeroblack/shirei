@@ -39,7 +39,7 @@ pub struct FileContent {
     pub mtime: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IndexEntry {
     pub rel: String,
     pub name: String,
@@ -229,16 +229,47 @@ pub fn fs_index(root: String, config: State<'_, ConfigManager>) -> Result<FileIn
     ))
 }
 
+// Ordered by mtime first (the tuple's field 0); an exact-mtime tie falls through
+// to the entry, a harmless deterministic tie-break.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct ByMtime(u64, IndexEntry);
+
+// Offer an entry to a full min-heap of the newest `cap` files: it replaces the
+// oldest kept file when it is newer, in a single sift. peek() gates the compare
+// so an older file (the common case in a large tree) does no heap work.
+fn offer_newest(
+    heap: &mut std::collections::BinaryHeap<std::cmp::Reverse<ByMtime>>,
+    item: ByMtime,
+) {
+    if heap
+        .peek()
+        .is_some_and(|std::cmp::Reverse(oldest)| item.0 > oldest.0)
+        && let Some(mut top) = heap.peek_mut()
+    {
+        *top = std::cmp::Reverse(item);
+    }
+}
+
 fn index_walk(
     root: &Path,
     index_cap: usize,
     exclude: &[String],
     respect_gitignore: bool,
 ) -> FileIndex {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+
     let exclude: Vec<std::ffi::OsString> = exclude.iter().map(std::ffi::OsString::from).collect();
     let home_lib = home_library();
-    let mut entries = Vec::new();
-    let mut truncated = false;
+    // The cap bounds the index sent to the frontend (memory + fuzzy-search cost).
+    // Files are buffered unstated while under the cap — mtime is only needed to
+    // pick what to drop. On the first overflow the buffer is stated once and the
+    // walk switches to a min-heap that keeps the newest by mtime, so a file an
+    // agent just created is never lost to walk order. The whole tree is still
+    // walked (unbounded on huge trees): the cost of keeping the newest instead of
+    // an arbitrary walk-order prefix.
+    let mut buffered: Vec<IndexEntry> = Vec::new();
+    let mut heap: Option<BinaryHeap<Reverse<ByMtime>>> = None;
 
     let walker = ignore::WalkBuilder::new(root)
         .hidden(false)
@@ -260,10 +291,6 @@ fn index_walk(
         })
         .build();
     for result in walker {
-        if entries.len() >= index_cap {
-            truncated = true;
-            break;
-        }
         let Ok(dir) = result else { continue };
         if dir.depth() == 0 {
             continue;
@@ -279,10 +306,38 @@ fn index_walk(
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         let is_dir = dir.file_type().map(|t| t.is_dir()).unwrap_or(false);
-        entries.push(IndexEntry { rel, name, is_dir });
+        let entry = IndexEntry { rel, name, is_dir };
+
+        if let Some(heap) = &mut heap {
+            let mtime = dir.metadata().map(|m| mtime_secs(&m)).unwrap_or(0);
+            offer_newest(heap, ByMtime(mtime, entry));
+        } else if buffered.len() < index_cap {
+            buffered.push(entry);
+        } else {
+            // Overflow: stat the buffered names once, seed the heap, then offer this.
+            let mut seeded = BinaryHeap::with_capacity(index_cap.max(1));
+            for e in buffered.drain(..) {
+                let mtime = std::fs::metadata(root.join(&e.rel))
+                    .map(|m| mtime_secs(&m))
+                    .unwrap_or(0);
+                seeded.push(Reverse(ByMtime(mtime, e)));
+            }
+            let mtime = dir.metadata().map(|m| mtime_secs(&m)).unwrap_or(0);
+            offer_newest(&mut seeded, ByMtime(mtime, entry));
+            heap = Some(seeded);
+        }
     }
 
-    FileIndex { entries, truncated }
+    match heap {
+        Some(heap) => FileIndex {
+            entries: heap.into_iter().map(|Reverse(e)| e.1).collect(),
+            truncated: true,
+        },
+        None => FileIndex {
+            entries: buffered,
+            truncated: false,
+        },
+    }
 }
 
 #[cfg(test)]
@@ -381,6 +436,34 @@ mod tests {
         let capped = index_walk(&tmp, 1, &[], false);
         assert!(capped.truncated);
         assert_eq!(capped.entries.len(), 1);
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn truncation_keeps_the_newest_files() {
+        let tmp = std::env::temp_dir().join(format!("shirei_index_recent_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        // Three files, staggered mtimes; "newest.md" is written last.
+        for name in ["oldest.md", "middle.md", "newest.md"] {
+            std::fs::write(tmp.join(name), b"x").unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(1100));
+        }
+
+        // Cap of 2 must drop the oldest, never the freshly written file.
+        let idx = index_walk(&tmp, 2, &[], false);
+        assert!(idx.truncated);
+        assert_eq!(idx.entries.len(), 2);
+        let names: Vec<&str> = idx.entries.iter().map(|e| e.name.as_str()).collect();
+        assert!(
+            names.contains(&"newest.md"),
+            "newest file must survive: {names:?}"
+        );
+        assert!(
+            !names.contains(&"oldest.md"),
+            "oldest file should be dropped: {names:?}"
+        );
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
