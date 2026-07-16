@@ -8,7 +8,9 @@ mod fonts;
 mod fs;
 mod git;
 mod logs;
+mod metrics;
 mod mux_client;
+mod notify;
 mod perf;
 mod pty;
 #[cfg(target_os = "macos")]
@@ -153,11 +155,13 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(pty::PtyManager::default())
         .manage(mux_client::MuxClient::default())
         .manage(config::ConfigManager::default())
         .manage(perf::PerfActiveTab::default())
-        .manage(todos::TodoStore::default());
+        .manage(todos::TodoStore::default())
+        .manage(metrics::MetricsStore::default());
 
     #[cfg(target_os = "macos")]
     let builder = builder.manage(screencast::RecorderState::default());
@@ -175,6 +179,12 @@ pub fn run() {
                 let _ = std::fs::create_dir_all(&dir);
                 if let Err(e) = app.state::<todos::TodoStore>().open(&dir.join("todos.db")) {
                     log::error!("failed to open todos.db: {e}");
+                }
+                if let Err(e) = app
+                    .state::<metrics::MetricsStore>()
+                    .open(&dir.join("metrics.db"))
+                {
+                    log::error!("failed to open metrics db: {e}");
                 }
             }
             watch::start(app.handle());
@@ -271,6 +281,17 @@ pub fn run() {
             let focus_down = MenuItemBuilder::with_id("pane-focus-down", "Focus Pane Down")
                 .accelerator("CmdOrCtrl+Shift+ArrowDown")
                 .build(handle)?;
+            // Reload and the address bar live in the menu so their accelerators
+            // reach the app while the browser's own webview holds first responder
+            // — the address bar is the escape hatch back to app keyboard focus.
+            // Back/forward stay off the menu on purpose: ⌘[/⌘] are the editor's
+            // dedent/indent, which a global menu accelerator would swallow.
+            let browser_reload = MenuItemBuilder::with_id("browser-reload", "Browser Reload")
+                .accelerator("CmdOrCtrl+Alt+Shift+R")
+                .build(handle)?;
+            let browser_url = MenuItemBuilder::with_id("browser-url", "Focus Address Bar")
+                .accelerator("CmdOrCtrl+L")
+                .build(handle)?;
             let pane_menu = SubmenuBuilder::new(handle, "Pane")
                 .item(&pin_pane)
                 .separator()
@@ -278,6 +299,9 @@ pub fn run() {
                 .item(&focus_right)
                 .item(&focus_up)
                 .item(&focus_down)
+                .separator()
+                .item(&browser_reload)
+                .item(&browser_url)
                 .build()?;
 
             let mut tab_items = Vec::with_capacity(9);
@@ -325,6 +349,8 @@ pub fn run() {
             "pane-focus-right" => dispatch_focused(app, "menu-pane-focus-right", ()),
             "pane-focus-up" => dispatch_focused(app, "menu-pane-focus-up", ()),
             "pane-focus-down" => dispatch_focused(app, "menu-pane-focus-down", ()),
+            "browser-reload" => dispatch_focused(app, "menu-browser-reload", ()),
+            "browser-url" => dispatch_focused(app, "menu-browser-url", ()),
             "zoom-in" => dispatch_focused(app, "menu-zoom-in", ()),
             "zoom-out" => dispatch_focused(app, "menu-zoom-out", ()),
             "zoom-reset" => dispatch_focused(app, "menu-zoom-reset", ()),
@@ -349,6 +375,7 @@ pub fn run() {
             mux_client::mux_resize,
             mux_client::mux_kill,
             mux_client::mux_detach,
+            notify::notify_fire,
             session::session_cwd,
             session::session_snapshot,
             session::session_pid,
@@ -362,6 +389,7 @@ pub fn run() {
             git::git_file_history,
             git::git_file_at,
             git::git_blame,
+            git::git_current_branch,
             config::config_get,
             config::config_set,
             todos::todo_list,
@@ -370,6 +398,7 @@ pub fn run() {
             todos::todo_delete,
             todos::todo_reorder,
             todos::todo_update,
+            metrics::metrics_log,
             fonts::font_install,
             fonts::font_installed,
             fonts::font_read,
@@ -414,6 +443,15 @@ pub fn run() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event
                 && window.label() == "main"
             {
+                if let (Ok(sz), Ok(pos)) = (window.outer_size(), window.outer_position()) {
+                    log::info!(
+                        "[winstate] save main on close: {}x{} @ {},{}",
+                        sz.width,
+                        sz.height,
+                        pos.x,
+                        pos.y
+                    );
+                }
                 let _ = window.app_handle().save_window_state(StateFlags::all());
                 api.prevent_close();
                 let _ = window.hide();
@@ -433,6 +471,32 @@ pub fn run() {
                     let _ = window.set_focus();
                 }
             }
+            tauri::RunEvent::ExitRequested { api, .. } => handle_exit_requested(app, &api),
             _ => {}
         });
+}
+
+// Cmd+Q / the "Quit Shirei" menu item calls NSApplication termination directly,
+// bypassing WindowEvent::CloseRequested entirely — but RunEvent::ExitRequested
+// still fires, giving the frontend's IPC-based metrics buffer one guaranteed
+// chance to flush its final session_end before the process actually goes away.
+static EXIT_FLUSH_STARTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn handle_exit_requested(app: &tauri::AppHandle, api: &tauri::ExitRequestApi) {
+    use std::sync::atomic::Ordering;
+
+    if EXIT_FLUSH_STARTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    api.prevent_exit();
+    let _ = app.emit("metrics://flush-on-exit", ());
+    let app_handle = app.clone();
+    std::thread::spawn(move || {
+        // Local IPC needs a moment to land the frontend's final metrics flush
+        // before native termination tears the webview down mid-write.
+        const EXIT_FLUSH_GRACE_MS: u64 = 400;
+        std::thread::sleep(std::time::Duration::from_millis(EXIT_FLUSH_GRACE_MS));
+        app_handle.exit(0);
+    });
 }

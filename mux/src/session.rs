@@ -7,9 +7,10 @@ use std::time::{Duration, Instant};
 
 use portable_pty::{Child, MasterPty};
 
+use crate::detect::{Detector, StateChange};
 use crate::lock::MutexExt;
 use crate::modes::ModeTracker;
-use crate::proc::{Snapshot, snapshot_of};
+use crate::proc::{ProcStatus, Snapshot, cpu_ticks, foreground_command, proc_status, snapshot_of};
 use crate::protocol::ServerMsg;
 use crate::ring::Ring;
 use crate::shell::{READ_BUFFER_LEN, ShellPty, open_login_shell, pty_size};
@@ -19,6 +20,17 @@ pub const DEFAULT_RING_CAP: usize = 256 * 1024;
 // buffer many times per ring of output. At 128 KiB the amplification stays near
 // 2x while a crash loses at most this much trailing scrollback.
 const DUMP_THRESHOLD: usize = 128 * 1024;
+// Consecutive idle ticks before Working flips to a low-confidence Waiting.
+const DEFAULT_HYSTERESIS: u32 = 2;
+// CPU time (ns) below which a process counts as idle for one tick — the second
+// vote (besides output silence) that a quiet session is genuinely waiting.
+const CPU_IDLE_DELTA_NS: u64 = 15_000_000;
+// How much trailing scrollback the prompt classifier (Layer 3) inspects.
+const TAIL_BYTES: usize = 2048;
+// Output within this window of the user's last keystroke is the CLI echoing or
+// repainting the input line as the user types, not the agent working — it must
+// not read as "working".
+const ECHO_WINDOW: Duration = Duration::from_millis(1000);
 
 struct Sub {
     client: u64,
@@ -31,6 +43,11 @@ struct Inner {
     child: Box<dyn Child + Send + Sync>,
     ring: Ring,
     modes: ModeTracker,
+    detector: Detector,
+    last_output: Instant,
+    last_input: Instant,
+    last_cpu: Option<u64>,
+    command: Option<String>,
     subs: Vec<Sub>,
     alive: bool,
     persist: Option<PathBuf>,
@@ -69,6 +86,17 @@ impl Inner {
         }
         self.subs.retain(|s| s.tx.try_send(msg.clone()).is_ok());
     }
+
+    fn broadcast_state(&mut self, id: &str, change: StateChange) {
+        let command = self.command.clone();
+        self.broadcast(ServerMsg::State {
+            id: id.to_string(),
+            state: change.state,
+            confidence: change.confidence,
+            command,
+            payload: change.payload,
+        });
+    }
 }
 
 fn dump_to(path: &Path, data: &[u8]) -> std::io::Result<()> {
@@ -93,6 +121,7 @@ pub struct ReapState {
 
 pub struct Session {
     inner: Arc<Mutex<Inner>>,
+    id: String,
 }
 
 impl Session {
@@ -136,6 +165,11 @@ impl Session {
             child,
             ring,
             modes: ModeTracker::default(),
+            detector: Detector::new(DEFAULT_HYSTERESIS),
+            last_output: Instant::now(),
+            last_input: Instant::now(),
+            last_cpu: None,
+            command: None,
             subs: Vec::new(),
             alive: true,
             persist,
@@ -143,6 +177,7 @@ impl Session {
             detached_at: Some(Instant::now()),
         }));
 
+        let session_id = id.clone();
         let reader_inner = Arc::clone(&inner);
         thread::spawn(move || {
             let mut buf = [0u8; READ_BUFFER_LEN];
@@ -154,10 +189,17 @@ impl Session {
                             let mut g = reader_inner.lock_ignore_poison();
                             g.ring.push(&buf[..n]);
                             g.modes.feed(&buf[..n]);
+                            let now = Instant::now();
+                            let is_echo = now.duration_since(g.last_input) < ECHO_WINDOW;
+                            g.last_output = now;
+                            let change = g.detector.on_output(&buf[..n], is_echo);
                             g.broadcast(ServerMsg::Output {
                                 id: id.clone(),
                                 data: buf[..n].to_vec(),
                             });
+                            if let Some(change) = change {
+                                g.broadcast_state(&id, change);
+                            }
                             g.mark_detached_if_empty();
                             g.pending_dump(n)
                         };
@@ -170,6 +212,15 @@ impl Session {
             let final_dump = {
                 let mut g = reader_inner.lock_ignore_poison();
                 g.alive = false;
+                let code = g
+                    .child
+                    .wait()
+                    .ok()
+                    .map(|s| s.exit_code() as i32)
+                    .unwrap_or(-1);
+                if let Some(change) = g.detector.on_exit(code) {
+                    g.broadcast_state(&id, change);
+                }
                 g.broadcast(ServerMsg::Exit { id: id.clone() });
                 g.persist.clone().map(|p| (p, g.ring.snapshot()))
             };
@@ -178,7 +229,10 @@ impl Session {
             }
         });
 
-        Ok(Session { inner })
+        Ok(Session {
+            inner,
+            id: session_id,
+        })
     }
 
     pub fn attach(&self, client: u64, sub: SyncSender<ServerMsg>, id: &str) {
@@ -244,6 +298,10 @@ impl Session {
         let mut g = self.inner.lock_ignore_poison();
         let _ = g.writer.write_all(data);
         let _ = g.writer.flush();
+        g.last_input = Instant::now();
+        if let Some(change) = g.detector.on_input() {
+            g.broadcast_state(&self.id, change);
+        }
     }
 
     pub fn resize(&self, cols: u16, rows: u16) {
@@ -304,6 +362,71 @@ impl Session {
             None => Snapshot::default(),
         }
     }
+
+    /// One periodic re-evaluation of the agent state (Layers 0+1+3). Broadcasts
+    /// a `State` message to this session's subscribers only when the state or
+    /// confidence actually changed, so the wire carries transitions, not ticks.
+    pub fn tick(&self, idle_threshold: Duration, tentative_threshold: Duration, now: Instant) {
+        let mut g = self.inner.lock_ignore_poison();
+        if !g.alive {
+            return;
+        }
+        let (status, cpu_idle) = match g.child.process_id() {
+            Some(pid) => {
+                let status = proc_status(pid);
+                let cpu_now = cpu_ticks(pid);
+                let cpu_idle = matches!(
+                    (g.last_cpu, cpu_now),
+                    (Some(prev), Some(cur)) if cur.saturating_sub(prev) < CPU_IDLE_DELTA_NS
+                );
+                g.last_cpu = cpu_now;
+                g.command = foreground_command(pid);
+                (status, cpu_idle)
+            }
+            None => (ProcStatus::Gone, true),
+        };
+        let silence = now.duration_since(g.last_output);
+        let idle = silence >= idle_threshold;
+        let long_idle = silence >= tentative_threshold;
+        let tail = tail_text(&g.ring.snapshot(), TAIL_BYTES);
+        if let Some(change) = g.detector.tick(idle, long_idle, status, cpu_idle, &tail) {
+            g.broadcast_state(&self.id, change);
+        }
+    }
+}
+
+/// Strips CSI and OSC escape sequences from the last `n` bytes of a raw ring
+/// snapshot so the prompt classifier (Layer 3) sees plain text, not control codes.
+fn tail_text(buf: &[u8], n: usize) -> String {
+    let slice = &buf[buf.len().saturating_sub(n)..];
+    let mut out: Vec<u8> = Vec::with_capacity(slice.len());
+    let mut i = 0;
+    while i < slice.len() {
+        if slice[i] == 0x1b {
+            i += 1;
+            match slice.get(i) {
+                Some(b'[') => {
+                    i += 1;
+                    while i < slice.len() && !(0x40..=0x7e).contains(&slice[i]) {
+                        i += 1;
+                    }
+                    i += 1;
+                }
+                Some(b']') => {
+                    i += 1;
+                    while i < slice.len() && slice[i] != 0x07 && slice[i] != 0x1b {
+                        i += 1;
+                    }
+                    i += 1;
+                }
+                _ => i += 1,
+            }
+        } else {
+            out.push(slice[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 #[cfg(test)]
@@ -348,6 +471,84 @@ mod tests {
             String::from_utf8_lossy(&got).contains("SHIREI_OK"),
             "expected output never arrived"
         );
+    }
+
+    #[test]
+    fn exit_broadcasts_a_done_state_with_the_code() {
+        use crate::detect::AgentState;
+        let session = Session::spawn(
+            "x".into(),
+            80,
+            24,
+            Some("/tmp".into()),
+            None,
+            64 * 1024,
+            None,
+        )
+        .unwrap();
+        let (tx, rx) = sync_channel(TEST_QUEUE_CAP);
+        session.attach(0, tx, "x");
+        // Attach first, then trigger the exit, so the Done broadcast can't race
+        // ahead of the subscriber (State messages are not replayed from the ring).
+        std::thread::sleep(Duration::from_millis(300));
+        session.input(b"exit 0\n");
+
+        let deadline = Instant::now() + Duration::from_secs(6);
+        let mut done_code = None;
+        while Instant::now() < deadline {
+            match rx.recv_timeout(Duration::from_millis(250)) {
+                Ok(ServerMsg::State {
+                    state: AgentState::Done { code },
+                    ..
+                }) => {
+                    done_code = Some(code);
+                    break;
+                }
+                Ok(ServerMsg::Exit { .. }) => break,
+                _ => {}
+            }
+        }
+        session.kill();
+        assert_eq!(done_code, Some(0), "exit did not broadcast Done{{code:0}}");
+    }
+
+    #[test]
+    fn ticking_an_idle_session_broadcasts_waiting() {
+        use crate::detect::AgentState;
+        let session = Session::spawn(
+            "w".into(),
+            80,
+            24,
+            Some("/tmp".into()),
+            Some("sleep 5".into()),
+            64 * 1024,
+            None,
+        )
+        .unwrap();
+        let (tx, rx) = sync_channel(TEST_QUEUE_CAP);
+        session.attach(0, tx, "w");
+        // Let the shell start `sleep` and drain the initial prompt/echo, so the
+        // transition we assert is the tick-driven one, not startup output.
+        std::thread::sleep(Duration::from_millis(500));
+        while rx.try_recv().is_ok() {}
+
+        // Zero idle threshold + the shell blocked in `sleep` (≈0 CPU): once past
+        // the CPU-idle warmup tick and the hysteresis, it must flip to Waiting.
+        let deadline = Instant::now() + Duration::from_secs(4);
+        let mut saw_waiting = false;
+        while Instant::now() < deadline {
+            session.tick(Duration::ZERO, Duration::from_secs(45), Instant::now());
+            if let Ok(ServerMsg::State {
+                state: AgentState::Waiting(_),
+                ..
+            }) = rx.recv_timeout(Duration::from_millis(150))
+            {
+                saw_waiting = true;
+                break;
+            }
+        }
+        session.kill();
+        assert!(saw_waiting, "an idle session never flipped to Waiting");
     }
 
     #[test]

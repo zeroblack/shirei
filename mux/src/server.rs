@@ -14,7 +14,7 @@ use crate::lock::MutexExt;
 use crate::protocol::{ClientMsg, ServerMsg, decode, encode, read_frame};
 use crate::session::{DEFAULT_RING_CAP, Session};
 
-type Registry = Arc<Mutex<HashMap<String, Session>>>;
+type Registry = Arc<Mutex<HashMap<String, Arc<Session>>>>;
 
 const SWEEP_INTERVAL: Duration = Duration::from_secs(5);
 
@@ -80,6 +80,7 @@ pub fn run(socket_path: &Path, build_id: String) -> anyhow::Result<()> {
     }
     let registry: Registry = Arc::new(Mutex::new(HashMap::new()));
     spawn_reaper(Arc::clone(&registry), orphan_ttl(), idle_exit_ttl());
+    spawn_ticker(Arc::clone(&registry));
     for stream in listener.incoming() {
         let stream = match stream {
             Ok(s) => s,
@@ -106,7 +107,7 @@ fn spawn_reaper(reg: Registry, ttl: Option<Duration>, idle_exit: Option<Duration
         let mut idle_since: Option<Instant> = None;
         loop {
             thread::sleep(SWEEP_INTERVAL);
-            let to_kill: Vec<Session> = {
+            let to_kill: Vec<Arc<Session>> = {
                 let mut sessions = reg.lock_ignore_poison();
                 let drop_ids: Vec<String> = sessions
                     .iter()
@@ -122,7 +123,7 @@ fn spawn_reaper(reg: Registry, ttl: Option<Duration>, idle_exit: Option<Duration
                     })
                     .map(|(id, _)| id.clone())
                     .collect();
-                let removed: Vec<Session> = drop_ids
+                let removed: Vec<Arc<Session>> = drop_ids
                     .into_iter()
                     .filter_map(|id| sessions.remove(&id))
                     .collect();
@@ -140,6 +141,35 @@ fn spawn_reaper(reg: Registry, ttl: Option<Duration>, idle_exit: Option<Duration
                 && since.elapsed() >= limit
             {
                 std::process::exit(0);
+            }
+        }
+    });
+}
+
+fn env_millis(var: &str) -> Option<Duration> {
+    std::env::var(var)
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|&ms| ms > 0)
+        .map(Duration::from_millis)
+}
+
+/// Periodically re-evaluates every session's agent state — the idle/Waiting half
+/// of the detector that output alone can't drive. Session handles are snapshotted
+/// under a short registry lock, then ticked with the lock released, so the
+/// per-session proc syscalls never block a spawn or a keystroke. Interval and
+/// idle threshold are env-overridable (the app passes them from config).
+fn spawn_ticker(reg: Registry) {
+    let interval = env_millis("SHIREI_TICK_MS").unwrap_or(Duration::from_millis(250));
+    let threshold = env_millis("SHIREI_IDLE_MS").unwrap_or(Duration::from_millis(5000));
+    let tentative = env_millis("SHIREI_TENTATIVE_MS").unwrap_or(Duration::from_millis(45000));
+    thread::spawn(move || {
+        loop {
+            thread::sleep(interval);
+            let now = Instant::now();
+            let sessions: Vec<Arc<Session>> = reg.lock_ignore_poison().values().cloned().collect();
+            for session in sessions {
+                session.tick(threshold, tentative, now);
             }
         }
     });
@@ -221,7 +251,7 @@ fn handle_msg(
                         DEFAULT_RING_CAP,
                         persist,
                     ) {
-                        sessions.insert(id.clone(), session);
+                        sessions.insert(id.clone(), Arc::new(session));
                     }
                 }
                 sessions.get(&id).and_then(|s| {

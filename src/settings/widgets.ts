@@ -98,6 +98,17 @@ export function checkbox(
   return wrap;
 }
 
+export function timeInput(
+  value: string,
+  onChange: (v: string) => void,
+): HTMLInputElement {
+  const el = document.createElement("input");
+  el.type = "time";
+  el.value = value;
+  el.addEventListener("change", () => onChange(el.value));
+  return el;
+}
+
 export function colorInput(
   value: string,
   onChange: (v: string) => void,
@@ -290,6 +301,23 @@ export function selectField<K extends string, V extends string>(
   return field(
     label,
     select(options, obj[key], (v) => {
+      obj[key] = v;
+      save();
+    }),
+    { desc },
+  );
+}
+
+export function timeField<K extends string>(
+  label: string,
+  obj: Record<K, string>,
+  key: K,
+  save: Save,
+  desc?: string,
+): HTMLElement {
+  return field(
+    label,
+    timeInput(obj[key], (v) => {
       obj[key] = v;
       save();
     }),

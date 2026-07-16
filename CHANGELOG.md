@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-07-16
+
+### Added
+- Agent orchestration: Shirei tracks the state of every AI CLI session, working,
+  waiting on you, done, or errored, and shows it on the tab. A turning atom marks
+  a session at work, a gold bell the moment it needs you, and a soft blue "Zzz"
+  once it has gone quiet for a while. A calm board (`⌘⌃A`) lists every session
+  with the ones waiting on you at the top, and `⌘⌃G` jumps to whichever needs you
+  next. When a session needs you while Shirei is in the background, it raises a
+  notification that names the session, with any secrets masked. Which CLIs are
+  tracked, the detection thresholds, and notification behavior live in Settings
+  under Agents; tracking covers Claude Code, with the other CLIs marked "Soon".
+- Keyboard control of the pinned dock: `⌘⇧→` enters it, `⌘⇧↑/↓` move between the
+  two cells, `⌘⇧←` returns to the grid, Enter adds a terminal or browser to the
+  focused cell, and `⌘W` unpins it. While a browser holds focus, `⌘L` focuses its
+  address bar and `⌘⌥⇧R` reloads it.
+- Local session logging: your session, project, tab, and agent activity are
+  recorded to a private database on your machine. No file content and no
+  keystrokes are stored.
+
+### Changed
+- Claude panes open with `--resume`, so each pane resumes its own session.
+
+### Fixed
+- Reopening the app returns to the tab you had focused when you quit.
+- In the editor, `⌘A` then `⌘C` copies the whole file, not only the lines on
+  screen.
+- `⌘W` closes the browser you are looking at, over a pane or in the pinned dock,
+  and returns to the pane.
+- Quick open finds recently created files even in a large directory.
+
 ## [0.15.0] - 2026-07-10
 
 ### Added
@@ -225,7 +256,9 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.14.5...HEAD
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/zeroblack/shirei/compare/v0.15.0...v0.16.0
+[0.15.0]: https://github.com/zeroblack/shirei/compare/v0.14.10...v0.15.0
 [0.14.5]: https://github.com/zeroblack/shirei/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/zeroblack/shirei/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/zeroblack/shirei/compare/v0.13.4...v0.14.3

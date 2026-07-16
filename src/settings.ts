@@ -11,6 +11,7 @@ import { getLocale, setLocale } from "./i18n";
 import { SECTION_LAYOUT, type SectionId } from "./settings/registry";
 import { aboutSection } from "./settings/section-about";
 import { advancedSection } from "./settings/section-advanced";
+import { agentsSection } from "./settings/section-agents";
 import { appearanceSection } from "./settings/section-appearance";
 import { browserSection } from "./settings/section-browser";
 import { editorSection } from "./settings/section-editor";
@@ -28,6 +29,7 @@ import { mountSettings, type SettingsSection } from "./settings/shell";
 
 const BY_ID: Record<SectionId, SettingsSection> = {
   home: homeSection,
+  agents: agentsSection,
   appearance: appearanceSection,
   editor: editorSection,
   git: gitSection,

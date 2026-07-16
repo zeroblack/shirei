@@ -42,6 +42,20 @@ pub fn git_file_head(path: String) -> Result<Option<String>> {
     Ok(Some(String::from_utf8_lossy(blob.content()).into_owned()))
 }
 
+/// The repo's current branch at `path`, `None` with no repo or a
+/// detached/unborn HEAD. Notification identity falls back to the session
+/// name when this comes back empty.
+#[tauri::command]
+pub fn git_current_branch(path: String) -> Result<Option<String>> {
+    let Ok(repo) = Repository::discover(Path::new(&path)) else {
+        return Ok(None);
+    };
+    let Ok(head) = repo.head() else {
+        return Ok(None);
+    };
+    Ok(head.shorthand().map(str::to_string))
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitInfo {

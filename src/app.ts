@@ -5,12 +5,14 @@ import { homeDir } from "@tauri-apps/api/path";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { BrowserSession } from "./browser";
 import { resolveColorScheme, shouldShowBrowser } from "./browser-core";
-import { alpha, mix } from "./colors";
+import { isClaudeCommand, withClaudeResume } from "./claude-cmd";
+import { alpha, deriveStatusColors, mix } from "./colors";
 import {
   browserBack,
   browserForward,
   browserReleaseFocus,
   browserReload,
+  metricsLog,
   ptyCwd,
   ptySnapshot,
   revealInFinder,
@@ -39,6 +41,23 @@ import { ImageSession } from "./image";
 import { Keymap } from "./keymap";
 import { eventToKeystroke, formatKeystroke, resolveBindings } from "./keys";
 import { MediaSession } from "./media";
+import {
+  type DormancyInput,
+  type DormancyState,
+  dormancyTransition,
+  MetricsLogger,
+  makeEvent,
+} from "./metrics";
+import {
+  isTrackedAgent,
+  NotificationCenter,
+  resolveCliId,
+} from "./notifications";
+import {
+  type BoardHints,
+  type BoardRow,
+  OrchestrationBoard,
+} from "./orchestration";
 import { createOverlay, overlaysOpen, setOverlayObserver } from "./overlay";
 import {
   type PaneContentKind,
@@ -61,6 +80,18 @@ import { QuickOpen } from "./quickopen";
 import type { Screencast } from "./screencast";
 import type { CssRect } from "./screencast-core";
 import { resolveSearchRoot, type ScopeRoots } from "./searchscope";
+import {
+  cycleWaitingId,
+  getSessionState,
+  initSessionState,
+  needsAttentionId,
+  needsYou,
+  onSessionStateChange,
+  pickPrimaryState,
+  type SessionState,
+  type SessionStateEntry,
+  sameKind,
+} from "./sessionstate";
 import { StatusBar } from "./statusbar";
 import {
   clearSession,
@@ -107,15 +138,6 @@ let seq = 0;
 function nextId(): string {
   seq += 1;
   return `t${Date.now().toString(36)}${seq}`;
-}
-
-function isClaudeCommand(cmd: string | undefined): cmd is string {
-  return cmd !== undefined && cmd.trim().split(/\s+/)[0] === "claude";
-}
-
-function withClaudeFlag(cmd: string, flag: "--continue" | "--resume"): string {
-  if (/(^|\s)(--continue|--resume|-c|-r)(\s|$)/.test(cmd)) return cmd;
-  return `${cmd} ${flag}`;
 }
 
 // Hidden longer than this on return is treated as a GPU sleep (rebuild renderers)
@@ -257,6 +279,8 @@ function applyChrome(
   };
   for (const [k, v] of Object.entries(vars))
     document.documentElement.style.setProperty(k, v);
+  for (const [k, v] of Object.entries(deriveStatusColors(vars["--bg"])))
+    document.documentElement.style.setProperty(k, v);
   document.documentElement.style.colorScheme = preset;
   // WebKit's native PDF viewer lives in a cross-origin iframe (asset://),
   // out of reach of CSS color-scheme; it follows the window appearance.
@@ -285,6 +309,7 @@ export class App {
     PaneGrid | EditorSessionType | ImageSession | MediaSession
   >();
   private activeId: string | null = null;
+  private readonly acknowledgedState = new Map<string, SessionState>();
   private readonly tabbar: TabBar;
   private readonly statusbar: StatusBar;
   private readonly host: HTMLElement;
@@ -307,9 +332,17 @@ export class App {
   private readonly pinSplitDividerEl: HTMLElement;
   private readonly pinCellEls: HTMLElement[];
   private readonly pinCells: (PinnedCell | null)[] = [null, null];
+  // Which pinned cell holds keyboard focus, or null when focus is in the main
+  // grid/tree. Drives dock navigation and lets the close key unpin the cell.
+  private focusedPin: number | null = null;
   // Guards against the tab-restore persist storm wiping the saved dock before
   // restorePinDock has read it back.
   private pinDockRestored = false;
+  // True only while init() is recreating tabs from the saved session. Each
+  // openTerminalTab/openFile would otherwise persist mid-restore, marking the
+  // last-created tab active and clobbering which tab the user actually left
+  // focused. Persist is suppressed until the restore settles on the real one.
+  private restoring = false;
   private todoFocused = false;
   private panelVisible = false;
   private lastRoot: string | null = null;
@@ -333,15 +366,32 @@ export class App {
     onOpenProject: (id) => void this.openProject(id),
     commands: () => this.paletteCommands(),
   });
+  private readonly orchestration = new OrchestrationBoard({
+    onActivate: (id) => this.focusSession(id),
+  });
+  private readonly notifications = new NotificationCenter();
   private readonly gitHistory = new GitHistory();
   private readonly updates: UpdateController;
   private readonly updateIndicator: UpdateIndicator;
   private updateModal: UpdateModalHandle | null = null;
   private appVersion = "";
+  private readonly metrics: MetricsLogger;
+  private readonly metricsSessionId = crypto.randomUUID();
+  private readonly tabDormancy = new Map<string, DormancyState>();
+  private readonly agentMetricsState = new Map<string, SessionState>();
+  private readonly seenProjectIds = new Set<string>();
+  private activeProjectId: string | null = null;
+  private metricsTimer: ReturnType<typeof setInterval> | null = null;
+  private lastActivityAt = Date.now();
+  private lastActivityPingAt = 0;
+  private systemIdle = false;
+  private disposed = false;
 
   constructor(tabbarEl: HTMLElement, host: HTMLElement, config: Config) {
     this.host = host;
     this.config = config;
+    this.metrics = new MetricsLogger(config.metrics, metricsLog);
+    this.notifications.setConfig(config.notifications, config.cli_registry);
     this.keymap = new Keymap(config.keybindings ?? {});
     this.projects = config.projects ?? [];
     this.fontSize = config.font.size;
@@ -389,6 +439,17 @@ export class App {
     this.pinCellEls = [
       ...this.pinSlotEl.querySelectorAll<HTMLElement>(".pin-cell"),
     ];
+    // Clicking into a filled cell makes it the dock's focused cell, so the
+    // arrow-key dock navigation and the close/unpin key follow the mouse.
+    this.pinCellEls.forEach((host, index) => {
+      host.addEventListener(
+        "pointerdown",
+        () => {
+          if (this.pinCells[index]) this.focusPinCell(index);
+        },
+        true,
+      );
+    });
     this.mainEl.style.setProperty(
       "--pin-width",
       `${(config.layout.pin_width_fraction * 100).toFixed(2)}%`,
@@ -437,11 +498,22 @@ export class App {
     webglPool.setCap(config.render.webgl_pool_cap);
     window.addEventListener("resize", () => this.queueFit());
     window.addEventListener("keydown", (e) => this.onKey(e));
+    // Best-effort only: a real Cmd+Q / Quit-menu terminate calls NSApplication
+    // directly and skips both the window CloseRequested pipeline and this handler's
+    // async work, so the visibilitychange/blur flushes below are the actual
+    // mitigation, keeping the buffer near-empty before that can happen.
     window.addEventListener("beforeunload", () => this.dispose());
     document.addEventListener("visibilitychange", () => this.onVisibility());
     window.addEventListener("focus", () => {
       this.cmdAvailable.clear();
       this.current()?.recoverRenderers(false);
+    });
+    window.addEventListener("pointerdown", () => this.noteActivity(), {
+      capture: true,
+    });
+    void getCurrentWindow().onFocusChanged(({ payload }) => {
+      this.logMetric(payload ? "app_focus" : "app_blur");
+      if (!payload && this.config.metrics.enabled) void this.metrics.flush();
     });
     this.setupTitlebarSearch();
     document.addEventListener("focusin", () => this.refreshFocusSurface());
@@ -534,6 +606,7 @@ export class App {
   private onVisibility(): void {
     if (document.hidden) {
       this.hiddenAt = Date.now();
+      if (this.config.metrics.enabled) void this.metrics.flush();
       return;
     }
     const hard =
@@ -558,10 +631,16 @@ export class App {
       () => void this.snapshot(),
       Math.max(1, this.config.session.snapshot_interval_secs) * 1000,
     );
-    this.ageTimer = setInterval(
-      () => this.tabbar.refreshAges(),
-      Math.max(1, this.config.tabs.age_refresh_secs) * 1000,
-    );
+    this.ageTimer = setInterval(() => {
+      this.tabbar.refreshAges();
+      this.orchestration.refreshAges();
+    }, Math.max(1, this.config.tabs.age_refresh_secs) * 1000);
+    if (this.config.metrics.enabled) {
+      this.metricsTimer = setInterval(
+        () => this.tickMetrics(),
+        Math.max(1000, this.config.metrics.activity_ping_ms),
+      );
+    }
   }
 
   private stopTimers(): void {
@@ -573,28 +652,240 @@ export class App {
       clearInterval(this.ageTimer);
       this.ageTimer = null;
     }
+    if (this.metricsTimer !== null) {
+      clearInterval(this.metricsTimer);
+      this.metricsTimer = null;
+    }
+  }
+
+  private logMetric(
+    kind: string,
+    fields: Omit<Parameters<typeof makeEvent>[1], never> = {},
+  ): void {
+    if (!this.config.metrics.enabled) return;
+    this.metrics.log(
+      makeEvent(kind, { sessionId: this.metricsSessionId, ...fields }),
+    );
+  }
+
+  private trackNewTabDormancy(tabId: string): void {
+    if (!this.config.metrics.enabled) return;
+    this.tabDormancy.set(tabId, {
+      state: "active",
+      shown: true,
+      lastActiveAt: Date.now(),
+    });
+  }
+
+  private untrackTabMetrics(tabId: string): void {
+    if (!this.config.metrics.enabled) return;
+    this.tabDormancy.delete(tabId);
+    this.agentMetricsState.delete(tabId);
+  }
+
+  private feedDormancy(tabId: string, input: DormancyInput): void {
+    if (!this.config.metrics.enabled) return;
+    const prev = this.tabDormancy.get(tabId);
+    if (!prev) return;
+    const { next, emit } = dormancyTransition(
+      prev,
+      input,
+      Date.now(),
+      this.config.metrics.dormant_after_ms,
+    );
+    this.tabDormancy.set(tabId, next);
+    if (!emit) return;
+    const tab = this.tab(tabId);
+    const projectId = tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
+    this.logMetric(emit, { tabId, projectId });
+  }
+
+  // Coarse presence ping: throttled to the config cadence and carrying no
+  // keystroke/click counts, only that the user is here. Also keeps the active
+  // tab's dormancy alive and clears a running system-idle span.
+  private noteActivity(): void {
+    if (!this.config.metrics.enabled) return;
+    const now = Date.now();
+    if (now - this.lastActivityPingAt >= this.config.metrics.activity_ping_ms) {
+      this.lastActivityPingAt = now;
+      this.logMetric("input_activity");
+    }
+    if (this.activeId) this.feedDormancy(this.activeId, "activity");
+    if (this.systemIdle) {
+      this.systemIdle = false;
+      this.logMetric("system_idle_end");
+    }
+    this.lastActivityAt = now;
+  }
+
+  private tickMetrics(): void {
+    if (!this.config.metrics.enabled) return;
+    const now = Date.now();
+    const states = this.tabSessionStates();
+    for (const [tabId, state] of this.tabDormancy) {
+      const entry = states.get(tabId);
+      const input: DormancyInput =
+        entry &&
+        (entry.state.kind === "working" || entry.state.kind === "waiting")
+          ? "activity"
+          : "tick";
+      const { next, emit } = dormancyTransition(
+        state,
+        input,
+        now,
+        this.config.metrics.dormant_after_ms,
+      );
+      this.tabDormancy.set(tabId, next);
+      if (!emit) continue;
+      const tab = this.tab(tabId);
+      const projectId =
+        tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
+      this.logMetric(emit, { tabId, projectId });
+    }
+    if (
+      !this.systemIdle &&
+      now - this.lastActivityAt >= this.config.metrics.idle_after_ms
+    ) {
+      this.systemIdle = true;
+      this.logMetric("system_idle_start");
+    }
+  }
+
+  // Session-state events arrive per pane leaf, but a tab surfaces only its most
+  // urgent tracked session (tabSessionStates, shared with the tabbar/bell UI);
+  // agent metrics follow that same per-tab primary state so the two never
+  // disagree. Dormancy is kept alive here on every state-change poll while a
+  // tab is working/waiting; tickMetrics reads that same primary state on its
+  // own periodic timer so a hidden tab whose agent works silently between
+  // state changes (e.g. a long build with no output) never crosses to dormant.
+  private emitAgentMetrics(): void {
+    if (!this.config.metrics.enabled) return;
+    const states = this.tabSessionStates();
+    for (const tab of this.tabs) {
+      const entry = states.get(tab.id);
+      if (
+        entry &&
+        (entry.state.kind === "working" || entry.state.kind === "waiting")
+      ) {
+        this.feedDormancy(tab.id, "activity");
+      }
+      const prev = this.agentMetricsState.get(tab.id);
+      if (entry && prev && sameKind(prev, entry.state)) continue;
+      if (prev) this.endAgentState(tab, prev);
+      if (entry) {
+        this.beginAgentState(tab, entry);
+        this.agentMetricsState.set(tab.id, entry.state);
+      } else {
+        this.agentMetricsState.delete(tab.id);
+      }
+    }
+  }
+
+  private endAgentState(tab: TabState, state: SessionState): void {
+    const projectId = tab.kind === "terminal" ? (tab.projectId ?? null) : null;
+    if (state.kind === "working")
+      this.logMetric("working_end", { tabId: tab.id, projectId });
+    else if (state.kind === "waiting")
+      this.logMetric("waiting_end", { tabId: tab.id, projectId });
+  }
+
+  private beginAgentState(tab: TabState, entry: SessionStateEntry): void {
+    const projectId = tab.kind === "terminal" ? (tab.projectId ?? null) : null;
+    const cliName = resolveCliId(entry.command, this.config.cli_registry);
+    const command = entry.command ?? null;
+    switch (entry.state.kind) {
+      case "working":
+        this.logMetric("working_start", {
+          tabId: tab.id,
+          projectId,
+          cliName,
+          payload: JSON.stringify({ command }),
+        });
+        break;
+      case "waiting":
+        this.logMetric("waiting_start", {
+          tabId: tab.id,
+          projectId,
+          cliName,
+          payload: JSON.stringify({ wait: entry.state.wait, command }),
+        });
+        break;
+      case "done":
+        this.logMetric("done", {
+          tabId: tab.id,
+          projectId,
+          cliName,
+          payload: JSON.stringify({ code: entry.state.code, command }),
+        });
+        break;
+      case "errored":
+        this.logMetric("errored", {
+          tabId: tab.id,
+          projectId,
+          cliName,
+          payload: JSON.stringify({ code: entry.state.code, command }),
+        });
+        break;
+    }
+  }
+
+  // Single funnel for project focus: every path that changes which project is
+  // active (opening/creating a project tab, switching tabs, opening a plain
+  // file/terminal tab) routes through setActiveProject, so this is the one
+  // place that needs to emit project_opened/focused/unfocused.
+  private emitProjectFocusMetrics(projectId: string | null): void {
+    if (!this.config.metrics.enabled) return;
+    const previous = this.activeProjectId;
+    if (previous === projectId) return;
+    this.activeProjectId = projectId;
+    if (previous !== null)
+      this.logMetric("project_unfocused", { projectId: previous });
+    if (projectId === null) return;
+    if (!this.seenProjectIds.has(projectId)) {
+      this.seenProjectIds.add(projectId);
+      const project = this.projects.find((p) => p.id === projectId);
+      this.logMetric("project_opened", {
+        projectId,
+        payload: JSON.stringify({
+          name: project?.name,
+          path: project?.path,
+        }),
+      });
+    }
+    this.logMetric("project_focused", { projectId });
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.logMetric("session_end");
     this.stopTimers();
     if (getCurrentWindow().label === "main") this.persist();
     else clearSession();
     this.statusbar.dispose();
     for (const session of this.sessions.values()) void session.dispose();
+    void this.metrics.dispose();
   }
 
   async init(): Promise<void> {
+    this.logMetric("session_start");
     this.tree.setHome(await homeDir());
     const saved = loadSession();
     if (saved.length === 0) {
       await this.newTab();
     } else {
+      this.restoring = true;
+      // The tab the user left focused, captured by the id its restore actually
+      // produced (openTerminalTab/openFile set activeId to the new tab), so it
+      // survives any tab that fails to restore instead of drifting by index.
+      let activeTabId: string | null = null;
       for (const t of saved) {
         if (t.kind === "terminal") {
           await this.openTerminalTab(t.tree, t.title, t.color, t.projectId);
         } else {
           await this.openFile(t.path, { silent: true });
         }
+        if (t.active) activeTabId = this.activeId;
       }
       if (!this.tabs.some((x) => x.kind === "terminal")) await this.newTab();
       saved.forEach((s, i) => {
@@ -603,7 +894,13 @@ export class App {
         if (typeof s.lastUsedAt === "number") t.lastUsedAt = s.lastUsedAt;
         if (typeof s.pinned === "boolean") t.pinned = s.pinned;
       });
+      this.restoring = false;
       this.renderTabs();
+      // Restoring the tabs in order leaves the last-created one active; return
+      // focus to whichever tab the user actually had open when they quit.
+      if (activeTabId && activeTabId !== this.activeId)
+        this.activate(activeTabId);
+      this.persist();
     }
     await this.restorePinDock();
     if (this.panelVisible) await this.openWorkspaceTree();
@@ -634,6 +931,14 @@ export class App {
     await listen("menu-pane-focus-right", () => paneAction("focus.right"));
     await listen("menu-pane-focus-up", () => paneAction("focus.up"));
     await listen("menu-pane-focus-down", () => paneAction("focus.down"));
+    await listen("menu-browser-reload", () => paneAction("browser.reload"));
+    await listen("menu-browser-url", () => paneAction("browser.focus-url"));
+    // Cmd+Q / the "Quit Shirei" menu item terminate via NSApplication directly,
+    // skipping beforeunload's async dispose — the backend holds native exit for
+    // a short grace period after this fires, giving dispose() (guarded by
+    // `disposed`, so session_end never logs twice) its one guaranteed chance to
+    // flush the metrics buffer before the process actually goes away.
+    await listen("metrics://flush-on-exit", () => this.dispose());
   }
 
   // The daemon connection can die between any two keystrokes (idle-exit, a
@@ -648,6 +953,25 @@ export class App {
       for (const session of this.sessions.values()) {
         if (session instanceof PaneGrid) session.reconnectAll();
       }
+    });
+  }
+
+  // Detection lives in shirei-mux keyed by PTY session (pane leaf) id; a tab
+  // can hold several panes, so it surfaces the most urgent one on its tab.
+  async bindSessionStateEvents(): Promise<void> {
+    await initSessionState();
+    await this.notifications.init();
+    onSessionStateChange(() => {
+      this.renderTabs();
+      if (this.orchestration.isOpen()) {
+        this.orchestration.refresh(this.boardRows());
+      }
+      const active = this.sessions.get(this.activeId ?? "");
+      this.notifications.setActive(
+        active instanceof PaneGrid ? active.leafIds() : [],
+      );
+      this.notifications.sync(this.notificationRows());
+      this.emitAgentMetrics();
     });
   }
 
@@ -748,6 +1072,8 @@ export class App {
   applyConfig(c: Config): void {
     const previous = this.config;
     this.config = c;
+    this.notifications.setConfig(c.notifications, c.cli_registry);
+    this.metrics.setConfig(c.metrics);
     setLocale(c.locale);
     this.applyTitlebarLabels();
     this.keymap = new Keymap(c.keybindings ?? {});
@@ -770,7 +1096,9 @@ export class App {
     if (
       previous.session.snapshot_interval_secs !==
         c.session.snapshot_interval_secs ||
-      previous.tabs.age_refresh_secs !== c.tabs.age_refresh_secs
+      previous.tabs.age_refresh_secs !== c.tabs.age_refresh_secs ||
+      previous.metrics.enabled !== c.metrics.enabled ||
+      previous.metrics.activity_ping_ms !== c.metrics.activity_ping_ms
     ) {
       this.startTimers();
     }
@@ -961,6 +1289,7 @@ export class App {
 
   private focusActive(): void {
     if (this.todoFocused) this.blurTodoPanel();
+    this.blurPinDock();
     const s = this.sessions.get(this.activeId ?? "");
     if (s instanceof PaneGrid) s.fitAndResize();
     s?.focus();
@@ -1024,27 +1353,20 @@ export class App {
 
   /**
    * Resolves the command per pane (keyed by leaf id) for a tab being opened.
-   * Panes restored from a snapshot (`lastCommand` defined) that run `claude`
-   * come back continuing their conversation: `--continue` when the tab holds a
-   * single claude pane, `--resume` when several share it so each picks its own.
+   * Every `claude` pane spawns with `--resume`, whether restored or freshly
+   * opened: bare `claude` starts a throwaway conversation, and `--continue`
+   * attaches to the most recent one in the directory, so panes and tabs opening
+   * at once race onto that same conversation and clobber each other. `--resume`
+   * lets each pane pick the session it belongs to.
    */
   private resolveSpawnCommands(
     tree: PaneNode,
   ): Map<string, string | undefined> {
-    const entries = leaves(tree).map((leaf) => ({
-      id: leaf.id,
-      cmd: this.spawnCommandFor(leaf),
-      restored: leaf.lastCommand !== undefined,
-    }));
-    const claude = entries.filter((e) => e.restored && isClaudeCommand(e.cmd));
-    const flag = claude.length > 1 ? "--resume" : "--continue";
     return new Map(
-      entries.map((e) => [
-        e.id,
-        e.restored && isClaudeCommand(e.cmd)
-          ? withClaudeFlag(e.cmd, flag)
-          : e.cmd,
-      ]),
+      leaves(tree).map((leaf) => {
+        const cmd = this.spawnCommandFor(leaf);
+        return [leaf.id, isClaudeCommand(cmd) ? withClaudeResume(cmd) : cmd];
+      }),
     );
   }
 
@@ -1087,6 +1409,15 @@ export class App {
       lastUsedAt: Date.now(),
       pinned: false,
     });
+    this.logMetric("tab_created", {
+      tabId: id,
+      projectId: projectId ?? null,
+      payload: JSON.stringify({
+        paneKind: "terminal",
+        has_project: projectId != null,
+      }),
+    });
+    this.trackNewTabDormancy(id);
     const container = document.createElement("div");
     container.className = "terminal-host";
     this.host.appendChild(container);
@@ -1286,10 +1617,13 @@ export class App {
     this.host.appendChild(container);
 
     let session: EditorSessionType | ImageSession | MediaSession;
+    let paneKind: "image" | "media" | "editor";
     if (isImage(name)) {
       session = new ImageSession(id, path, container);
+      paneKind = "image";
     } else if (mediaKind(name)) {
       session = new MediaSession(id, path, container);
+      paneKind = "media";
     } else {
       const ES = await loadEditor();
       session = new ES(id, path, container, {
@@ -1303,8 +1637,15 @@ export class App {
       session.onDirtyChange = (dirty) => this.setDirty(id, dirty);
       const editorSession = session;
       editorSession.onHistory = () => void this.openHistory(editorSession);
+      paneKind = "editor";
     }
     this.sessions.set(id, session);
+    this.logMetric("tab_created", {
+      tabId: id,
+      projectId: null,
+      payload: JSON.stringify({ paneKind, has_project: false }),
+    });
+    this.trackNewTabDormancy(id);
 
     this.activeId = id;
     this.showActive();
@@ -1586,13 +1927,22 @@ export class App {
   }
 
   private addToPinDock(kind: "terminal" | "browser"): void {
-    const index = this.pinCells.indexOf(null);
+    // Fill the focused empty cell when the dock has keyboard focus, else the
+    // first free cell — so ⌘⌃T/⌘⌃B land where the user is looking.
+    const focused = this.focusedPin;
+    const index =
+      focused !== null && !this.pinCells[focused]
+        ? focused
+        : this.pinCells.indexOf(null);
     if (index < 0) {
       this.notify(t("ui.pin.full"));
       return;
     }
-    if (kind === "terminal") void this.openTerminalInCell(index);
-    else void this.openBrowserInCell(index);
+    const opened =
+      kind === "terminal"
+        ? this.openTerminalInCell(index)
+        : this.openBrowserInCell(index);
+    void opened.then(() => this.focusPinCell(index));
   }
 
   // The empty-cell picker: choose what independent content to place there.
@@ -1697,12 +2047,80 @@ export class App {
     const cell = this.pinCells[index];
     if (!cell) return;
     this.pinCells[index] = null;
+    if (this.focusedPin === index) this.blurPinDock();
     void cell.session.dispose();
     cell.container.remove();
     this.showPinDock();
     this.syncBrowserVisibility();
     this.refreshTreeIfVisible();
     this.persist();
+  }
+
+  private dockVisible(): boolean {
+    return this.pinCells.some((c) => c !== null);
+  }
+
+  // Focus a dock cell whether it is filled or an empty "+" slot, so the keyboard
+  // can reach an empty cell to add content into it. Only a filled terminal takes
+  // real DOM focus (to type); a browser is background content and an empty cell
+  // has nothing to focus — both stay keyboard-navigable at the app level.
+  private focusPinCell(index: number): void {
+    if (index < 0 || index >= this.pinCellEls.length || !this.dockVisible())
+      return;
+    this.focusedPin = index;
+    this.pinCellEls.forEach((el, i) => {
+      el.classList.toggle("pin-focused", i === index);
+    });
+    const cell = this.pinCells[index];
+    if (cell?.kind === "terminal") cell.session.focus();
+  }
+
+  private blurPinDock(): void {
+    this.focusedPin = null;
+    for (const el of this.pinCellEls) el.classList.remove("pin-focused");
+  }
+
+  // Entering the dock lands on the top cell; the arrows reach the other from
+  // there. Fails (so focus stays in the grid) when the dock is empty/hidden.
+  private enterPinDock(): boolean {
+    if (!this.dockVisible()) return false;
+    this.focusPinCell(0);
+    // Pull the keyboard off any pinned browser's webview so the dock's own keys
+    // (Enter to add, ⌘⌃T/⌘⌃B, ⌘W) reach the app instead of the web page.
+    void browserReleaseFocus();
+    return true;
+  }
+
+  // Arrow navigation once the dock holds focus: up/down move between the two
+  // stacked cells (empty or filled), left returns to the main grid.
+  private navigateWithinDock(dir: FocusDir): boolean {
+    if (dir === "left") {
+      this.blurPinDock();
+      this.focusActive();
+      return true;
+    }
+    if (dir === "up") this.focusPinCell(0);
+    else if (dir === "down") this.focusPinCell(1);
+    void browserReleaseFocus();
+    return true;
+  }
+
+  // ⌘W in the dock: a filled cell unpins, an empty one just exits — either way
+  // focus returns to the working pane, mirroring how closing a file over a pane
+  // reveals the terminal underneath, so ⌘W is never a silent no-op.
+  private closeFocusedPin(): void {
+    const index = this.focusedPin;
+    if (index === null) return;
+    if (this.pinCells[index]) this.unpinCell(index);
+    this.focusActive();
+  }
+
+  // Enter on a focused empty cell opens its content picker (browser or terminal).
+  private fillFocusedPin(): boolean {
+    const index = this.focusedPin;
+    if (index === null || this.pinCells[index]) return false;
+    this.openCellPicker(index);
+    return true;
   }
 
   // Empty cells invite content with a "+" and a hint; a filled cell shows its
@@ -1865,14 +2283,29 @@ export class App {
 
   activate(id: string): void {
     if (id === this.activeId || !this.sessions.has(id)) return;
+    const previousId = this.activeId;
     this.activeId = id;
     this.showActive();
     this.renderTabs();
     this.focusActive();
     this.persist();
     if (this.panelVisible) void this.openWorkspaceTree();
+    if (previousId) {
+      const previousTab = this.tab(previousId);
+      const previousProjectId =
+        previousTab?.kind === "terminal"
+          ? (previousTab.projectId ?? null)
+          : null;
+      this.logMetric("tab_deactivated", {
+        tabId: previousId,
+        projectId: previousProjectId,
+      });
+    }
     const tab = this.tab(id);
     const projectId = tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
+    this.logMetric("tab_activated", { tabId: id, projectId });
+    this.feedDormancy(id, "shown");
+    if (previousId) this.feedDormancy(previousId, "hidden");
     this.setActiveProject(projectId);
     this.syncBrowserVisibility();
   }
@@ -1896,8 +2329,18 @@ export class App {
     if (!session) return;
     const index = this.tabs.findIndex((t) => t.id === id);
 
+    const projectId = tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
+    this.logMetric("tab_closed", { tabId: id, projectId });
+    this.untrackTabMetrics(id);
+
     this.sessions.delete(id);
     this.tabs = this.tabs.filter((t) => t.id !== id);
+    if (projectId !== null) {
+      const projectStillOpen = this.tabs.some(
+        (t) => t.kind === "terminal" && t.projectId === projectId,
+      );
+      if (!projectStillOpen) this.logMetric("project_closed", { projectId });
+    }
 
     if (session instanceof PaneGrid) await session.dispose();
     else session.dispose();
@@ -2121,6 +2564,7 @@ export class App {
     this.todoPanelEl.classList.toggle("hidden", !hasProject);
     this.todoDividerEl.classList.toggle("hidden", !hasProject);
     void this.todoPanel.setProject(projectId);
+    this.emitProjectFocusMetrics(projectId);
   }
 
   togglePanel(): void {
@@ -2159,6 +2603,7 @@ export class App {
       void this.openWorkspaceTree();
     }
     this.todoFocused = true;
+    this.blurPinDock();
     this.todoPanel.focus();
   }
 
@@ -2173,6 +2618,7 @@ export class App {
       void this.openWorkspaceTree();
     }
     if (this.todoFocused) this.blurTodoPanel();
+    this.blurPinDock();
     this.tree.focus();
   }
 
@@ -2185,15 +2631,18 @@ export class App {
       | MediaSession
       | undefined,
   ): boolean {
+    if (this.focusedPin !== null) return this.navigateWithinDock(dir);
     if (this.treeHasFocus()) {
       if (dir === "right") this.focusActive();
       return true;
     }
     if (active instanceof PaneGrid) {
       if (active.focusDir(dir)) return true;
+      if (dir === "right" && this.enterPinDock()) return true;
       if (dir === "left") this.focusTree();
       return true;
     }
+    if (dir === "right" && this.enterPinDock()) return true;
     if (
       dir === "left" &&
       !(EditorSession !== null && active instanceof EditorSession)
@@ -2453,7 +2902,29 @@ export class App {
     this.tree.focus();
   }
 
+  private activeFileEditor(
+    active:
+      | PaneGrid
+      | EditorSessionType
+      | ImageSession
+      | MediaSession
+      | undefined,
+  ): EditorSessionType | undefined {
+    if (EditorSession !== null && active instanceof EditorSession)
+      return active;
+    if (active instanceof PaneGrid) {
+      const paneId = active.activePaneId();
+      if (active.activeContentIsFile(paneId)) {
+        const content = active.activeContentSession(paneId);
+        if (EditorSession !== null && content instanceof EditorSession)
+          return content;
+      }
+    }
+    return undefined;
+  }
+
   private onKey(e: KeyboardEvent): void {
+    this.noteActivity();
     const active = this.sessions.get(this.activeId ?? "");
     if (
       active instanceof MediaSession &&
@@ -2465,6 +2936,23 @@ export class App {
     ) {
       e.preventDefault();
       active.togglePlay();
+      return;
+    }
+    // Enter on a focused empty dock cell opens its content picker. Enter carries
+    // no modifier so it never reaches the keymap; handled here directly.
+    if (
+      this.focusedPin !== null &&
+      e.key === "Enter" &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      !(
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) &&
+      this.fillFocusedPin()
+    ) {
+      e.preventDefault();
       return;
     }
     if (this.todoFocused) {
@@ -2491,6 +2979,27 @@ export class App {
     }
     const ks = eventToKeystroke(e);
     if (!ks) return;
+    // Select-all and copy in a file editor run on the document state, not the
+    // rendered viewport, so a 1000-line file copies in full instead of just the
+    // ~60 visible lines. Intercepted ahead of the keymap so it wins over the
+    // terminal's own copy binding when a file is layered over a pane. A focused
+    // text field (the editor's own search box, rename, quick open) keeps its
+    // native select/copy — those must act on the field, not the document.
+    const inField =
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement;
+    if (!inField && ks.meta && !ks.ctrl && !ks.alt && !ks.shift) {
+      const editor =
+        ks.key === "a" || ks.key === "c"
+          ? this.activeFileEditor(active)
+          : undefined;
+      if (editor) {
+        e.preventDefault();
+        if (ks.key === "a") editor.selectAll();
+        else void editor.copySelection();
+        return;
+      }
+    }
     const action = this.keymap.resolve(ks, {
       pane: active instanceof PaneGrid,
     });
@@ -2688,23 +3197,35 @@ export class App {
         this.addToPinDock("browser");
         break;
       case "browser.focus-url":
-        this.activeBrowserSession(pane)?.focus();
+        this.activeBrowser(pane)?.focus();
         break;
       case "browser.back": {
-        const s = this.activeBrowserSession(pane);
+        const s = this.activeBrowser(pane);
         if (s) void browserBack(s.label);
         break;
       }
       case "browser.forward": {
-        const s = this.activeBrowserSession(pane);
+        const s = this.activeBrowser(pane);
         if (s) void browserForward(s.label);
         break;
       }
       case "browser.reload": {
-        const s = this.activeBrowserSession(pane);
+        const s = this.activeBrowser(pane);
         if (s) void browserReload(s.label);
         break;
       }
+      case "orchestration.open":
+        this.toggleOrchestration();
+        break;
+      case "orchestration.goto-waiting":
+        this.gotoWhoNeedsMe();
+        break;
+      case "orchestration.next-waiting":
+        this.cycleWaiting(1);
+        break;
+      case "orchestration.prev-waiting":
+        this.cycleWaiting(-1);
+        break;
     }
   }
 
@@ -2712,6 +3233,32 @@ export class App {
     if (!pane) return undefined;
     const session = pane.activeContentSession(pane.activePaneId());
     return session instanceof BrowserSession ? session : undefined;
+  }
+
+  // The browser the user is looking at, for controls routed through the native
+  // menu (so ⌘[/⌘]/reload/⌘L survive a focused webview). A keyboard-focused
+  // pinned browser wins; otherwise, when a child webview holds first responder
+  // (`document.hasFocus()` is false) and there is a single pinned browser, it is
+  // unambiguously that one; else the active grid pane's browser.
+  private pinnedBrowserCells(): { session: BrowserSession; index: number }[] {
+    const out: { session: BrowserSession; index: number }[] = [];
+    this.pinCells.forEach((cell, index) => {
+      if (cell?.session instanceof BrowserSession)
+        out.push({ session: cell.session, index });
+    });
+    return out;
+  }
+
+  private activeBrowser(pane?: PaneGrid): BrowserSession | undefined {
+    if (this.focusedPin !== null) {
+      const cell = this.pinCells[this.focusedPin];
+      if (cell?.session instanceof BrowserSession) return cell.session;
+    }
+    if (!document.hasFocus()) {
+      const pinned = this.pinnedBrowserCells();
+      if (pinned.length === 1) return pinned[0].session;
+    }
+    return this.activeBrowserSession(pane);
   }
 
   private async guardDirtyContent(
@@ -2754,12 +3301,36 @@ export class App {
   }
 
   private async closeActive(): Promise<void> {
+    // A focused pinned dock cell closes first, wherever ⌘W came from — the app's
+    // own keydown or the native menu accelerator that fires while a pinned
+    // browser's webview holds focus. Same close-and-reveal flow as a content
+    // pane: the cell empties and focus returns to the working pane.
+    if (this.focusedPin !== null) {
+      this.closeFocusedPin();
+      return;
+    }
     const active = this.sessions.get(this.activeId ?? "");
-    // ⌘W closes the frontmost thing: a file layered over a terminal closes the
-    // file and reveals the terminal, leaving the tab in place.
+    const gridBrowserFocused =
+      active instanceof PaneGrid &&
+      active.activeContentIsBrowser(active.activePaneId());
+    // A pinned browser focused by mouse holds the webview first responder, so the
+    // main document reports no focus; ⌘W then closes that browser (unambiguous
+    // when it is the only pinned browser and the grid isn't itself showing a
+    // browser) instead of a background grid pane.
+    if (!document.hasFocus() && !gridBrowserFocused) {
+      const pinned = this.pinnedBrowserCells();
+      if (pinned.length === 1) {
+        this.focusedPin = pinned[0].index;
+        this.closeFocusedPin();
+        return;
+      }
+    }
+    // ⌘W closes the frontmost thing: a file or browser layered over a terminal
+    // closes and reveals the terminal, leaving the tab in place.
     if (
       active instanceof PaneGrid &&
-      active.activeContentIsFile(active.activePaneId())
+      (active.activeContentIsFile(active.activePaneId()) ||
+        active.activeContentIsBrowser(active.activePaneId()))
     ) {
       await this.closeActiveContentGuarded(active);
       return;
@@ -2863,7 +3434,25 @@ export class App {
       });
       if (!ok) return;
     }
+    this.logKillMetric(grid);
     grid.killActive();
+  }
+
+  // Logged ahead of the actual kill so a user-initiated kill is distinguishable
+  // in the timeline from the done/errored transition the kill itself produces.
+  private logKillMetric(grid: PaneGrid): void {
+    if (!this.config.metrics.enabled) return;
+    const tabId = [...this.sessions].find(([, s]) => s === grid)?.[0];
+    if (!tabId) return;
+    const tab = this.tab(tabId);
+    const projectId = tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
+    const command = getSessionState(grid.activePtyId())?.command ?? null;
+    this.logMetric("killed", {
+      tabId,
+      projectId,
+      cliName: resolveCliId(command, this.config.cli_registry),
+      payload: JSON.stringify({ command }),
+    });
   }
 
   private async runningProc(ptyId: string): Promise<string | null> {
@@ -2940,12 +3529,160 @@ export class App {
     void configSet(this.config);
   }
 
+  private tabSessionStates(): Map<string, SessionStateEntry> {
+    const states = new Map<string, SessionStateEntry>();
+    const registry = this.config.cli_registry;
+    for (const tab of this.tabs) {
+      const grid = this.sessions.get(tab.id);
+      if (!(grid instanceof PaneGrid)) continue;
+      const tracked = grid
+        .leafIds()
+        .filter((id) =>
+          isTrackedAgent(getSessionState(id)?.command ?? null, registry),
+        );
+      const primary = pickPrimaryState(tracked);
+      if (primary) states.set(tab.id, primary);
+    }
+    return states;
+  }
+
   private renderTabs(): void {
-    this.tabbar.render(this.tabs, this.activeId);
+    const states = this.tabSessionStates();
+    this.tabbar.render(
+      this.tabs,
+      this.activeId,
+      states,
+      this.tabAttention(states),
+    );
+  }
+
+  // A blocked session on a background tab must keep flagging until the user
+  // opens it: the one-shot transition is missed precisely because the tab is
+  // not being watched. Attention is the set of non-active tabs that need the
+  // user (a high-confidence Waiting) and whose state is unseen since it last
+  // changed; the active tab is always considered seen, so visiting a tab clears
+  // its flag. Done and errored stay calm — finishing never raises the flag.
+  private tabAttention(states: Map<string, SessionStateEntry>): Set<string> {
+    const attention = new Set<string>();
+    const present = new Set(this.tabs.map((tab) => tab.id));
+    for (const id of this.acknowledgedState.keys()) {
+      if (!present.has(id)) this.acknowledgedState.delete(id);
+    }
+    for (const tab of this.tabs) {
+      const entry = states.get(tab.id);
+      if (tab.id === this.activeId) {
+        if (entry) this.acknowledgedState.set(tab.id, entry.state);
+        else this.acknowledgedState.delete(tab.id);
+        continue;
+      }
+      if (!entry || !needsYou(entry)) continue;
+      const seen = this.acknowledgedState.get(tab.id);
+      if (!seen || !sameKind(seen, entry.state)) attention.add(tab.id);
+    }
+    return attention;
+  }
+
+  // Every tracked session across every tab, flat: the board and the
+  // keyboard-triage shortcuts both operate across the whole workspace, not
+  // just the active tab.
+  private allTrackedSessionIds(): string[] {
+    const ids: string[] = [];
+    for (const tab of this.tabs) {
+      const grid = this.sessions.get(tab.id);
+      if (grid instanceof PaneGrid) ids.push(...grid.leafIds());
+    }
+    return ids;
+  }
+
+  private activeSessionId(): string | null {
+    const active = this.sessions.get(this.activeId ?? "");
+    return active instanceof PaneGrid ? active.activePtyId() : null;
+  }
+
+  private trackedRows(
+    label: (tab: TabState, entry: SessionStateEntry) => string,
+  ): BoardRow[] {
+    const rows: BoardRow[] = [];
+    const registry = this.config.cli_registry;
+    for (const tab of this.tabs) {
+      const grid = this.sessions.get(tab.id);
+      if (!(grid instanceof PaneGrid)) continue;
+      for (const id of grid.leafIds()) {
+        const entry = getSessionState(id);
+        if (!entry || !isTrackedAgent(entry.command, registry)) continue;
+        const color = tab.kind === "terminal" ? tab.color : null;
+        rows.push({
+          id,
+          tab: tab.title,
+          color,
+          label: label(tab, entry),
+          entry,
+        });
+      }
+    }
+    return rows;
+  }
+
+  private boardRows(): BoardRow[] {
+    return this.trackedRows((tab, entry) => entry.command ?? tab.title);
+  }
+
+  // The notification's identity leads with the session name, not the raw
+  // process name (the board's row label does the opposite) — the CLI is
+  // appended separately per `identity.append_cli` when composing the message.
+  private notificationRows(): BoardRow[] {
+    return this.trackedRows((tab) => tab.title);
+  }
+
+  private boardHints(): BoardHints {
+    return {
+      gotoWaiting: this.strokeFor("orchestration.goto-waiting"),
+      next: this.strokeFor("orchestration.next-waiting"),
+      prev: this.strokeFor("orchestration.prev-waiting"),
+    };
+  }
+
+  private toggleOrchestration(): void {
+    if (this.orchestration.isOpen()) {
+      this.orchestration.close();
+      this.focusActive();
+      return;
+    }
+    this.orchestration.open(this.boardRows(), this.boardHints());
+  }
+
+  // Jumps to a session by mux id, wherever it lives: activates its owning
+  // tab, then switches that tab's pane grid to the session's leaf.
+  private focusSession(id: string): void {
+    for (const tab of this.tabs) {
+      const grid = this.sessions.get(tab.id);
+      if (!(grid instanceof PaneGrid) || !grid.leafIds().includes(id)) {
+        continue;
+      }
+      this.activate(tab.id);
+      grid.setActive(id);
+      return;
+    }
+  }
+
+  private gotoWhoNeedsMe(): void {
+    const id = needsAttentionId(this.allTrackedSessionIds());
+    if (id) this.focusSession(id);
+  }
+
+  private cycleWaiting(dir: 1 | -1): void {
+    const id = cycleWaitingId(
+      this.allTrackedSessionIds(),
+      this.activeSessionId(),
+      dir,
+    );
+    if (id) this.focusSession(id);
   }
 
   private persist(): void {
+    if (this.restoring) return;
     const session: SavedTab[] = this.tabs.map((t) => {
+      const active = t.id === this.activeId;
       if (t.kind === "terminal") {
         const grid = this.sessions.get(t.id);
         return {
@@ -2959,6 +3696,7 @@ export class App {
           color: t.color,
           lastUsedAt: t.lastUsedAt,
           pinned: t.pinned,
+          active,
         };
       }
       return {
@@ -2966,6 +3704,7 @@ export class App {
         path: t.path,
         lastUsedAt: t.lastUsedAt,
         pinned: t.pinned,
+        active,
       };
     });
     const dock = this.pinCells.map((cell) => {

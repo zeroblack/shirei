@@ -8,6 +8,7 @@ export const SECTION_LAYOUT = [
   { id: "terminal", group: "terminal" },
   { id: "sessions", group: "terminal" },
   { id: "tabs", group: "terminal" },
+  { id: "agents", group: "terminal" },
   { id: "recording", group: "tools" },
   { id: "browser", group: "tools" },
   { id: "performance", group: "tools" },

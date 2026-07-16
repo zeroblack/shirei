@@ -73,3 +73,81 @@ export function ensureContrast(
   }
   return mix(color, fg, 1);
 }
+
+function oklchToHex(l: number, c: number, h: number): string {
+  const hRad = (h * Math.PI) / 180;
+  const a = c * Math.cos(hRad);
+  const b = c * Math.sin(hRad);
+
+  const l_ = l + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = l - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = l - 0.0894841775 * a - 1.291485548 * b;
+  const l3 = l_ * l_ * l_;
+  const m3 = m_ * m_ * m_;
+  const s3 = s_ * s_ * s_;
+
+  const rLin = 4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3;
+  const gLin = -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3;
+  const bLin = -0.0041960863 * l3 - 0.7034186147 * m3 + 1.707614701 * s3;
+
+  const encode = (v: number): number => {
+    const clamped = Math.min(1, Math.max(0, v));
+    return clamped <= 0.0031308
+      ? 12.92 * clamped
+      : 1.055 * clamped ** (1 / 2.4) - 0.055;
+  };
+  return toHex([encode(rLin) * 255, encode(gLin) * 255, encode(bLin) * 255]);
+}
+
+interface StatusRole {
+  token: string;
+  l: number;
+  c: number;
+  h: number;
+}
+
+// Mirrors the OKLCH values in tokens.css (--status-working/waiting/done/error).
+// Kept as numbers here (not parsed from the CSS custom property) so the floor
+// search below can walk the OKLCH lightness axis directly.
+const STATUS_ROLES: readonly StatusRole[] = [
+  { token: "--status-working", l: 0.7, c: 0.06, h: 235 },
+  { token: "--status-waiting", l: 0.8, c: 0.15, h: 82 },
+  { token: "--status-done", l: 0.78, c: 0.14, h: 155 },
+  { token: "--status-error", l: 0.64, c: 0.2, h: 25 },
+];
+
+// The 2px underline under a tab is a thin, low-area mark — legible needs a
+// real APCA floor, not just "not zero". 42 is where the error role's spec
+// lightness (0.64) needs its first real lift, landing around L 0.67-0.70 on
+// the catalog's dark themes: exactly the "nudge to ~0.67" the design calls
+// for, reached by measurement rather than hardcoded.
+const STATUS_MIN_LC = 42;
+const STATUS_LIGHTNESS_STEP = 0.01;
+const STATUS_LIGHTNESS_MAX_STEPS = 60;
+
+// Walks the OKLCH lightness axis only (hue and chroma fixed) toward whichever
+// end clears the background, so a role keeps its curated hue instead of
+// desaturating toward the theme's fg like the generic ensureContrast mix.
+function deriveRoleColor(role: StatusRole, bg: string): string {
+  const base = oklchToHex(role.l, role.c, role.h);
+  if (apcaContrast(base, bg) >= STATUS_MIN_LC) return base;
+  const step =
+    screenLuminance(bg) < 0.5 ? STATUS_LIGHTNESS_STEP : -STATUS_LIGHTNESS_STEP;
+  let l = role.l;
+  let hex = base;
+  for (let i = 0; i < STATUS_LIGHTNESS_MAX_STEPS; i++) {
+    l = Math.min(1, Math.max(0, l + step));
+    hex = oklchToHex(l, role.c, role.h);
+    if (apcaContrast(hex, bg) >= STATUS_MIN_LC || l <= 0 || l >= 1) break;
+  }
+  return hex;
+}
+
+// Derives the four status-role colors against a theme's tab background,
+// APCA-validated per role (see colors.test.ts, which checks every catalog
+// theme plus pure black).
+export function deriveStatusColors(bg: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const role of STATUS_ROLES) out[role.token] = deriveRoleColor(role, bg);
+  return out;
+}

@@ -10,8 +10,15 @@ export type SavedTab =
       color: string | null;
       lastUsedAt?: number;
       pinned?: boolean;
+      active?: boolean;
     }
-  | { kind: "editor"; path: string; lastUsedAt?: number; pinned?: boolean };
+  | {
+      kind: "editor";
+      path: string;
+      lastUsedAt?: number;
+      pinned?: boolean;
+      active?: boolean;
+    };
 
 export type PinnedCellSave =
   | { kind: "browser"; url: string }

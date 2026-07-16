@@ -441,6 +441,30 @@ export const ACTIONS: ActionDef[] = [
     // Plain Cmd+R is the global tree.refresh; do not collide with it.
     defaults: [{ key: "r", meta: true, alt: true, shift: true }],
   },
+  {
+    id: "orchestration.open",
+    category: "orchestration",
+    scope: "global",
+    defaults: [{ key: "a", meta: true, ctrl: true }],
+  },
+  {
+    id: "orchestration.goto-waiting",
+    category: "orchestration",
+    scope: "global",
+    defaults: [{ key: "g", meta: true, ctrl: true }],
+  },
+  {
+    id: "orchestration.next-waiting",
+    category: "orchestration",
+    scope: "global",
+    defaults: [{ key: "]", meta: true, ctrl: true }],
+  },
+  {
+    id: "orchestration.prev-waiting",
+    category: "orchestration",
+    scope: "global",
+    defaults: [{ key: "[", meta: true, ctrl: true }],
+  },
 ];
 
 export function resolveBindings(

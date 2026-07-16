@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use shirei_mux::detect::{AgentState, Confidence};
 use shirei_mux::lock::MutexExt;
 use shirei_mux::paths::socket_path;
 use shirei_mux::proc::Snapshot;
@@ -16,7 +17,7 @@ use shirei_mux::protocol::{ClientMsg, ServerMsg, decode, encode, read_frame};
 use tauri::ipc::{Channel, Response};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::config::ConfigManager;
+use crate::config::{ConfigManager, DetectionConfig};
 use crate::error::{Error, Result};
 
 const PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
@@ -59,13 +60,24 @@ fn build_id() -> String {
     format!("v{}", env!("CARGO_PKG_VERSION"))
 }
 
-fn spawn_daemon(orphan_ttl_secs: u32, build_id: &str, path: &Path) -> Result<()> {
+fn spawn_daemon(
+    orphan_ttl_secs: u32,
+    detection: &DetectionConfig,
+    build_id: &str,
+    path: &Path,
+) -> Result<()> {
     let mut cmd = Command::new(daemon_bin());
     cmd.arg(path)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .env("SHIREI_ORPHAN_TTL", orphan_ttl_secs.to_string())
+        .env("SHIREI_TICK_MS", detection.poll_interval_ms.to_string())
+        .env("SHIREI_IDLE_MS", detection.idle_threshold_ms.to_string())
+        .env(
+            "SHIREI_TENTATIVE_MS",
+            detection.tentative_threshold_ms.to_string(),
+        )
         .env("SHIREI_BUILD_ID", build_id);
     // setsid: the daemon gets its own session and survives the app closing.
     unsafe {
@@ -134,14 +146,14 @@ fn wait_until_socket_free(path: &Path) {
 /// Returns a stream to a daemon that passed the build-id handshake. When the
 /// socket is held by a foreign or stale build, it asks that daemon to exit,
 /// waits for it to release the socket, and spawns our own in its place.
-fn connect_or_spawn(orphan_ttl_secs: u32) -> Result<UnixStream> {
+fn connect_or_spawn(orphan_ttl_secs: u32, detection: &DetectionConfig) -> Result<UnixStream> {
     let path = socket_path();
     let want = build_id();
     for _ in 0..3 {
         let mut stream = match UnixStream::connect(&path) {
             Ok(stream) => stream,
             Err(_) => {
-                spawn_daemon(orphan_ttl_secs, &want, &path)?;
+                spawn_daemon(orphan_ttl_secs, detection, &want, &path)?;
                 wait_for_daemon(&path)?
             }
         };
@@ -162,17 +174,36 @@ fn connect_or_spawn(orphan_ttl_secs: u32) -> Result<UnixStream> {
 /// actually enabled (`keep_alive`) — the daemon is useless otherwise, so there's
 /// nothing to pre-warm and starting it would be pure overhead.
 pub fn autostart(app: &AppHandle) {
-    let session = app.state::<ConfigManager>().current().session;
+    let config = app.state::<ConfigManager>().current();
+    let session = config.session;
     if !session.autostart_daemon || !session.keep_alive {
         return;
     }
     let path = socket_path();
     if UnixStream::connect(&path).is_err() {
-        let _ = spawn_daemon(session.orphan_ttl_secs, &build_id(), &path);
+        let _ = spawn_daemon(
+            session.orphan_ttl_secs,
+            &config.detection,
+            &build_id(),
+            &path,
+        );
     }
 }
 
 type ProbeReply = (Option<String>, Option<String>, Option<u32>);
+
+/// The agent-state event pushed to the frontend on every detector transition.
+/// `state`/`confidence` reuse the mux enums (they serialize to the same shape
+/// the TS side mirrors); `command` lets the frontend gate by the CLI registry
+/// and `payload` carries the verbatim pending thing for a notification.
+#[derive(Clone, serde::Serialize)]
+struct SessionStateEvent {
+    id: String,
+    state: AgentState,
+    confidence: Confidence,
+    command: Option<String>,
+    payload: Option<String>,
+}
 
 /// One live connection to the daemon. Each concern has its own lock so the
 /// reader thread routing output never contends with command writes.
@@ -194,12 +225,8 @@ impl MuxClient {
         if let Some(conn) = guard.as_ref() {
             return Ok(Arc::clone(conn));
         }
-        let ttl = app
-            .state::<ConfigManager>()
-            .current()
-            .session
-            .orphan_ttl_secs;
-        let write = connect_or_spawn(ttl)?;
+        let config = app.state::<ConfigManager>().current();
+        let write = connect_or_spawn(config.session.orphan_ttl_secs, &config.detection)?;
         let read = write.try_clone().map_err(Error::Io)?;
         let conn = Arc::new(Conn {
             write: Mutex::new(write),
@@ -298,6 +325,24 @@ fn spawn_reader(mut read: UnixStream, conn: Arc<Conn>, app: AppHandle) {
                     {
                         let _ = waiter.send(pid);
                     }
+                }
+                ServerMsg::State {
+                    id,
+                    state,
+                    confidence,
+                    command,
+                    payload,
+                } => {
+                    let _ = app.emit(
+                        "session://state",
+                        SessionStateEvent {
+                            id,
+                            state,
+                            confidence,
+                            command,
+                            payload,
+                        },
+                    );
                 }
                 ServerMsg::Sessions { .. } => {}
                 // The handshake consumes Welcome synchronously before this reader
