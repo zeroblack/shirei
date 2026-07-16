@@ -134,10 +134,16 @@ mod tests {
             .unwrap();
 
         let conn = rusqlite::Connection::open(&path).unwrap();
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM event", [], |r| r.get(0)).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM event", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(count, 2);
         let nulls: i64 = conn
-            .query_row("SELECT COUNT(*) FROM event WHERE project_id IS NULL", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM event WHERE project_id IS NULL",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(nulls, 1);
         let _ = std::fs::remove_file(&path);

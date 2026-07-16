@@ -180,7 +180,10 @@ pub fn run() {
                 if let Err(e) = app.state::<todos::TodoStore>().open(&dir.join("todos.db")) {
                     log::error!("failed to open todos.db: {e}");
                 }
-                if let Err(e) = app.state::<metrics::MetricsStore>().open(&dir.join("metrics.db")) {
+                if let Err(e) = app
+                    .state::<metrics::MetricsStore>()
+                    .open(&dir.join("metrics.db"))
+                {
                     log::error!("failed to open metrics db: {e}");
                 }
             }
@@ -477,7 +480,8 @@ pub fn run() {
 // bypassing WindowEvent::CloseRequested entirely — but RunEvent::ExitRequested
 // still fires, giving the frontend's IPC-based metrics buffer one guaranteed
 // chance to flush its final session_end before the process actually goes away.
-static EXIT_FLUSH_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static EXIT_FLUSH_STARTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 fn handle_exit_requested(app: &tauri::AppHandle, api: &tauri::ExitRequestApi) {
     use std::sync::atomic::Ordering;
