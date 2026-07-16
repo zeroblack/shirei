@@ -7,95 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.15.16] - 2026-07-16
-
-### Fixed
-- Quick open no longer misses recently created files in a large directory: when
-  the file index is capped, it keeps the most recent files instead of an
-  arbitrary set.
-
-## [0.15.15] - 2026-07-15
-
-### Fixed
-- Claude panes restored from an older session no longer come back with
-  `--continue`.
-
-## [0.15.14] - 2026-07-15
-
-### Fixed
-- Claude panes open with `--resume`, whether restored or newly opened.
-
-## [0.15.13] - 2026-07-14
+## [0.16.0] - 2026-07-16
 
 ### Added
-- Local session logging: session, project, tab, and agent activity are recorded
-  to a database on your machine. No content and no keystrokes are recorded.
+- Agent orchestration: Shirei tracks the state of every AI CLI session, working,
+  waiting on you, done, or errored, and shows it on the tab. A turning atom marks
+  a session at work, a gold bell the moment it needs you, and a soft blue "Zzz"
+  once it has gone quiet for a while. A calm board (`⌘⌃A`) lists every session
+  with the ones waiting on you at the top, and `⌘⌃G` jumps to whichever needs you
+  next. When a session needs you while Shirei is in the background, it raises a
+  notification that names the session, with any secrets masked. Which CLIs are
+  tracked, the detection thresholds, and notification behavior live in Settings
+  under Agents; tracking covers Claude Code, with the other CLIs marked "Soon".
+- Keyboard control of the pinned dock: `⌘⇧→` enters it, `⌘⇧↑/↓` move between the
+  two cells, `⌘⇧←` returns to the grid, Enter adds a terminal or browser to the
+  focused cell, and `⌘W` unpins it. While a browser holds focus, `⌘L` focuses its
+  address bar and `⌘⌥⇧R` reloads it.
+- Local session logging: your session, project, tab, and agent activity are
+  recorded to a private database on your machine. No file content and no
+  keystrokes are stored.
 
-## [0.15.12] - 2026-07-14
-
-### Added
-- Pinned dock keyboard reach: ⌘⇧↑/↓ move to empty cells, Enter adds content to
-  the focused cell, ⌘L and ⌘⌥⇧R drive the focused browser while it holds focus.
+### Changed
+- Claude panes open with `--resume`, so each pane resumes its own session.
 
 ### Fixed
-- ⌘W closes the browser you're on — layered over a pane or in the pinned dock —
+- Reopening the app returns to the tab you had focused when you quit.
+- In the editor, `⌘A` then `⌘C` copies the whole file, not only the lines on
+  screen.
+- `⌘W` closes the browser you are looking at, over a pane or in the pinned dock,
   and returns to the pane.
-
-## [0.15.11] - 2026-07-14
-
-### Added
-- Keyboard navigation for the pinned dock: ⌘⇧→ enters it, ⌘⇧↑/↓ move between
-  cells, ⌘⇧← returns to the grid, ⌘W unpins the focused cell.
-
-### Fixed
-- Cmd+A then Cmd+C copies the whole file in the editor, not only the on-screen
-  lines.
-
-## [0.15.10] - 2026-07-12
-
-### Changed
-- Agent tracking covers Claude Code. The other CLIs in Settings under Agents are
-  marked "Soon" and stay off.
-
-### Fixed
-- Reopening the app returns to the tab that was focused on quit.
-
-## [0.15.8] - 2026-07-11
-
-### Changed
-- The tentative "maybe waiting" tab mark is a breathing blue "Zzz".
-
-### Fixed
-- A calm colored tab no longer prints its name flush against the identity bar.
-
-## [0.15.7] - 2026-07-11
-
-### Added
-- Plan and selection prompts (numbered menu, "would you like to proceed",
-  shift+tab footer) raise the needs-you mark and notification immediately.
-
-## [0.15.6] - 2026-07-11
-
-### Added
-- Tentative "maybe waiting" tab mark after a long idle, configurable in Settings
-  under Agents.
-- "Action Required" window titles (Codex) count as needs-you.
-
-### Changed
-- Smaller needs-you bell.
-
-## [0.15.5] - 2026-07-10
-
-### Added
-- Agent orchestration: Shirei tracks the state of every AI CLI session — working,
-  waiting, done, or errored — the same way for any CLI (Claude Code, Codex,
-  OpenCode, Gemini, and more). Each tab carries its state as a glyph and color,
-  rendered honestly about how sure the detection is. A calm board (`⌘⌃A`) lists
-  every session with the ones waiting on you at the top, and `⌘⌃G` jumps straight
-  to whichever needs you. When a session needs you while Shirei is in the
-  background, it raises a notification that names the session and shows the real
-  pending command or error, with secrets masked. Which CLIs are tracked, the
-  detection thresholds, and notification behavior live in Settings under Agents.
+- Quick open finds recently created files even in a large directory.
 
 ## [0.15.0] - 2026-07-10
 
@@ -315,18 +256,8 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.15.16...HEAD
-[0.15.16]: https://github.com/zeroblack/shirei/compare/v0.15.15...v0.15.16
-[0.15.15]: https://github.com/zeroblack/shirei/compare/v0.15.14...v0.15.15
-[0.15.14]: https://github.com/zeroblack/shirei/compare/v0.15.13...v0.15.14
-[0.15.13]: https://github.com/zeroblack/shirei/compare/v0.15.12...v0.15.13
-[0.15.12]: https://github.com/zeroblack/shirei/compare/v0.15.11...v0.15.12
-[0.15.11]: https://github.com/zeroblack/shirei/compare/v0.15.10...v0.15.11
-[0.15.10]: https://github.com/zeroblack/shirei/compare/v0.15.8...v0.15.10
-[0.15.8]: https://github.com/zeroblack/shirei/compare/v0.15.7...v0.15.8
-[0.15.7]: https://github.com/zeroblack/shirei/compare/v0.15.6...v0.15.7
-[0.15.6]: https://github.com/zeroblack/shirei/compare/v0.15.5...v0.15.6
-[0.15.5]: https://github.com/zeroblack/shirei/compare/v0.15.0...v0.15.5
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/zeroblack/shirei/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/zeroblack/shirei/compare/v0.14.10...v0.15.0
 [0.14.5]: https://github.com/zeroblack/shirei/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/zeroblack/shirei/compare/v0.14.3...v0.14.4
