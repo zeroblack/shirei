@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.16] - 2026-07-16
+
+### Fixed
+- Quick open no longer misses recently created files in a large directory: when
+  the file index is capped, it keeps the most recent files instead of an
+  arbitrary set.
+
 ## [0.15.15] - 2026-07-15
 
 ### Fixed
@@ -308,7 +315,8 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.15.15...HEAD
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.15.16...HEAD
+[0.15.16]: https://github.com/zeroblack/shirei/compare/v0.15.15...v0.15.16
 [0.15.15]: https://github.com/zeroblack/shirei/compare/v0.15.14...v0.15.15
 [0.15.14]: https://github.com/zeroblack/shirei/compare/v0.15.13...v0.15.14
 [0.15.13]: https://github.com/zeroblack/shirei/compare/v0.15.12...v0.15.13
