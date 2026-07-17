@@ -51,8 +51,6 @@ export const uiEn = {
 
   "ui.quickopen.placeholderProject": "Search this project…",
   "ui.quickopen.placeholderHome": "Search your whole home folder…",
-  "ui.quickopen.truncated":
-    "Index truncated: there are more files than listed.",
   "ui.quickopen.tagProject": "project",
   "ui.quickopen.tagCommand": "command",
   "ui.quickopen.hintNavigate": "navigate",
@@ -60,8 +58,8 @@ export const uiEn = {
   "ui.quickopen.hintClose": "close",
   "ui.quickopen.scopeHome": "home",
   "ui.quickopen.scopeProject": "project",
-  "ui.quickopen.indexing": "Indexing home…",
-  "ui.quickopen.truncatedHome": "Showing the first matches. Refine to narrow.",
+  "ui.quickopen.indexing": "Indexing…",
+  "ui.quickopen.partial": "Showing the top matches. Refine to narrow.",
   "ui.quickopen.empty": "No matches",
   "ui.quickopen.hintScopeHome": "switch to home",
   "ui.quickopen.hintScopeProject": "back to project",

@@ -42,3 +42,5 @@ docs/
 *.sln
 *.sw?
 .research/
+
+.superpowers/

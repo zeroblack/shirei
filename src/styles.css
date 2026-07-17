@@ -1925,10 +1925,6 @@ body {
   font-weight: 600;
 }
 
-.quickopen-row.selected .qo-hl {
-  color: #fff;
-}
-
 .quickopen-footer {
   display: flex;
   gap: 14px;
@@ -2000,7 +1996,7 @@ body {
 }
 
 .quickopen-row.selected {
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--fg) 12%, transparent);
 }
 
 .qo-icon {
@@ -2047,7 +2043,7 @@ body {
 
 .quickopen-note {
   padding: 6px 12px;
-  color: #d2a93e;
+  color: var(--text-subtle);
   font-size: 11px;
 }
 
@@ -2159,11 +2155,10 @@ body {
 }
 
 .qo-loading {
+  padding: 28px 12px;
   color: var(--text-muted);
-}
-
-.qo-note-muted {
-  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
 }
 
 .qo-empty {

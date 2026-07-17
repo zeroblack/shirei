@@ -15,6 +15,7 @@ mod perf;
 mod pty;
 #[cfg(target_os = "macos")]
 mod screencast;
+mod search;
 mod session;
 #[cfg(target_os = "macos")]
 mod shortcuts;
@@ -161,7 +162,8 @@ pub fn run() {
         .manage(config::ConfigManager::default())
         .manage(perf::PerfActiveTab::default())
         .manage(todos::TodoStore::default())
-        .manage(metrics::MetricsStore::default());
+        .manage(metrics::MetricsStore::default())
+        .manage(search::session::SearchState::default());
 
     #[cfg(target_os = "macos")]
     let builder = builder.manage(screencast::RecorderState::default());
@@ -384,7 +386,11 @@ pub fn run() {
             fs::fs_image_meta,
             fs::fs_write_file,
             fs::fs_create_file,
-            fs::fs_index,
+            search::session::search_start,
+            search::session::search_query,
+            search::session::search_close,
+            search::session::search_heartbeat,
+            search::session::record_open,
             git::git_file_head,
             git::git_file_history,
             git::git_file_at,
