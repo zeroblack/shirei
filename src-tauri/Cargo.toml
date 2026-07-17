@@ -1,6 +1,6 @@
 [package]
 name = "shirei"
-version = "0.16.1"
+version = "0.16.2"
 description = "CLI-first terminal cockpit with renameable, color-coded tabs"
 authors = ["Dionisio Fernández"]
 edition = "2024"
@@ -30,6 +30,8 @@ reqwest = { version = "0.13", default-features = false, features = ["blocking", 
 flate2 = "1"
 sha2 = "0.10"
 notify = "8"
+nucleo = "0.5"
+rayon = "1"
 libproc = "0.14"
 shirei-mux = { path = "../mux" }
 tauri-plugin-log = "2.8.0"
@@ -43,6 +45,7 @@ regex = "1.13.0"
 
 [dev-dependencies]
 zip = { version = "8", default-features = false, features = ["deflate"] }
+tempfile = "3"
 
 [profile.release]
 panic = "abort"

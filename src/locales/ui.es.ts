@@ -53,8 +53,6 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
 
   "ui.quickopen.placeholderProject": "Buscar en este proyecto…",
   "ui.quickopen.placeholderHome": "Buscar en toda tu carpeta personal…",
-  "ui.quickopen.truncated":
-    "Índice truncado: hay más archivos de los listados.",
   "ui.quickopen.tagProject": "proyecto",
   "ui.quickopen.tagCommand": "comando",
   "ui.quickopen.hintNavigate": "navegar",
@@ -62,8 +60,8 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.quickopen.hintClose": "cerrar",
   "ui.quickopen.scopeHome": "home",
   "ui.quickopen.scopeProject": "proyecto",
-  "ui.quickopen.indexing": "Indexando home…",
-  "ui.quickopen.truncatedHome":
+  "ui.quickopen.indexing": "Indexando…",
+  "ui.quickopen.partial":
     "Mostrando los primeros resultados. Afina para acotar.",
   "ui.quickopen.empty": "Sin coincidencias",
   "ui.quickopen.hintScopeHome": "cambiar a home",

@@ -1,6 +1,7 @@
-import { indexDir } from "./commands";
+import { Channel } from "@tauri-apps/api/core";
+import { recordOpen, searchClose, searchQuery, searchStart } from "./commands";
 import type { Project } from "./config";
-import { fuzzyMatch, fuzzyPositions, topK } from "./fuzzy";
+import { fuzzyMatch, fuzzyPositions } from "./fuzzy";
 import { t } from "./i18n";
 import { fileIcon } from "./icons";
 import { createOverlay } from "./overlay";
@@ -10,7 +11,7 @@ import {
   type Scope,
   type ScopeRoots,
 } from "./searchscope";
-import type { IndexEntry } from "./types";
+import type { MatchItem, SearchEvent } from "./types";
 
 const FILTER_DEBOUNCE_MS = 40;
 
@@ -33,16 +34,77 @@ interface OpenOpts {
 }
 
 type Item =
-  | { kind: "project"; id: string; name: string; color: string }
-  | { kind: "command"; id: string; name: string; run: () => void }
-  | { kind: "file"; rel: string; name: string; isDir: boolean };
+  | {
+      kind: "project";
+      id: string;
+      name: string;
+      color: string;
+      positions: number[];
+    }
+  | {
+      kind: "command";
+      id: string;
+      name: string;
+      run: () => void;
+      positions: number[];
+    }
+  | {
+      kind: "file";
+      rel: string;
+      name: string;
+      isDir: boolean;
+      positions: number[];
+    };
+
+export interface SearchState {
+  items: MatchItem[];
+  indexing: boolean;
+  indexingCount: number;
+  partial: boolean;
+}
+
+export const initialSearchState: SearchState = {
+  items: [],
+  indexing: false,
+  indexingCount: 0,
+  partial: false,
+};
+
+/**
+ * Pure reducer over backend search events, kept DOM-free so it is
+ * unit-testable on its own. `results` carries the generation it answers;
+ * a slow query for an older generation can resolve after a newer one, so
+ * anything not matching the live generation is dropped rather than applied.
+ */
+export function applyEvent(
+  state: SearchState,
+  ev: SearchEvent,
+  generation: number,
+): SearchState {
+  switch (ev.kind) {
+    case "indexing":
+      return { ...state, indexing: true, indexingCount: ev.count };
+    case "results":
+      if (ev.generation !== generation) return state;
+      return { ...state, items: ev.items, partial: ev.partial };
+    case "done":
+      return { ...state, indexing: false, partial: ev.partial };
+  }
+}
+
+function byScoreThenName(
+  a: { item: Item; score: number },
+  b: { item: Item; score: number },
+): number {
+  return b.score - a.score || a.item.name.localeCompare(b.item.name);
+}
 
 export class QuickOpen {
   private readonly cb: QuickOpenCallbacks;
-  private overlay: HTMLElement | null = null;
   private overlayClose: (() => Promise<void>) | null = null;
   private input!: HTMLInputElement;
   private list!: HTMLElement;
+  private metaEl!: HTMLElement;
   private scopeChip!: HTMLButtonElement;
   private statusEl!: HTMLElement;
   private roots: ScopeRoots = {
@@ -54,17 +116,15 @@ export class QuickOpen {
   private scope: Scope = "project";
   private toggleKey = "Tab";
   private projects: Project[] = [];
-  private entries: IndexEntry[] = [];
-  private readonly cache = new Map<
-    Scope,
-    { entries: IndexEntry[]; truncated: boolean }
-  >();
   private generation = 0;
-  private loading = false;
+  // Fresh per search_start (open / scope toggle): `indexing`/`done` events
+  // carry no generation, so a superseded channel's late events can only be
+  // told apart from the live one by object identity, not by number.
+  private channel: Channel<SearchEvent> | null = null;
+  private search: SearchState = initialSearchState;
   private matches: Item[] = [];
   private query = "";
   private selected = 0;
-  private truncated = false;
   private limit = 50;
   private filterTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -76,7 +136,7 @@ export class QuickOpen {
     if (this.filterTimer !== null) clearTimeout(this.filterTimer);
     this.filterTimer = setTimeout(() => {
       this.filterTimer = null;
-      this.filter(query);
+      this.runQuery(query);
     }, FILTER_DEBOUNCE_MS);
   }
 
@@ -91,71 +151,52 @@ export class QuickOpen {
     this.limit = limit;
     this.toggleKey = opts.toggleKey || "Tab";
     this.scope = opts.defaultScope;
-    this.cache.clear();
-    this.generation = 0;
-    this.entries = [];
-    this.truncated = false;
-    this.loading = false;
+    this.query = "";
     this.render();
     this.renderScopeChip();
-    this.filter("");
-    await this.ensureIndex(this.scope);
+    this.recomputeMatches();
+    this.startSearch();
   }
 
-  private async ensureIndex(scope: Scope): Promise<void> {
-    const cached = this.cache.get(scope);
-    if (cached) {
-      this.entries = cached.entries;
-      this.truncated = cached.truncated;
-      this.setLoading(false);
-      this.filter(this.query);
-      return;
-    }
-    const root = rootForScope(scope, this.roots);
-    if (!root) {
-      this.entries = [];
-      this.truncated = false;
-      this.setLoading(false);
-      this.filter(this.query);
-      return;
-    }
-    const gen = ++this.generation;
-    this.setLoading(true);
-    let index: { entries: IndexEntry[]; truncated: boolean };
-    try {
-      index = await indexDir(root);
-    } catch {
-      index = { entries: [], truncated: false };
-    }
-    // Discard a walk that finished after the user switched scope or closed the
-    // palette: without this, a slow $HOME walk dumps home files into the
-    // project view a second later.
-    if (gen !== this.generation || !this.overlay || this.scope !== scope)
-      return;
-    this.cache.set(scope, index);
-    this.entries = index.entries;
-    this.truncated = index.truncated;
-    this.setLoading(false);
-    this.filter(this.query);
+  private startSearch(): void {
+    if (this.channel) void searchClose(this.generation).catch(() => {});
+    this.generation += 1;
+    const generation = this.generation;
+    const channel = new Channel<SearchEvent>();
+    channel.onmessage = (ev) => {
+      if (this.channel !== channel) return;
+      this.search = applyEvent(this.search, ev, this.generation);
+      this.renderScopeChip();
+      this.recomputeMatches();
+    };
+    this.channel = channel;
+    this.search = initialSearchState;
+    this.renderScopeChip();
+    this.recomputeMatches();
+
+    const root = rootForScope(this.scope, this.roots);
+    if (!root) return;
+    void searchStart(root, this.scope, generation, channel).catch(() => {});
+    void searchQuery(generation, this.query).catch(() => {});
+  }
+
+  private runQuery(query: string): void {
+    this.query = query;
+    this.recomputeMatches();
+    if (!this.channel) return;
+    // generation identifies the search SESSION (bumped only in startSearch,
+    // where a fresh session/Channel is born), not the keystroke: the backend
+    // gates search_query on strict equality against session.generation, so
+    // bumping here would desync from it and every query after the first
+    // would be silently dropped. Superseded results are already filtered by
+    // the fresh-Channel-per-search_start identity guard in startSearch.
+    void searchQuery(this.generation, query).catch(() => {});
   }
 
   private toggleScope(dir: 1 | -1): void {
     this.scope = cycleScope(this.scope, dir);
-    this.generation += 1;
-    const cached = this.cache.get(this.scope);
-    if (!cached) {
-      this.entries = [];
-      this.truncated = false;
-    }
-    this.renderScopeChip();
     this.announceScope();
-    void this.ensureIndex(this.scope);
-  }
-
-  private setLoading(loading: boolean): void {
-    this.loading = loading;
-    this.renderScopeChip();
-    this.renderList();
+    this.startSearch();
   }
 
   private render(): void {
@@ -195,14 +236,16 @@ export class QuickOpen {
     this.list = document.createElement("div");
     this.list.className = "quickopen-list";
 
+    this.metaEl = document.createElement("div");
+
     box.append(
       row,
       this.list,
+      this.metaEl,
       this.statusEl,
       hintFooter(this.scope, this.toggleKey),
     );
     document.body.appendChild(overlay);
-    this.overlay = overlay;
     this.input.focus();
   }
 
@@ -223,7 +266,7 @@ export class QuickOpen {
 
     const current = document.createElement("span");
     current.className = "qo-scope-seg qo-scope-current";
-    this.fillScopeSeg(current, this.scope, this.loading);
+    this.fillScopeSeg(current, this.scope, this.search.indexing);
 
     const key = document.createElement("kbd");
     key.className = "qo-scope-key";
@@ -269,67 +312,53 @@ export class QuickOpen {
         : t("ui.quickopen.announceProject");
   }
 
-  private filter(query: string): void {
-    this.query = query;
-    const projects: Array<{ p: Project; s: number }> = [];
+  private recomputeMatches(): void {
+    const projects: Array<{ item: Item; score: number }> = [];
     for (const p of this.projects) {
-      const s = query ? fuzzyMatch(query, p.name) : 0;
-      if (s !== null) projects.push({ p, s });
-    }
-    projects.sort((a, b) => b.s - a.s || a.p.name.localeCompare(b.p.name));
-
-    const commands: Array<{ c: PaletteCommand; s: number }> = [];
-    for (const c of this.cb.commands?.() ?? []) {
-      const s = query ? fuzzyMatch(query, c.name) : 0;
-      if (s !== null) commands.push({ c, s });
-    }
-    commands.sort((a, b) => b.s - a.s || a.c.name.localeCompare(b.c.name));
-
-    let files: Array<{ e: IndexEntry; s: number }> = [];
-    if (query) {
-      const scored = (function* (entries: IndexEntry[]) {
-        for (const e of entries) {
-          const s = fuzzyMatch(query, e.rel);
-          if (s !== null) yield { e, s };
-        }
-      })(this.entries);
-      // Higher score first; ties break on shorter, then alphabetical paths so
-      // equally-scored results never reorder between keystrokes.
-      files = topK(
-        scored,
-        this.limit,
-        (a, b) =>
-          b.s - a.s ||
-          a.e.rel.length - b.e.rel.length ||
-          a.e.rel.localeCompare(b.e.rel),
-      );
-    }
-
-    this.matches = [
-      ...projects.map(
-        ({ p }): Item => ({
+      const score = fuzzyMatch(this.query, p.name);
+      if (score === null) continue;
+      projects.push({
+        item: {
           kind: "project",
           id: p.id,
           name: p.name,
           color: p.color,
-        }),
-      ),
-      ...commands.map(
-        ({ c }): Item => ({
+          positions: fuzzyPositions(this.query, p.name) ?? [],
+        },
+        score,
+      });
+    }
+    projects.sort(byScoreThenName);
+
+    const commands: Array<{ item: Item; score: number }> = [];
+    for (const c of this.cb.commands?.() ?? []) {
+      const score = fuzzyMatch(this.query, c.name);
+      if (score === null) continue;
+      commands.push({
+        item: {
           kind: "command",
           id: c.id,
           name: c.name,
           run: c.run,
-        }),
-      ),
-      ...files.map(
-        ({ e }): Item => ({
-          kind: "file",
-          rel: e.rel,
-          name: e.name,
-          isDir: e.is_dir,
-        }),
-      ),
+          positions: fuzzyPositions(this.query, c.name) ?? [],
+        },
+        score,
+      });
+    }
+    commands.sort(byScoreThenName);
+
+    const files: Item[] = this.search.items.map((m) => ({
+      kind: "file",
+      rel: m.rel,
+      name: m.name,
+      isDir: m.is_dir,
+      positions: m.positions,
+    }));
+
+    this.matches = [
+      ...projects.map((x) => x.item),
+      ...commands.map((x) => x.item),
+      ...files,
     ].slice(0, this.limit);
     this.selected = 0;
     this.renderList();
@@ -337,25 +366,21 @@ export class QuickOpen {
 
   private renderList(): void {
     this.list.replaceChildren();
-    if (this.loading) {
+    if (this.search.partial) {
+      this.metaEl.className = "quickopen-note";
+      this.metaEl.textContent = t("ui.quickopen.partial");
+    } else {
+      this.metaEl.className = "";
+      this.metaEl.textContent = "";
+    }
+    if (this.search.indexing && this.matches.length === 0) {
       const line = document.createElement("div");
-      line.className = "quickopen-note qo-loading";
+      line.className = "qo-loading";
       line.textContent = t("ui.quickopen.indexing");
       this.list.appendChild(line);
+      return;
     }
-    if (this.truncated) {
-      const note = document.createElement("div");
-      note.className =
-        this.scope === "home"
-          ? "quickopen-note qo-note-muted"
-          : "quickopen-note";
-      note.textContent =
-        this.scope === "home"
-          ? t("ui.quickopen.truncatedHome")
-          : t("ui.quickopen.truncated");
-      this.list.appendChild(note);
-    }
-    if (!this.loading && this.query && this.matches.length === 0) {
+    if (!this.search.indexing && this.query && this.matches.length === 0) {
       this.list.appendChild(this.emptyState());
       return;
     }
@@ -374,21 +399,21 @@ export class QuickOpen {
         dot.className = "qo-project-dot";
         dot.style.background = item.color;
         icon.appendChild(dot);
-        this.fillName(name, item.name);
+        this.fillName(name, item.name, item.positions);
         const tag = document.createElement("span");
         tag.className = "qo-tag";
         tag.textContent = t("ui.quickopen.tagProject");
         rowEl.append(icon, name, tag);
       } else if (item.kind === "command") {
         icon.textContent = "⌘";
-        this.fillName(name, item.name);
+        this.fillName(name, item.name, item.positions);
         const tag = document.createElement("span");
         tag.className = "qo-tag";
         tag.textContent = t("ui.quickopen.tagCommand");
         rowEl.append(icon, name, tag);
       } else {
         icon.innerHTML = fileIcon(item.name, item.isDir, false);
-        this.fillName(name, item.name);
+        this.fillName(name, item.name, item.positions);
         rowEl.append(icon, name);
         const slash = item.rel.lastIndexOf("/");
         if (slash > 0) {
@@ -429,14 +454,13 @@ export class QuickOpen {
     return wrap;
   }
 
-  private fillName(el: HTMLElement, text: string): void {
+  private fillName(el: HTMLElement, text: string, positions: number[]): void {
     el.replaceChildren();
-    const pos = this.query ? fuzzyPositions(this.query, text) : null;
-    if (!pos || pos.length === 0) {
+    if (positions.length === 0) {
       el.textContent = text;
       return;
     }
-    const hit = new Set(pos);
+    const hit = new Set(positions);
     let i = 0;
     while (i < text.length) {
       const on = hit.has(i);
@@ -493,6 +517,7 @@ export class QuickOpen {
     if (!root) return;
     const base = root.replace(/\/+$/, "");
     const abs = `${base}/${item.rel}`;
+    void recordOpen(abs).catch(() => {});
     if (item.isDir) this.cb.onRevealDir(abs);
     else this.cb.onOpenFile(abs, newTab);
   }
@@ -502,13 +527,16 @@ export class QuickOpen {
       clearTimeout(this.filterTimer);
       this.filterTimer = null;
     }
+    if (this.channel) {
+      void searchClose(this.generation).catch(() => {});
+      this.channel = null;
+    }
     // Must go through the overlay's own close so the global overlay count is
     // decremented; a bare remove() leaks the count and permanently gates the
     // native browser pane's visibility off (it stays hidden -> black).
     void this.overlayClose?.();
     this.overlayClose = null;
-    this.overlay = null;
-    this.entries = [];
+    this.search = initialSearchState;
   }
 }
 

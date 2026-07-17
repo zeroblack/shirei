@@ -15,6 +15,7 @@ import {
   metricsLog,
   ptyCwd,
   ptySnapshot,
+  recordOpen,
   revealInFinder,
   revealLogs,
 } from "./commands";
@@ -413,7 +414,10 @@ export class App {
     ) as HTMLElement;
     if (!this.todoPanelEl) throw new Error("missing #todopanel");
     this.tree = new FileTree(this.treeRegionEl, {
-      onOpenFile: (path, newTab) => void this.openFile(path, { newTab }),
+      onOpenFile: (path, newTab) => {
+        void recordOpen(path).catch(() => {});
+        void this.openFile(path, { newTab });
+      },
       onEscape: () => this.sessions.get(this.activeId ?? "")?.focus(),
     });
     this.todoDividerEl = document.querySelector<HTMLElement>(

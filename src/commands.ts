@@ -1,8 +1,8 @@
-import { invoke } from "@tauri-apps/api/core";
+import { type Channel, invoke } from "@tauri-apps/api/core";
 import type { RecordFormat } from "./config";
 import type { MetricEvent } from "./metrics";
 import type { PhysicalRect, RecordTarget } from "./screencast-core";
-import type { DirListing, FileContent, FileIndex } from "./types";
+import type { DirListing, FileContent, SearchEvent } from "./types";
 
 export const readDir = (path: string) =>
   invoke<DirListing>("fs_read_dir", { path });
@@ -22,8 +22,21 @@ export const writeFile = (
 export const createFile = (path: string) =>
   invoke<void>("fs_create_file", { path });
 
-export const indexDir = (root: string) =>
-  invoke<FileIndex>("fs_index", { root });
+export const searchStart = (
+  root: string,
+  scope: "project" | "home",
+  generation: number,
+  onEvent: Channel<SearchEvent>,
+) => invoke<void>("search_start", { root, scope, generation, onEvent });
+
+export const searchQuery = (generation: number, query: string) =>
+  invoke<void>("search_query", { generation, query });
+
+export const searchClose = (generation: number) =>
+  invoke<void>("search_close", { generation });
+
+export const recordOpen = (path: string) =>
+  invoke<void>("record_open", { path });
 
 export const revealInFinder = (path: string) =>
   invoke<void>("reveal_in_finder", { path });

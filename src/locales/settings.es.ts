@@ -385,7 +385,6 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.advanced.group.config": "Configuración",
   "settings.advanced.maxFile": "Máx. archivo (MB)",
   "settings.advanced.maxImage": "Máx. imagen (MB)",
-  "settings.advanced.indexCap": "Índice (máx.)",
   "settings.advanced.quickopenResults": "Resultados quick-open (máx.)",
   "settings.advanced.dirEntriesCap": "Archivos por carpeta (máx.)",
   "settings.advanced.excludeDirs": "Carpetas excluidas",

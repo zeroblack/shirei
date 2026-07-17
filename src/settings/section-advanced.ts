@@ -44,13 +44,6 @@ export const advancedSection: SettingsSection = {
           save,
         ),
         numField(
-          t("settings.advanced.indexCap"),
-          config.limits,
-          "index_cap",
-          { min: 1000, max: 1000000 },
-          save,
-        ),
-        numField(
           t("settings.advanced.quickopenResults"),
           config.limits,
           "quickopen_results",

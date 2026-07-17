@@ -236,6 +236,17 @@ export interface NotificationsConfig {
   truncation_length: number;
 }
 
+export interface SearchConfig {
+  walk_entries_ceiling: number;
+  walk_budget_ms: number;
+  walker_threads: number;
+  watch_debounce_ms: number;
+  frecency_enabled: boolean;
+  frecency_max_multiplier: number;
+  home_exclude_extra: string[];
+  home_hidden: boolean;
+}
+
 export interface CliRegistryEntry {
   id: string;
   label: string;
@@ -285,7 +296,6 @@ export interface Config {
   };
   limits: {
     max_file_bytes: number;
-    index_cap: number;
     max_image_bytes: number;
     quickopen_results: number;
     dir_entries_cap: number;
@@ -297,6 +307,7 @@ export interface Config {
     default_scope: "project" | "home";
     toggle_scope: string;
   };
+  search: SearchConfig;
   layout: {
     sidebar_width: number;
     sidebar_min_width: number;

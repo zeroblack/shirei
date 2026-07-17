@@ -7,7 +7,7 @@ use tauri::State;
 
 use crate::error::Result;
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -35,6 +35,18 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
                 focus      INTEGER,
                 energy     INTEGER,
                 note       TEXT
+            );",
+        )?;
+        tx.pragma_update(None, "user_version", 1)?;
+        tx.commit()?;
+    }
+    if version < 2 {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS file_opens (
+                path        TEXT PRIMARY KEY,
+                count       INTEGER NOT NULL,
+                last_opened INTEGER NOT NULL
             );",
         )?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
@@ -68,6 +80,15 @@ impl MetricsStore {
         migrate(&conn)?;
         *self.conn.lock_ignore_poison() = Some(conn);
         Ok(())
+    }
+
+    pub(crate) fn with_conn<T>(
+        &self,
+        f: impl FnOnce(&Connection) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<T> {
+        let guard = self.conn.lock_ignore_poison();
+        let conn = guard.as_ref().ok_or(rusqlite::Error::InvalidQuery)?;
+        f(conn)
     }
 
     fn append(&self, events: &[EventIn]) -> rusqlite::Result<()> {
@@ -166,6 +187,57 @@ mod tests {
             )
             .unwrap();
         assert_eq!(has_reflection, 1);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn migrate_creates_file_opens_table() {
+        let path = tmp_path("migrate-file-opens");
+        let _ = std::fs::remove_file(&path);
+        let store = MetricsStore::default();
+        store.open(&path).unwrap();
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        let has_file_opens: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='file_opens'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(has_file_opens, 1);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn migrate_upgrades_a_pre_existing_v1_database() {
+        let path = tmp_path("migrate-upgrade");
+        let _ = std::fs::remove_file(&path);
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE event (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT
+                );
+                CREATE TABLE reflection_event (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT
+                );",
+            )
+            .unwrap();
+            conn.pragma_update(None, "user_version", 1).unwrap();
+        }
+
+        let store = MetricsStore::default();
+        store.open(&path).unwrap();
+
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        let has_file_opens: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='file_opens'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(has_file_opens, 1);
         let _ = std::fs::remove_file(&path);
     }
 }

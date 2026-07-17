@@ -554,7 +554,6 @@ impl Default for PerformanceConfig {
 #[serde(default)]
 pub struct LimitsConfig {
     pub max_file_bytes: u64,
-    pub index_cap: usize,
     pub max_image_bytes: u64,
     pub quickopen_results: usize,
     pub dir_entries_cap: usize,
@@ -566,7 +565,6 @@ impl Default for LimitsConfig {
     fn default() -> Self {
         LimitsConfig {
             max_file_bytes: 5 * 1024 * 1024,
-            index_cap: 50_000,
             max_image_bytes: 25 * 1024 * 1024,
             quickopen_results: 50,
             dir_entries_cap: 2000,
@@ -599,6 +597,41 @@ fn default_exclude_dirs() -> Vec<String> {
     .iter()
     .map(|s| s.to_string())
     .collect()
+}
+
+fn default_home_exclude_extra() -> Vec<String> {
+    [".cache", ".local/share", ".Trash"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct SearchConfig {
+    pub walk_entries_ceiling: u32,
+    pub walk_budget_ms: u32,
+    pub walker_threads: u16,
+    pub watch_debounce_ms: u32,
+    pub frecency_enabled: bool,
+    pub frecency_max_multiplier: f32,
+    pub home_exclude_extra: Vec<String>,
+    pub home_hidden: bool,
+}
+
+impl Default for SearchConfig {
+    fn default() -> Self {
+        SearchConfig {
+            walk_entries_ceiling: 200_000,
+            walk_budget_ms: 400,
+            walker_threads: 0,
+            watch_debounce_ms: 100,
+            frecency_enabled: true,
+            frecency_max_multiplier: 4.0,
+            home_exclude_extra: default_home_exclude_extra(),
+            home_hidden: true,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -1245,6 +1278,8 @@ pub struct Config {
     pub performance: PerformanceConfig,
     pub files: FilesConfig,
     pub quickopen: QuickOpenConfig,
+    #[serde(default)]
+    pub search: SearchConfig,
     pub recorder: RecorderConfig,
     #[serde(default)]
     pub browser: BrowserConfig,
@@ -1289,6 +1324,7 @@ impl Default for Config {
             performance: PerformanceConfig::default(),
             files: FilesConfig::default(),
             quickopen: QuickOpenConfig::default(),
+            search: SearchConfig::default(),
             recorder: RecorderConfig::default(),
             browser: BrowserConfig::default(),
             detection: DetectionConfig::default(),
@@ -1470,7 +1506,6 @@ mod tests {
         assert_eq!(c.font.size, 13);
         assert_eq!(c.font.family, "meslo");
         assert_eq!(c.limits.max_file_bytes, 5 * 1024 * 1024);
-        assert_eq!(c.limits.index_cap, 50_000);
         assert_eq!(c.limits.quickopen_results, 50);
         assert_eq!(c.limits.dir_entries_cap, 2000);
         assert_eq!(c.limits.font_size_min, 8);
@@ -1526,7 +1561,7 @@ mod tests {
 
     #[test]
     fn partial_json_fills_quickopen_default() {
-        let c = Config::from_json_or_default(r#"{"limits":{"index_cap":1000}}"#);
+        let c = Config::from_json_or_default(r#"{"limits":{"max_file_bytes":1000}}"#);
         assert_eq!(c.limits.quickopen_results, 50);
         let c = Config::from_json_or_default(r#"{"limits":{"quickopen_results":120}}"#);
         assert_eq!(c.limits.quickopen_results, 120);
@@ -1554,7 +1589,6 @@ mod tests {
         let c = Config::from_json_or_default(r#"{"font":{"size":20}}"#);
         assert_eq!(c.font.size, 20);
         assert_eq!(c.font.family, "meslo");
-        assert_eq!(c.limits.index_cap, 50_000);
     }
 
     #[test]
@@ -1840,5 +1874,21 @@ mod tests {
             .unwrap();
         assert_eq!(fira.kind, FontKind::Download);
         assert_eq!(fira.asset.as_deref(), Some("FiraCode"));
+    }
+
+    #[test]
+    fn search_config_defaults() {
+        let s = SearchConfig::default();
+        assert_eq!(s.walk_entries_ceiling, 200_000);
+        assert_eq!(s.walk_budget_ms, 400);
+        assert_eq!(s.walker_threads, 0);
+        assert_eq!(s.watch_debounce_ms, 100);
+        assert!(s.frecency_enabled);
+        assert_eq!(s.frecency_max_multiplier, 4.0);
+        assert!(s.home_hidden);
+        assert_eq!(
+            s.home_exclude_extra,
+            vec![".cache", ".local/share", ".Trash"]
+        );
     }
 }

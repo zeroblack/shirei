@@ -37,13 +37,19 @@ export interface FileContent {
   mtime: number;
 }
 
-export interface IndexEntry {
+export interface MatchItem {
   rel: string;
   name: string;
   is_dir: boolean;
+  positions: number[];
 }
 
-export interface FileIndex {
-  entries: IndexEntry[];
-  truncated: boolean;
-}
+export type SearchEvent =
+  | { kind: "indexing"; count: number }
+  | {
+      kind: "results";
+      generation: number;
+      items: MatchItem[];
+      partial: boolean;
+    }
+  | { kind: "done"; total: number; partial: boolean };

@@ -1,31 +1,3 @@
-/**
- * Best `k` items by `cmp` (negative = `a` ranks first) without sorting the
- * full input: binary-insert into a bounded array, O(n·log k) comparisons.
- * Worth it for quickopen, where the index can hold hundreds of thousands of
- * entries while only a page of results is shown.
- */
-export function topK<T>(
-  items: Iterable<T>,
-  k: number,
-  cmp: (a: T, b: T) => number,
-): T[] {
-  if (k <= 0) return [];
-  const top: T[] = [];
-  for (const item of items) {
-    if (top.length === k && cmp(item, top[top.length - 1]) >= 0) continue;
-    let lo = 0;
-    let hi = top.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (cmp(item, top[mid]) < 0) hi = mid;
-      else lo = mid + 1;
-    }
-    top.splice(lo, 0, item);
-    if (top.length > k) top.pop();
-  }
-  return top;
-}
-
 export function fuzzyMatch(query: string, target: string): number | null {
   if (query.length === 0) return 0;
   const q = query.toLowerCase();

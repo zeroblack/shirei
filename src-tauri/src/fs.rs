@@ -39,17 +39,11 @@ pub struct FileContent {
     pub mtime: u64,
 }
 
-#[derive(Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IndexEntry {
     pub rel: String,
     pub name: String,
     pub is_dir: bool,
-}
-
-#[derive(Serialize)]
-pub struct FileIndex {
-    pub entries: Vec<IndexEntry>,
-    pub truncated: bool,
 }
 
 fn looks_binary(bytes: &[u8]) -> bool {
@@ -66,7 +60,7 @@ fn is_too_large(len: u64, max: u64) -> bool {
 // prompt once per app. It is never source the user searches for, so the file
 // tree and index skip it unconditionally — this is a system invariant, not a
 // user-tunable exclude (which persisted configs could be missing).
-fn home_library() -> Option<std::path::PathBuf> {
+pub(crate) fn home_library() -> Option<std::path::PathBuf> {
     std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library"))
 }
 
@@ -214,132 +208,6 @@ pub fn fs_create_file(path: String) -> Result<()> {
         .map_err(Error::Io)
 }
 
-#[tauri::command]
-pub fn fs_index(root: String, config: State<'_, ConfigManager>) -> Result<FileIndex> {
-    let root_path = Path::new(&root);
-    if !root_path.is_dir() {
-        return Err(Error::NotFound(root));
-    }
-    let files = config.files();
-    Ok(index_walk(
-        root_path,
-        config.limits().index_cap,
-        &files.exclude_dirs,
-        files.respect_gitignore,
-    ))
-}
-
-// Ordered by mtime first (the tuple's field 0); an exact-mtime tie falls through
-// to the entry, a harmless deterministic tie-break.
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-struct ByMtime(u64, IndexEntry);
-
-// Offer an entry to a full min-heap of the newest `cap` files: it replaces the
-// oldest kept file when it is newer, in a single sift. peek() gates the compare
-// so an older file (the common case in a large tree) does no heap work.
-fn offer_newest(
-    heap: &mut std::collections::BinaryHeap<std::cmp::Reverse<ByMtime>>,
-    item: ByMtime,
-) {
-    if heap
-        .peek()
-        .is_some_and(|std::cmp::Reverse(oldest)| item.0 > oldest.0)
-        && let Some(mut top) = heap.peek_mut()
-    {
-        *top = std::cmp::Reverse(item);
-    }
-}
-
-fn index_walk(
-    root: &Path,
-    index_cap: usize,
-    exclude: &[String],
-    respect_gitignore: bool,
-) -> FileIndex {
-    use std::cmp::Reverse;
-    use std::collections::BinaryHeap;
-
-    let exclude: Vec<std::ffi::OsString> = exclude.iter().map(std::ffi::OsString::from).collect();
-    let home_lib = home_library();
-    // The cap bounds the index sent to the frontend (memory + fuzzy-search cost).
-    // Files are buffered unstated while under the cap — mtime is only needed to
-    // pick what to drop. On the first overflow the buffer is stated once and the
-    // walk switches to a min-heap that keeps the newest by mtime, so a file an
-    // agent just created is never lost to walk order. The whole tree is still
-    // walked (unbounded on huge trees): the cost of keeping the newest instead of
-    // an arbitrary walk-order prefix.
-    let mut buffered: Vec<IndexEntry> = Vec::new();
-    let mut heap: Option<BinaryHeap<Reverse<ByMtime>>> = None;
-
-    let walker = ignore::WalkBuilder::new(root)
-        .hidden(false)
-        .git_ignore(respect_gitignore)
-        .git_global(respect_gitignore)
-        .git_exclude(respect_gitignore)
-        .ignore(respect_gitignore)
-        .parents(respect_gitignore)
-        .require_git(false)
-        .filter_entry(move |e| {
-            let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
-            if !is_dir {
-                return true;
-            }
-            if home_lib.as_deref() == Some(e.path()) {
-                return false;
-            }
-            !exclude.iter().any(|x| e.file_name() == x.as_os_str())
-        })
-        .build();
-    for result in walker {
-        let Ok(dir) = result else { continue };
-        if dir.depth() == 0 {
-            continue;
-        }
-        let path = dir.path();
-        let rel = path
-            .strip_prefix(root)
-            .unwrap_or(path)
-            .to_string_lossy()
-            .into_owned();
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let is_dir = dir.file_type().map(|t| t.is_dir()).unwrap_or(false);
-        let entry = IndexEntry { rel, name, is_dir };
-
-        if let Some(heap) = &mut heap {
-            let mtime = dir.metadata().map(|m| mtime_secs(&m)).unwrap_or(0);
-            offer_newest(heap, ByMtime(mtime, entry));
-        } else if buffered.len() < index_cap {
-            buffered.push(entry);
-        } else {
-            // Overflow: stat the buffered names once, seed the heap, then offer this.
-            let mut seeded = BinaryHeap::with_capacity(index_cap.max(1));
-            for e in buffered.drain(..) {
-                let mtime = std::fs::metadata(root.join(&e.rel))
-                    .map(|m| mtime_secs(&m))
-                    .unwrap_or(0);
-                seeded.push(Reverse(ByMtime(mtime, e)));
-            }
-            let mtime = dir.metadata().map(|m| mtime_secs(&m)).unwrap_or(0);
-            offer_newest(&mut seeded, ByMtime(mtime, entry));
-            heap = Some(seeded);
-        }
-    }
-
-    match heap {
-        Some(heap) => FileIndex {
-            entries: heap.into_iter().map(|Reverse(e)| e.1).collect(),
-            truncated: true,
-        },
-        None => FileIndex {
-            entries: buffered,
-            truncated: false,
-        },
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -386,84 +254,6 @@ mod tests {
         let capped = list_dir(&p, 3, &[]).unwrap();
         assert!(capped.truncated);
         assert_eq!(capped.entries.len(), 3);
-
-        let _ = std::fs::remove_dir_all(&tmp);
-    }
-
-    #[test]
-    fn index_walk_surfaces_gitignored_files_by_default() {
-        let tmp = std::env::temp_dir().join(format!("shirei_index_gi_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(tmp.join(".claude/worktrees/feat/sub")).unwrap();
-        std::fs::write(tmp.join(".gitignore"), b".claude/worktrees\n").unwrap();
-        std::fs::write(
-            tmp.join(".claude/worktrees/feat/sub/00036_migration.sql"),
-            b"-- created by the agent\n",
-        )
-        .unwrap();
-
-        let names = |idx: &FileIndex| -> Vec<String> {
-            idx.entries.iter().map(|e| e.name.clone()).collect()
-        };
-
-        let indexed = index_walk(&tmp, 1000, &[], false);
-        assert!(
-            names(&indexed).iter().any(|n| n == "00036_migration.sql"),
-            "disk truth must surface files inside gitignored worktrees"
-        );
-
-        let git_aware = index_walk(&tmp, 1000, &[], true);
-        assert!(
-            !names(&git_aware).iter().any(|n| n == "00036_migration.sql"),
-            "respect_gitignore=true must hide gitignored files"
-        );
-
-        let _ = std::fs::remove_dir_all(&tmp);
-    }
-
-    #[test]
-    fn index_walk_excludes_noise_dirs_and_caps() {
-        let tmp = std::env::temp_dir().join(format!("shirei_index_excl_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(tmp.join("node_modules/pkg")).unwrap();
-        std::fs::write(tmp.join("node_modules/pkg/index.js"), b"x").unwrap();
-        std::fs::write(tmp.join("app.ts"), b"x").unwrap();
-
-        let idx = index_walk(&tmp, 1000, &["node_modules".to_string()], false);
-        assert!(idx.entries.iter().all(|e| e.name != "node_modules"));
-        assert!(idx.entries.iter().any(|e| e.name == "app.ts"));
-
-        let capped = index_walk(&tmp, 1, &[], false);
-        assert!(capped.truncated);
-        assert_eq!(capped.entries.len(), 1);
-
-        let _ = std::fs::remove_dir_all(&tmp);
-    }
-
-    #[test]
-    fn truncation_keeps_the_newest_files() {
-        let tmp = std::env::temp_dir().join(format!("shirei_index_recent_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
-        // Three files, staggered mtimes; "newest.md" is written last.
-        for name in ["oldest.md", "middle.md", "newest.md"] {
-            std::fs::write(tmp.join(name), b"x").unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(1100));
-        }
-
-        // Cap of 2 must drop the oldest, never the freshly written file.
-        let idx = index_walk(&tmp, 2, &[], false);
-        assert!(idx.truncated);
-        assert_eq!(idx.entries.len(), 2);
-        let names: Vec<&str> = idx.entries.iter().map(|e| e.name.as_str()).collect();
-        assert!(
-            names.contains(&"newest.md"),
-            "newest file must survive: {names:?}"
-        );
-        assert!(
-            !names.contains(&"oldest.md"),
-            "oldest file should be dropped: {names:?}"
-        );
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

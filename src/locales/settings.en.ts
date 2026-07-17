@@ -369,7 +369,6 @@ export const settingsEn = {
   "settings.advanced.group.config": "Configuration",
   "settings.advanced.maxFile": "Max file (MB)",
   "settings.advanced.maxImage": "Max image (MB)",
-  "settings.advanced.indexCap": "Index (max)",
   "settings.advanced.quickopenResults": "Quick-open results (max)",
   "settings.advanced.dirEntriesCap": "Files per folder (max)",
   "settings.advanced.excludeDirs": "Excluded folders",
