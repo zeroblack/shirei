@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.6] - 2026-07-29
+
 ### Added
 - Focus timer in the pinned dock: a keyboard-first session clock with built-in
   presets (Pomodoro, long Pomodoro, deep work, ultradian, flowtime) or your own,
