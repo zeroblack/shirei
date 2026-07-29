@@ -13,6 +13,7 @@ import {
   browserReleaseFocus,
   browserReload,
   metricsLog,
+  notifyFire,
   ptyCwd,
   ptySnapshot,
   recordOpen,
@@ -34,10 +35,12 @@ import { attachDrag } from "./drag";
 import type { EditorSession as EditorSessionType } from "./editor";
 import { errorMessage } from "./errors";
 import { FileTree } from "./filetree";
+import { FocusCell, type FocusCellShortcuts } from "./focus/cell";
+import type { Phase } from "./focus/machine";
 import { fontStack, isFontLoaded, registerFont } from "./fonts";
 import { GitHistory } from "./githistory";
 import { setLocale, t } from "./i18n";
-import { isImage, mediaKind, SEARCH, SIDEBAR } from "./icons";
+import { isImage, mediaKind, PANEL_RIGHT, SEARCH, SIDEBAR } from "./icons";
 import { ImageSession } from "./image";
 import { Keymap } from "./keymap";
 import { eventToKeystroke, formatKeystroke, resolveBindings } from "./keys";
@@ -52,7 +55,9 @@ import {
 import {
   isTrackedAgent,
   NotificationCenter,
+  playTimbre,
   resolveCliId,
+  withinQuietHours,
 } from "./notifications";
 import {
   type BoardHints,
@@ -128,9 +133,9 @@ async function loadEditor(): Promise<typeof EditorSessionType> {
 // A filled pinned cell. Closing it (the × button) always disposes the session —
 // the source pane, if any, was already collapsed when the content was pinned.
 interface PinnedCell {
-  session: PaneContentSession | TerminalSession;
+  session: PaneContentSession | TerminalSession | FocusCell;
   container: HTMLElement;
-  kind: PaneContentKind;
+  kind: PaneContentKind | "timer";
   path?: string;
   title: string;
 }
@@ -139,6 +144,12 @@ let seq = 0;
 function nextId(): string {
   seq += 1;
   return `t${Date.now().toString(36)}${seq}`;
+}
+
+// A mouse press on a titlebar button doesn't steal focus from the terminal
+// underneath and never surfaces the platform focus ring.
+function keepFocusOffClick(el: HTMLElement): void {
+  el.addEventListener("mousedown", (e) => e.preventDefault());
 }
 
 // Hidden longer than this on return is treated as a GPU sleep (rebuild renderers)
@@ -321,6 +332,8 @@ export class App {
   private readonly tree: FileTree;
   private searchKbd: HTMLElement | null = null;
   private sidebarBtn: HTMLElement | null = null;
+  private dockBtn: HTMLElement | null = null;
+  private dockKbd: HTMLElement | null = null;
   private readonly mainEl: HTMLElement;
   private readonly panelEl: HTMLElement;
   private readonly dividerEl: HTMLElement;
@@ -569,14 +582,26 @@ export class App {
     const icon = btn.querySelector<HTMLElement>(".ts-icon");
     if (icon) icon.innerHTML = SEARCH;
     this.searchKbd = btn.querySelector<HTMLElement>(".ts-key");
+    // Suppress focus-on-click so the platform focus ring only shows for keyboard
+    // navigation, not on a mouse press (the click handler still fires).
+    keepFocusOffClick(btn);
     btn.addEventListener("click", () => void this.openQuickOpen());
-    this.updateSearchHint();
 
     this.sidebarBtn = document.querySelector<HTMLElement>("#titlebar-sidebar");
     const sidebarIcon = this.sidebarBtn?.querySelector<HTMLElement>(".ts-icon");
     if (sidebarIcon) sidebarIcon.innerHTML = SIDEBAR;
+    if (this.sidebarBtn) keepFocusOffClick(this.sidebarBtn);
     this.sidebarBtn?.addEventListener("click", () => this.togglePanel());
     this.syncSidebarButton();
+
+    this.dockBtn = document.querySelector<HTMLElement>("#titlebar-dock");
+    const dockIcon = this.dockBtn?.querySelector<HTMLElement>(".ts-icon");
+    if (dockIcon) dockIcon.innerHTML = PANEL_RIGHT;
+    this.dockKbd = this.dockBtn?.querySelector<HTMLElement>(".ts-key") ?? null;
+    if (this.dockBtn) keepFocusOffClick(this.dockBtn);
+    this.dockBtn?.addEventListener("click", () => this.togglePinDock());
+
+    this.updateSearchHint();
     this.applyTitlebarLabels();
   }
 
@@ -586,6 +611,9 @@ export class App {
     const searchLabel = search?.querySelector<HTMLElement>(".ts-label");
     if (searchLabel) searchLabel.textContent = t("ui.titlebar.searchLabel");
     this.sidebarBtn?.setAttribute("title", t("ui.titlebar.toggleSidebar"));
+    this.dockBtn?.setAttribute("title", t("ui.titlebar.toggleDock"));
+    const dockLabel = this.dockBtn?.querySelector<HTMLElement>(".ts-label");
+    if (dockLabel) dockLabel.textContent = t("ui.titlebar.dock");
   }
 
   private syncSidebarButton(): void {
@@ -600,6 +628,7 @@ export class App {
   private updateSearchHint(): void {
     if (this.searchKbd)
       this.searchKbd.textContent = this.strokeFor("palette.open");
+    if (this.dockKbd) this.dockKbd.textContent = this.strokeFor("pane.pin");
     this.todoPanel.setFocusHint(this.strokeFor("todo.focus"));
     this.tree.setFocusHint(this.strokeFor("tree.focus"));
   }
@@ -752,6 +781,18 @@ export class App {
     ) {
       this.systemIdle = true;
       this.logMetric("system_idle_start");
+      this.pauseFocusCellsOnIdle();
+    }
+  }
+
+  // Reuses the app's own idle detector (config.metrics.idle_after_ms of no
+  // keyboard/mouse activity) rather than standing up a second one — matching
+  // the Settings copy ("pause the timer when the session goes idle") and
+  // never auto-resuming, since coming back from idle is a deliberate action.
+  private pauseFocusCellsOnIdle(): void {
+    if (!this.config.focus.pause_on_idle) return;
+    for (const cell of this.pinCells) {
+      if (cell?.session instanceof FocusCell) cell.session.pauseIfRunning();
     }
   }
 
@@ -1097,6 +1138,7 @@ export class App {
     this.applyMotionVars(c.motion);
     this.updateContextHint();
     webglPool.setCap(c.render.webgl_pool_cap);
+    this.applyFocusCellsConfig(c);
     if (
       previous.session.snapshot_interval_secs !==
         c.session.snapshot_interval_secs ||
@@ -1117,6 +1159,22 @@ export class App {
     r.toggle("no-pane-accent", c?.pane_accent === false);
     r.toggle("no-tab-line", c?.tab_accent_line === false);
     r.toggle("no-tab-hat", c?.active_tab_highlight === false);
+  }
+
+  // Pinned FocusCells outlive a single applyConfig call (the dock stays open
+  // across a settings save), so a live cell must be re-themed/re-gated in
+  // place instead of only picking up the new config on its next reopen.
+  private applyFocusCellsConfig(c: Config): void {
+    for (const cell of this.pinCells) {
+      if (cell?.session instanceof FocusCell) {
+        cell.session.setConfig(
+          c.focus,
+          c.theme.terminal.bg,
+          c.metrics.enabled,
+          this.focusCellShortcuts(),
+        );
+      }
+    }
   }
 
   // Settings runs in a separate webview, so a font installed there is absent
@@ -1869,6 +1927,7 @@ export class App {
       const c = saved[i];
       if (!c) continue;
       if (c.kind === "browser") await this.openBrowserInCell(i, c.url);
+      else if (c.kind === "timer") this.openTimerInCell(i, c.preset, c.name);
       else await this.openTerminalInCell(i);
     }
     // Only now may persist() write the dock — before this, an empty pinCells
@@ -1886,9 +1945,23 @@ export class App {
     );
   }
 
-  // ⌘⌃P sends the active pane's content to the first free pinned cell, or —
-  // when nothing pinnable is focused — seeds that cell with a fresh browser, so
-  // the shortcut always opens the dock with something useful.
+  // ⌘⌃P toggles the whole dock: open it seeded with the active browser/file (or
+  // a fresh browser) on top and the focus timer below; tear it all down when
+  // anything is pinned. Per-cell ⌘W still closes one.
+  private togglePinDock(): void {
+    if (this.dockVisible()) {
+      for (let i = 0; i < this.pinCells.length; i++)
+        if (this.pinCells[i]) this.unpinCell(i);
+      this.focusActive();
+      return;
+    }
+    this.pinActiveContent();
+    const timerIndex = this.pinCells.indexOf(null);
+    if (timerIndex >= 0) this.openTimerInCell(timerIndex);
+  }
+
+  // Sends the active pane's content to the first free pinned cell, or — when
+  // nothing pinnable is focused — seeds that cell with a fresh browser.
   private pinActiveContent(): void {
     const index = this.pinCells.indexOf(null);
     if (index < 0) {
@@ -1902,8 +1975,7 @@ export class App {
         this.placeInCell(index, detached);
         this.refreshTreeIfVisible();
         // Showing the pinned browser re-grabs first responder; hand keyboard
-        // focus back to the grid (natively, since DOM focus alone does not
-        // cross back over the child webview) so pane navigation keeps working.
+        // focus back to the grid so pane navigation keeps working.
         grid.focus();
         void browserReleaseFocus();
         return;
@@ -1930,9 +2002,9 @@ export class App {
     this.persist();
   }
 
-  private addToPinDock(kind: "terminal" | "browser"): void {
+  private addToPinDock(kind: "terminal" | "browser" | "timer"): void {
     // Fill the focused empty cell when the dock has keyboard focus, else the
-    // first free cell — so ⌘⌃T/⌘⌃B land where the user is looking.
+    // first free cell — so ⌘⌃T/⌘⌃B/⌘⌃F land where the user is looking.
     const focused = this.focusedPin;
     const index =
       focused !== null && !this.pinCells[focused]
@@ -1940,6 +2012,11 @@ export class App {
         : this.pinCells.indexOf(null);
     if (index < 0) {
       this.notify(t("ui.pin.full"));
+      return;
+    }
+    if (kind === "timer") {
+      this.openTimerInCell(index);
+      this.focusPinCell(index);
       return;
     }
     const opened =
@@ -1982,6 +2059,9 @@ export class App {
         t("ui.pane.addBrowser"),
         "⌘⌃B",
         () => void this.openBrowserInCell(index),
+      ),
+      row(t("ui.focus.add"), this.strokeFor("pin.timer"), () =>
+        this.openTimerInCell(index),
       ),
     );
     document.body.appendChild(overlay);
@@ -2047,12 +2127,87 @@ export class App {
     session.fitAndResize();
   }
 
+  // Resolves the focus timer's discoverable bindings from the live keymap —
+  // never hardcoded — so a control tooltip or the panel legend always shows
+  // whatever the user actually has bound (or drops the hint entirely once
+  // they clear it).
+  private focusCellShortcuts(): FocusCellShortcuts {
+    return {
+      toggle: this.strokeFor("timer.toggle"),
+      skip: this.strokeFor("timer.skip"),
+      reset: this.strokeFor("timer.reset"),
+      panel: this.strokeFor("timer.panel"),
+    };
+  }
+
+  private openTimerInCell(
+    index: number,
+    presetId?: string,
+    name?: string,
+  ): void {
+    const container = document.createElement("div");
+    container.className = "terminal-host pane-content";
+    const cfg = presetId
+      ? { ...this.config.focus, default_preset: presetId }
+      : this.config.focus;
+    const session = new FocusCell(
+      `pin-timer-${index}`,
+      container,
+      cfg,
+      this.config.theme.terminal.bg,
+      this.config.metrics.enabled,
+      { projectId: null, shireiSessionId: this.metricsSessionId },
+      this.focusCellShortcuts(),
+    );
+    if (name) session.restoreName(name);
+    session.onCloseRequest = () => this.unpinCell(index);
+    session.onPhaseChange = (from, to) => this.fireFocusAlert(from, to);
+    session.onPresetSaved = () => {
+      void configSet(this.config);
+      this.applyFocusCellsConfig(this.config);
+    };
+    session.onRename = () => this.persist();
+    this.placeInCell(index, {
+      kind: "timer",
+      session,
+      container,
+      title: t("ui.focus.title"),
+    });
+    // Restored dock cells must never surprise-start: pinDockRestored is still
+    // false while restorePinDock's loop is running, so only a cell opened by
+    // an actual user action honors start_on_open.
+    if (this.config.focus.start_on_open && this.pinDockRestored) {
+      session.toggleStart();
+    }
+  }
+
+  private fireFocusAlert(_from: Phase, to: Phase): void {
+    const focus = this.config.focus;
+    if (focus.alert_channel === "off") return;
+    if (withinQuietHours(this.config.notifications.quiet_hours, new Date())) {
+      return;
+    }
+    const body = t(
+      to === "break" ? "notif.focus.toBreak" : "notif.focus.toFocus",
+    );
+    if (focus.alert_channel === "in-app") {
+      showToast(body);
+    } else {
+      void notifyFire(t("ui.focus.title"), body).catch(() => {});
+    }
+    if (focus.alert_sound) playTimbre(focus.alert_timbre);
+  }
+
   private unpinCell(index: number): void {
     const cell = this.pinCells[index];
     if (!cell) return;
     this.pinCells[index] = null;
     if (this.focusedPin === index) this.blurPinDock();
-    void cell.session.dispose();
+    // A pin cell owns its content: closing it kills the process (a keep_alive
+    // terminal is torn down, not detached), unlike a tab which survives.
+    if (cell.session instanceof TerminalSession)
+      void cell.session.dispose(true);
+    else void cell.session.dispose();
     cell.container.remove();
     this.showPinDock();
     this.syncBrowserVisibility();
@@ -2076,7 +2231,9 @@ export class App {
       el.classList.toggle("pin-focused", i === index);
     });
     const cell = this.pinCells[index];
-    if (cell?.kind === "terminal") cell.session.focus();
+    if (cell?.kind === "terminal" || cell?.kind === "timer") {
+      cell.session.focus();
+    }
   }
 
   private blurPinDock(): void {
@@ -3192,7 +3349,7 @@ export class App {
         if (pane) void this.switchPaneToBrowser(pane, pane.activePaneId());
         break;
       case "pane.pin":
-        this.pinActiveContent();
+        this.togglePinDock();
         break;
       case "pin.terminal":
         this.addToPinDock("terminal");
@@ -3200,6 +3357,29 @@ export class App {
       case "pin.browser":
         this.addToPinDock("browser");
         break;
+      case "pin.timer":
+        this.addToPinDock("timer");
+        break;
+      case "timer.toggle":
+        this.activeFocusCell()?.toggleStart();
+        break;
+      case "timer.skip":
+        this.activeFocusCell()?.skip();
+        break;
+      case "timer.reset":
+        this.activeFocusCell()?.reset();
+        break;
+      case "timer.rename":
+        this.activeFocusCell()?.startRename();
+        break;
+      case "timer.panel":
+        this.activeFocusCell()?.openPanel();
+        break;
+      case "timer.focusCell": {
+        const index = this.timerCellIndex();
+        if (index >= 0) this.focusPinCell(index);
+        break;
+      }
       case "browser.focus-url":
         this.activeBrowser(pane)?.focus();
         break;
@@ -3263,6 +3443,25 @@ export class App {
       if (pinned.length === 1) return pinned[0].session;
     }
     return this.activeBrowserSession(pane);
+  }
+
+  // The timer keyboard shortcuts operate on the keyboard-focused dock cell when
+  // it holds one, else the first pinned timer — so ⌘⌃Space/⌘⌃S/⌘⌃0 always reach
+  // a timer when exactly one is pinned, and the focused one when there are two.
+  private timerCellIndex(): number {
+    if (
+      this.focusedPin !== null &&
+      this.pinCells[this.focusedPin]?.kind === "timer"
+    ) {
+      return this.focusedPin;
+    }
+    return this.pinCells.findIndex((cell) => cell?.kind === "timer");
+  }
+
+  private activeFocusCell(): FocusCell | undefined {
+    const index = this.timerCellIndex();
+    const cell = index >= 0 ? this.pinCells[index] : null;
+    return cell?.session instanceof FocusCell ? cell.session : undefined;
   }
 
   private async guardDirtyContent(
@@ -3717,6 +3916,15 @@ export class App {
       }
       if (cell?.session instanceof TerminalSession) {
         return { kind: "terminal" as const };
+      }
+      if (cell?.session instanceof FocusCell) {
+        return {
+          kind: "timer" as const,
+          preset: cell.session.presetId,
+          ...(cell.session.sessionName
+            ? { name: cell.session.sessionName }
+            : {}),
+        };
       }
       return null;
     });
