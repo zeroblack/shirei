@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Focus timer in the pinned dock: a keyboard-first session clock with built-in
+  presets (Pomodoro, long Pomodoro, deep work, ultradian, flowtime) or your own,
+  breaks that flow on their own when a preset asks for it, and phase alerts that
+  honor quiet hours. Preset and focus length can be changed from the timer
+  itself, without opening Settings.
+- Five ways to watch the time run down: a ring, a draining liquid, a coffee cup
+  that steams while it is fresh, an hourglass, or a bar. Each works with the six
+  color skins derived from your terminal background, all under Settings › Focus.
+- The session at a glance: a row of pips for the cycles and breaks you have put
+  in, alongside the time you have focused. A session can be named, and the name
+  is kept with it in your stats.
+- A Dock control in the titlebar, so the pinned dock is discoverable without its
+  shortcut.
+
+### Fixed
+- Closing the pinned dock now shuts its content down, instead of leaving a
+  browser, timer, or terminal process running in the background.
+
 ## [0.16.2] - 2026-07-16
 
 ### Fixed
