@@ -21,7 +21,7 @@ export class UpdateIndicator {
   }
 
   private mount(): HTMLButtonElement {
-    const titlebar = document.querySelector<HTMLElement>("#titlebar");
+    const actions = document.querySelector<HTMLElement>("#titlebar-actions");
     const btn = document.createElement("button");
     btn.type = "button";
     btn.id = "titlebar-update";
@@ -33,7 +33,7 @@ export class UpdateIndicator {
     label.textContent = t("ui.update.indicatorLabel");
     btn.append(dot, label);
     btn.addEventListener("click", () => this.onActivate());
-    titlebar?.append(btn);
+    actions?.prepend(btn);
     requestAnimationFrame(() => {
       btn.dataset.mounted = "true";
     });

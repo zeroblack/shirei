@@ -12,11 +12,18 @@
         <span class="ts-icon" aria-hidden="true"></span>
       </button>
       <span id="app-title">指令 Shirei</span>
-      <button id="titlebar-search" type="button" title="Search file or launch project">
-        <span class="ts-icon" aria-hidden="true"></span>
-        <span class="ts-label">Search…</span>
-        <kbd class="ts-key"></kbd>
-      </button>
+      <div id="titlebar-actions">
+        <button id="titlebar-dock" type="button" title="Toggle pinned dock">
+          <span class="ts-icon" aria-hidden="true"></span>
+          <span class="ts-label">Dock</span>
+          <kbd class="ts-key"></kbd>
+        </button>
+        <button id="titlebar-search" type="button" title="Search file or launch project">
+          <span class="ts-icon" aria-hidden="true"></span>
+          <span class="ts-label">Search…</span>
+          <kbd class="ts-key"></kbd>
+        </button>
+      </div>
     </div>
     <div id="tabbar" data-tauri-drag-region></div>
     <div id="main">
