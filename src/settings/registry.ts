@@ -11,6 +11,7 @@ export const SECTION_LAYOUT = [
   { id: "agents", group: "terminal" },
   { id: "recording", group: "tools" },
   { id: "browser", group: "tools" },
+  { id: "focus", group: "tools" },
   { id: "performance", group: "tools" },
   { id: "advanced", group: "system" },
   { id: "updates", group: "system" },

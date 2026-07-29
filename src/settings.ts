@@ -15,6 +15,7 @@ import { agentsSection } from "./settings/section-agents";
 import { appearanceSection } from "./settings/section-appearance";
 import { browserSection } from "./settings/section-browser";
 import { editorSection } from "./settings/section-editor";
+import { focusSection } from "./settings/section-focus";
 import { gitSection } from "./settings/section-git";
 import { homeSection } from "./settings/section-home";
 import { performanceSection } from "./settings/section-performance";
@@ -40,6 +41,7 @@ const BY_ID: Record<SectionId, SettingsSection> = {
   tabs: tabsSection,
   recording: recordingSection,
   browser: browserSection,
+  focus: focusSection,
   performance: performanceSection,
   about: aboutSection,
   advanced: advancedSection,

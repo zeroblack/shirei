@@ -70,6 +70,7 @@ export const settingsEn = {
   "settings.agents.label": "Agents",
   "settings.recording.label": "Recording",
   "settings.browser.label": "Browser",
+  "settings.focus.label": "Focus",
   "settings.performance.label": "Performance",
   "settings.advanced.label": "Advanced",
   "settings.updates.label": "Updates",
@@ -94,6 +95,7 @@ export const settingsEn = {
   "settings.shortcuts.desc.layouts": "Save and reuse the pane layout.",
   "settings.shortcuts.desc.recording": "Capture the session as video or gif.",
   "settings.shortcuts.desc.editor": "Line editing inside the editor.",
+  "settings.shortcuts.desc.focus": "Start, skip and reset the focus timer.",
   "settings.shortcuts.native.gotoTab": "Go to tab (1–9)",
   "settings.shortcuts.native.openSettings": "Open settings",
   "settings.shortcuts.native.copy": "Copy",
@@ -317,6 +319,105 @@ export const settingsEn = {
   "settings.browser.autoHideDesc":
     "Hides the bar after a moment of inactivity; hover the top edge or press ⌘L to bring it back.",
   "settings.browser.autoHideDelay": "Auto-hide delay (seconds)",
+
+  "settings.focus.title": "Focus",
+  "settings.focus.desc": "Timer presets, look, behavior, and alerts.",
+  "settings.focus.tab.presets": "Presets",
+  "settings.focus.tab.theme": "Theme",
+  "settings.focus.tab.behavior": "Behavior",
+  "settings.focus.tab.alerts": "Alerts",
+
+  "settings.focus.presets.desc":
+    "Timer presets available from the focus dock cell.",
+  "settings.focus.presets.focusMin": "Focus (min)",
+  "settings.focus.presets.breakMin": "Break (min)",
+  "settings.focus.presets.longBreakMin": "Long break (min)",
+  "settings.focus.presets.cycles": "Cycles",
+  "settings.focus.presets.duplicate": "Duplicate",
+  "settings.focus.presets.remove": "Remove",
+  "settings.focus.presets.copySuffix": " copy",
+  "settings.focus.presets.newLabel": "New preset",
+  "settings.focus.presets.add": "Add preset",
+  "settings.focus.presets.defaultPreset": "Default preset",
+  "settings.focus.presets.defaultPresetDesc":
+    "Opens automatically when a new focus session starts.",
+  "settings.focus.presets.autoAdvance": "Auto-advance",
+  "settings.focus.presets.autoAdvanceDesc":
+    "Flow straight into the next phase when a block from this preset ends.",
+
+  "settings.focus.theme.deriveLabel": "Derive from terminal",
+  "settings.focus.theme.overridesGroup": "Color overrides",
+  "settings.focus.theme.overridesLabel": "Role colors",
+  "settings.focus.theme.overridesDesc":
+    "Override individual roles on top of the selected skin.",
+  "settings.focus.theme.overridesReset": "Reset overrides",
+  "settings.focus.theme.role.focus": "Focus",
+  "settings.focus.theme.role.break": "Break",
+  "settings.focus.theme.role.overflow": "Overflow",
+  "settings.focus.theme.role.track": "Track",
+  "settings.focus.theme.role.field": "Field",
+  "settings.focus.theme.shapeGroup": "Shape",
+  "settings.focus.theme.shape.ring": "Ring",
+  "settings.focus.theme.shape.liquid": "Liquid",
+  "settings.focus.theme.shape.coffee": "Coffee",
+  "settings.focus.theme.shape.hourglass": "Hourglass",
+  "settings.focus.theme.shape.bar": "Bar",
+  "settings.focus.theme.ringGroup": "Ring",
+  "settings.focus.theme.ringStyle": "Ring style",
+  "settings.focus.theme.ringStyleDesc": "Applies to the ring shape only.",
+  "settings.focus.theme.ringStyle.solid": "Solid",
+  "settings.focus.theme.ringStyle.gradient": "Gradient",
+  "settings.focus.theme.ringStyle.dualStroke": "Dual stroke",
+  "settings.focus.theme.ringWidth": "Ring width (px)",
+  "settings.focus.theme.glowIntensity": "Glow intensity",
+  "settings.focus.theme.numericEmphasis": "Numeric emphasis",
+  "settings.focus.theme.numericEmphasis.ambient": "Ambient",
+  "settings.focus.theme.numericEmphasis.balanced": "Balanced",
+  "settings.focus.theme.numericEmphasis.numeric": "Numeric",
+  "settings.focus.theme.numericEmphasisDesc":
+    "How much the remaining time competes with the ring for attention.",
+
+  "settings.focus.behavior.groupFlow": "Flow",
+  "settings.focus.behavior.startOnOpen": "Start on open",
+  "settings.focus.behavior.startOnOpenDesc":
+    "Begin the timer as soon as the dock cell appears.",
+  "settings.focus.behavior.pauseOnIdle": "Pause on idle",
+  "settings.focus.behavior.pauseOnIdleDesc":
+    "Pause the timer when the session goes idle.",
+  "settings.focus.behavior.groupOverflow": "Overflow",
+  "settings.focus.behavior.overflowEnabled": "Allow overflow",
+  "settings.focus.behavior.overflowEnabledDesc":
+    "Keep counting past a block's end instead of stopping at zero.",
+  "settings.focus.behavior.overflowCap": "Overflow cap (min)",
+  "settings.focus.behavior.overflowCapDesc":
+    "Longest a block can run past its end before it's forced to advance.",
+  "settings.focus.behavior.groupSession": "Session",
+  "settings.focus.behavior.sessionNote": "Session note prompt",
+  "settings.focus.behavior.sessionNoteDesc":
+    "Ask what you worked on when a focus block ends.",
+
+  "settings.focus.alerts.groupChannel": "Phase change",
+  "settings.focus.alerts.channel": "Notify when a phase ends",
+  "settings.focus.alerts.channelDesc":
+    "How the timer tells you a focus block or a break just ended.",
+  "settings.focus.alerts.groupSound": "Sound",
+  "settings.focus.alerts.soundEnabled": "Play a sound",
+  "settings.focus.alerts.timbre": "Chime",
+  "settings.focus.alerts.timbreDesc": "Plays alongside the phase-change alert.",
+  "settings.focus.alerts.groupQuietHours": "Quiet hours",
+  "settings.focus.alerts.quietHoursEnabled": "Enable quiet hours",
+  "settings.focus.alerts.quietHoursDesc":
+    "Global do-not-disturb window, shared with agent notifications (Agents › Notifications).",
+  "settings.focus.alerts.quietHoursStart": "From",
+  "settings.focus.alerts.quietHoursEnd": "To",
+  "settings.focus.alerts.groupMotion": "Motion",
+  "settings.focus.alerts.motion": "Ring motion",
+  "settings.focus.alerts.motion.calm": "Calm",
+  "settings.focus.alerts.motion.lively": "Lively",
+  "settings.focus.alerts.motion.off": "Off",
+  "settings.focus.alerts.reducedMotionNote":
+    "When macOS Reduce Motion is on, the ring always animates at Off regardless of this setting.",
+
   "settings.recording.group.output": "Output",
   "settings.recording.group.quality": "Quality",
   "settings.recording.group.capture": "Capture",
@@ -479,6 +580,8 @@ export const settingsEn = {
     "recording record screen screencast video gif mp4 folder format fps cursor share clipboard finder countdown",
   "settings.browser.search":
     "browser webview web page url youtube video player preview localhost dev server dark light color scheme auto hide chrome address bar",
+  "settings.focus.search":
+    "focus timer pomodoro presets deep work flowtime ultradian ring skin theme sumi hinode shinya kasumi mori signal derive glow overflow break long break cycles auto advance idle session note alerts quiet hours motion",
   "settings.performance.search":
     "performance status bar cpu ram memory disk network monitor usage tab app total threshold webgl contexts",
   "settings.advanced.search":

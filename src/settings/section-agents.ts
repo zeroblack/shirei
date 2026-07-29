@@ -196,18 +196,26 @@ function detectionTab(config: Config, save: () => void): HTMLElement {
   ]);
 }
 
-function notificationsTab(config: Config, save: () => void): HTMLElement {
-  const n = config.notifications;
-
-  const channelOptions: [NotifyChannel, string][] = [
+export function notifyChannelOptions(): [NotifyChannel, string][] {
+  return [
     ["os", t("settings.agents.notifications.channel.os")],
     ["in-app", t("settings.agents.notifications.channel.inApp")],
     ["off", t("settings.agents.notifications.channel.off")],
   ];
-  const timbreOptions: [SoundTimbre, string][] = [
+}
+
+export function soundTimbreOptions(): [SoundTimbre, string][] {
+  return [
     ["soft", t("settings.agents.notifications.timbre.soft")],
     ["deep", t("settings.agents.notifications.timbre.deep")],
   ];
+}
+
+function notificationsTab(config: Config, save: () => void): HTMLElement {
+  const n = config.notifications;
+
+  const channelOptions = notifyChannelOptions();
+  const timbreOptions = soundTimbreOptions();
   const verbosityOptions: [PayloadVerbosity, string][] = [
     ["full", t("settings.agents.notifications.payload.full")],
     ["redacted", t("settings.agents.notifications.payload.redacted")],

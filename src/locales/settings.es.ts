@@ -73,6 +73,7 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.agents.label": "Agentes",
   "settings.recording.label": "Grabación",
   "settings.browser.label": "Navegador",
+  "settings.focus.label": "Enfoque",
   "settings.performance.label": "Rendimiento",
   "settings.advanced.label": "Avanzado",
   "settings.updates.label": "Actualizaciones",
@@ -99,6 +100,8 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
     "Guardar y reutilizar la disposición de panes.",
   "settings.shortcuts.desc.recording": "Capturar la sesión en video o gif.",
   "settings.shortcuts.desc.editor": "Edición de líneas dentro del editor.",
+  "settings.shortcuts.desc.focus":
+    "Iniciar, saltar y reiniciar el temporizador de enfoque.",
   "settings.shortcuts.native.gotoTab": "Ir a pestaña (1–9)",
   "settings.shortcuts.native.openSettings": "Abrir ajustes",
   "settings.shortcuts.native.copy": "Copiar",
@@ -330,6 +333,107 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.browser.autoHideDesc":
     "Oculta la barra tras un momento de inactividad; pasa el mouse por el borde superior o presiona ⌘L para volver a mostrarla.",
   "settings.browser.autoHideDelay": "Retardo para ocultar (segundos)",
+
+  "settings.focus.title": "Enfoque",
+  "settings.focus.desc":
+    "Presets del timer, apariencia, comportamiento y alertas.",
+  "settings.focus.tab.presets": "Presets",
+  "settings.focus.tab.theme": "Apariencia",
+  "settings.focus.tab.behavior": "Comportamiento",
+  "settings.focus.tab.alerts": "Alertas",
+
+  "settings.focus.presets.desc":
+    "Presets del timer disponibles desde la celda de enfoque.",
+  "settings.focus.presets.focusMin": "Foco (min)",
+  "settings.focus.presets.breakMin": "Descanso (min)",
+  "settings.focus.presets.longBreakMin": "Descanso largo (min)",
+  "settings.focus.presets.cycles": "Ciclos",
+  "settings.focus.presets.duplicate": "Duplicar",
+  "settings.focus.presets.remove": "Eliminar",
+  "settings.focus.presets.copySuffix": " copia",
+  "settings.focus.presets.newLabel": "Preset nuevo",
+  "settings.focus.presets.add": "Agregar preset",
+  "settings.focus.presets.defaultPreset": "Preset por defecto",
+  "settings.focus.presets.defaultPresetDesc":
+    "Se abre automáticamente al iniciar una sesión de enfoque nueva.",
+  "settings.focus.presets.autoAdvance": "Avance automático",
+  "settings.focus.presets.autoAdvanceDesc":
+    "Pasa directo a la siguiente fase cuando termina un bloque de este preset.",
+
+  "settings.focus.theme.deriveLabel": "Derivar del terminal",
+  "settings.focus.theme.overridesGroup": "Sobrescritura de colores",
+  "settings.focus.theme.overridesLabel": "Colores por rol",
+  "settings.focus.theme.overridesDesc":
+    "Sobrescribe roles individuales sobre el skin seleccionado.",
+  "settings.focus.theme.overridesReset": "Restablecer sobrescrituras",
+  "settings.focus.theme.role.focus": "Foco",
+  "settings.focus.theme.role.break": "Descanso",
+  "settings.focus.theme.role.overflow": "Sobretiempo",
+  "settings.focus.theme.role.track": "Pista",
+  "settings.focus.theme.role.field": "Fondo",
+  "settings.focus.theme.shapeGroup": "Forma",
+  "settings.focus.theme.shape.ring": "Anillo",
+  "settings.focus.theme.shape.liquid": "Líquido",
+  "settings.focus.theme.shape.coffee": "Café",
+  "settings.focus.theme.shape.hourglass": "Reloj de arena",
+  "settings.focus.theme.shape.bar": "Barra",
+  "settings.focus.theme.ringGroup": "Anillo",
+  "settings.focus.theme.ringStyle": "Estilo del anillo",
+  "settings.focus.theme.ringStyleDesc": "Aplica solo a la forma de anillo.",
+  "settings.focus.theme.ringStyle.solid": "Sólido",
+  "settings.focus.theme.ringStyle.gradient": "Degradado",
+  "settings.focus.theme.ringStyle.dualStroke": "Doble trazo",
+  "settings.focus.theme.ringWidth": "Grosor del anillo (px)",
+  "settings.focus.theme.glowIntensity": "Intensidad del resplandor",
+  "settings.focus.theme.numericEmphasis": "Énfasis numérico",
+  "settings.focus.theme.numericEmphasis.ambient": "Ambiental",
+  "settings.focus.theme.numericEmphasis.balanced": "Equilibrado",
+  "settings.focus.theme.numericEmphasis.numeric": "Numérico",
+  "settings.focus.theme.numericEmphasisDesc":
+    "Cuánto compite el tiempo restante con el anillo por la atención.",
+
+  "settings.focus.behavior.groupFlow": "Flujo",
+  "settings.focus.behavior.startOnOpen": "Iniciar al abrir",
+  "settings.focus.behavior.startOnOpenDesc":
+    "Comienza el timer apenas aparece la celda del dock.",
+  "settings.focus.behavior.pauseOnIdle": "Pausar en inactividad",
+  "settings.focus.behavior.pauseOnIdleDesc":
+    "Pausa el timer cuando la sesión queda inactiva.",
+  "settings.focus.behavior.groupOverflow": "Sobretiempo",
+  "settings.focus.behavior.overflowEnabled": "Permitir sobretiempo",
+  "settings.focus.behavior.overflowEnabledDesc":
+    "Sigue contando después del fin de un bloque en vez de detenerse en cero.",
+  "settings.focus.behavior.overflowCap": "Tope de sobretiempo (min)",
+  "settings.focus.behavior.overflowCapDesc":
+    "Máximo que un bloque puede extenderse antes de forzar el avance.",
+  "settings.focus.behavior.groupSession": "Sesión",
+  "settings.focus.behavior.sessionNote": "Pedir nota de sesión",
+  "settings.focus.behavior.sessionNoteDesc":
+    "Pregunta en qué trabajaste cuando termina un bloque de enfoque.",
+
+  "settings.focus.alerts.groupChannel": "Cambio de fase",
+  "settings.focus.alerts.channel": "Notificar al terminar una fase",
+  "settings.focus.alerts.channelDesc":
+    "Cómo avisa el timer que un bloque de enfoque o un descanso terminó.",
+  "settings.focus.alerts.groupSound": "Sonido",
+  "settings.focus.alerts.soundEnabled": "Reproducir un sonido",
+  "settings.focus.alerts.timbre": "Timbre",
+  "settings.focus.alerts.timbreDesc":
+    "Suena junto con la alerta de cambio de fase.",
+  "settings.focus.alerts.groupQuietHours": "Horario silencioso",
+  "settings.focus.alerts.quietHoursEnabled": "Activar horario silencioso",
+  "settings.focus.alerts.quietHoursDesc":
+    "Ventana global de no molestar, compartida con las notificaciones de agentes (Agentes › Notificaciones).",
+  "settings.focus.alerts.quietHoursStart": "Desde",
+  "settings.focus.alerts.quietHoursEnd": "Hasta",
+  "settings.focus.alerts.groupMotion": "Movimiento",
+  "settings.focus.alerts.motion": "Movimiento del anillo",
+  "settings.focus.alerts.motion.calm": "Calmo",
+  "settings.focus.alerts.motion.lively": "Animado",
+  "settings.focus.alerts.motion.off": "Desactivado",
+  "settings.focus.alerts.reducedMotionNote":
+    "Con Reducir movimiento activo en macOS, el anillo siempre anima en Desactivado sin importar este ajuste.",
+
   "settings.recording.group.output": "Salida",
   "settings.recording.group.quality": "Calidad",
   "settings.recording.group.capture": "Captura",
@@ -496,6 +600,8 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
     "grabacion grabar pantalla screencast video gif mp4 carpeta formato fps cursor compartir portapapeles finder cuenta regresiva",
   "settings.browser.search":
     "navegador browser webview vista web pagina url youtube video reproductor previsualizacion localhost servidor desarrollo oscuro claro color esquema ocultar barra direccion",
+  "settings.focus.search":
+    "enfoque foco timer pomodoro presets deep work flowtime ultradian anillo skin apariencia sumi hinode shinya kasumi mori signal derivar resplandor sobretiempo descanso descanso largo ciclos avance automático inactividad nota de sesión alertas horario silencioso movimiento",
   "settings.performance.search":
     "rendimiento performance barra estado cpu ram memoria disco red network monitor uso pestaña app total umbral webgl contextos",
   "settings.advanced.search":
