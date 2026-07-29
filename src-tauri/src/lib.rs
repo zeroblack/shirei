@@ -4,6 +4,7 @@ mod dialog;
 #[cfg(target_os = "macos")]
 mod dock;
 mod error;
+mod focus;
 mod fonts;
 mod fs;
 mod git;
@@ -187,6 +188,23 @@ pub fn run() {
                     .open(&dir.join("metrics.db"))
                 {
                     log::error!("failed to open metrics db: {e}");
+                } else {
+                    // A crash or force-quit can leave a focus session stuck in
+                    // `running`/`paused` forever; anything untouched for longer
+                    // than a plausible session is reconciled to `crashed` once
+                    // at startup rather than left to mislead stats/UI.
+                    let stale_after_s = i64::from(
+                        app.state::<config::ConfigManager>()
+                            .current()
+                            .focus
+                            .orphan_stale_after_s,
+                    );
+                    let store = app.state::<metrics::MetricsStore>();
+                    match focus::reconcile_orphans(&store, focus::now_secs(), stale_after_s) {
+                        Ok(n) if n > 0 => log::info!("reconciled {n} orphaned focus session(s)"),
+                        Ok(_) => {}
+                        Err(e) => log::error!("failed to reconcile focus sessions: {e}"),
+                    }
                 }
             }
             watch::start(app.handle());
@@ -405,6 +423,9 @@ pub fn run() {
             todos::todo_reorder,
             todos::todo_update,
             metrics::metrics_log,
+            focus::focus_session_start,
+            focus::focus_session_update,
+            focus::focus_session_end,
             fonts::font_install,
             fonts::font_installed,
             fonts::font_read,

@@ -85,4 +85,21 @@
   --atom-bg-opacity: 0.6;
 
   --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--accent-soft);
+
+  /* Sumi defaults (the shipped default skin); applyTimerTheme overwrites these
+     once the config/skin resolves, this is only the pre-JS fallback. */
+  --timer-focus: oklch(0.92 0.01 0);
+  --timer-break: oklch(0.72 0.06 150);
+  --timer-overflow: oklch(0.75 0.14 70);
+  --timer-track: oklch(0.4 0.01 0);
+  --timer-field: oklch(0.34 0.02 40);
+  --timer-ring-w: 3px;
+  --timer-glow: 0.12;
+  --timer-motion: 1;
+}
+
+@property --timer-progress {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
 }

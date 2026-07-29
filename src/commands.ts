@@ -1,5 +1,10 @@
 import { type Channel, invoke } from "@tauri-apps/api/core";
 import type { RecordFormat } from "./config";
+import type {
+  FocusSessionEndPayload,
+  FocusSessionPatch,
+  FocusSessionStartPayload,
+} from "./focus/logging";
 import type { MetricEvent } from "./metrics";
 import type { PhysicalRect, RecordTarget } from "./screencast-core";
 import type { DirListing, FileContent, SearchEvent } from "./types";
@@ -154,3 +159,12 @@ export const browserSetColorScheme = (label: string, scheme: string) =>
 
 export const metricsLog = (events: MetricEvent[]) =>
   invoke<void>("metrics_log", { events });
+
+export const focusSessionStart = (payload: FocusSessionStartPayload) =>
+  invoke<void>("focus_session_start", { session: payload });
+
+export const focusSessionUpdate = (uuid: string, patch: FocusSessionPatch) =>
+  invoke<void>("focus_session_update", { uuid, patch });
+
+export const focusSessionEnd = (uuid: string, end: FocusSessionEndPayload) =>
+  invoke<void>("focus_session_end", { uuid, end });

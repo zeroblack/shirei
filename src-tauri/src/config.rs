@@ -636,6 +636,138 @@ impl Default for SearchConfig {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]
+pub struct FocusPreset {
+    pub id: String,
+    pub label: String,
+    pub focus_min: u16,
+    pub break_min: u16,
+    pub long_break_min: u16,
+    pub cycles_before_long: u8,
+    pub auto_advance: bool,
+}
+
+impl Default for FocusPreset {
+    fn default() -> Self {
+        FocusPreset {
+            id: String::new(),
+            label: String::new(),
+            focus_min: 0,
+            break_min: 0,
+            long_break_min: 0,
+            cycles_before_long: 1,
+            auto_advance: false,
+        }
+    }
+}
+
+fn focus_preset(
+    id: &str,
+    label: &str,
+    focus_min: u16,
+    break_min: u16,
+    long_break_min: u16,
+    cycles_before_long: u8,
+    auto_advance: bool,
+) -> FocusPreset {
+    FocusPreset {
+        id: id.into(),
+        label: label.into(),
+        focus_min,
+        break_min,
+        long_break_min,
+        cycles_before_long,
+        auto_advance,
+    }
+}
+
+fn default_focus_presets() -> Vec<FocusPreset> {
+    vec![
+        focus_preset("pomodoro", "Pomodoro", 25, 5, 20, 4, true),
+        focus_preset("long_pomodoro", "Long Pomodoro", 50, 10, 20, 4, true),
+        focus_preset("deep_work", "Deep Work", 90, 0, 0, 1, false),
+        focus_preset("ultradian", "Ultradian", 90, 20, 0, 1, true),
+        focus_preset("flowtime", "Flowtime", 0, 0, 0, 1, false),
+    ]
+}
+
+// 12h: long enough that a real, still-running session is never mistaken for
+// an orphan, short enough that a crash/force-quit doesn't leave a `running`/
+// `paused` row misleading stats until the next restart after that.
+fn default_orphan_stale_after_s() -> u32 {
+    43_200
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct FocusConfig {
+    pub presets: Vec<FocusPreset>,
+    pub default_preset: String,
+    pub theme: String,
+    pub role_overrides: HashMap<String, String>,
+    // Shape strategy for the timer viz: ring | liquid | coffee | hourglass | bar.
+    pub timer_shape: String,
+    // Scoped to timer_shape === "ring"; other shapes ignore it.
+    pub ring_style: String,
+    pub ring_width: u8,
+    pub glow_intensity: f32,
+    pub motion: String,
+    pub numeric_emphasis: String,
+    pub overflow_enabled: bool,
+    pub overflow_cap_min: u16,
+    pub start_on_open: bool,
+    pub pause_on_idle: bool,
+    pub session_note: bool,
+    pub alert_channel: NotifyChannel,
+    pub alert_sound: bool,
+    pub alert_timbre: SoundTimbre,
+    // No Settings UI: an internal knob for the startup orphan sweep, only
+    // reachable by hand-editing config.json.
+    #[serde(default = "default_orphan_stale_after_s")]
+    pub orphan_stale_after_s: u32,
+    // No Settings UI: config-file-only tuning for the timer ring bounds and the
+    // in-cell quick-duration chips/stepper.
+    pub ring_min_px: u16,
+    pub ring_max_px: u16,
+    pub quick_focus_steps: Vec<u16>,
+    pub focus_step_min: u16,
+    pub focus_min_floor: u16,
+    pub focus_min_ceil: u16,
+}
+
+impl Default for FocusConfig {
+    fn default() -> Self {
+        FocusConfig {
+            presets: default_focus_presets(),
+            default_preset: "pomodoro".into(),
+            theme: "sumi".into(),
+            role_overrides: HashMap::new(),
+            timer_shape: "ring".into(),
+            ring_style: "solid".into(),
+            ring_width: 3,
+            glow_intensity: 0.12,
+            motion: "calm".into(),
+            numeric_emphasis: "ambient".into(),
+            overflow_enabled: true,
+            overflow_cap_min: 30,
+            start_on_open: false,
+            pause_on_idle: false,
+            session_note: true,
+            alert_channel: NotifyChannel::Os,
+            alert_sound: true,
+            alert_timbre: SoundTimbre::Soft,
+            orphan_stale_after_s: default_orphan_stale_after_s(),
+            ring_min_px: 96,
+            ring_max_px: 200,
+            quick_focus_steps: vec![25, 50, 90],
+            focus_step_min: 5,
+            focus_min_floor: 5,
+            focus_min_ceil: 180,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
 pub struct QuickOpenConfig {
     pub default_scope: String,
     pub toggle_scope: String,
@@ -1284,6 +1416,8 @@ pub struct Config {
     #[serde(default)]
     pub browser: BrowserConfig,
     #[serde(default)]
+    pub focus: FocusConfig,
+    #[serde(default)]
     pub detection: DetectionConfig,
     #[serde(default)]
     pub metrics: MetricsConfig,
@@ -1327,6 +1461,7 @@ impl Default for Config {
             search: SearchConfig::default(),
             recorder: RecorderConfig::default(),
             browser: BrowserConfig::default(),
+            focus: FocusConfig::default(),
             detection: DetectionConfig::default(),
             metrics: MetricsConfig::default(),
             notifications: NotificationsConfig::default(),
@@ -1518,6 +1653,21 @@ mod tests {
         assert_eq!(c.tabs.age_refresh_secs, 30);
         assert_eq!(c.tabs.activity_throttle_secs, 5);
         assert!(c.keybindings.is_empty());
+        assert_eq!(c.focus.orphan_stale_after_s, 43_200);
+    }
+
+    #[test]
+    fn focus_orphan_stale_after_s_defaults_on_old_config_json() {
+        let c = Config::from_json_or_default(r#"{"focus":{"theme":"sumi"}}"#);
+        assert_eq!(c.focus.orphan_stale_after_s, 43_200);
+        assert_eq!(c.focus.theme, "sumi");
+    }
+
+    #[test]
+    fn focus_timer_shape_defaults_on_old_config_json() {
+        let c = Config::from_json_or_default(r#"{"focus":{"theme":"sumi"}}"#);
+        assert_eq!(c.focus.timer_shape, "ring");
+        assert_eq!(c.focus.theme, "sumi");
     }
 
     #[test]
@@ -1557,6 +1707,25 @@ mod tests {
         assert_eq!(c.layout.sidebar_width, 240);
         let c = Config::from_json_or_default(r#"{"layout":{"sidebar_width":320}}"#);
         assert_eq!(c.layout.sidebar_width, 320);
+    }
+
+    #[test]
+    fn partial_json_fills_focus_panel_knob_defaults() {
+        let c = Config::from_json_or_default(r#"{"focus":{"ring_min_px":140}}"#);
+        assert_eq!(c.focus.ring_min_px, 140);
+        assert_eq!(c.focus.ring_max_px, 200);
+        assert_eq!(c.focus.quick_focus_steps, vec![25, 50, 90]);
+        assert_eq!(c.focus.focus_step_min, 5);
+        assert_eq!(c.focus.focus_min_floor, 5);
+        assert_eq!(c.focus.focus_min_ceil, 180);
+
+        let c = Config::from_json_or_default(
+            r#"{"focus":{"quick_focus_steps":[15,30],"focus_min_ceil":90}}"#,
+        );
+        assert_eq!(c.focus.quick_focus_steps, vec![15, 30]);
+        assert_eq!(c.focus.focus_min_ceil, 90);
+        assert_eq!(c.focus.focus_min_floor, 5);
+        assert_eq!(c.focus.ring_min_px, 96);
     }
 
     #[test]
@@ -1890,5 +2059,63 @@ mod tests {
             s.home_exclude_extra,
             vec![".cache", ".local/share", ".Trash"]
         );
+    }
+
+    #[test]
+    fn focus_config_defaults() {
+        let f = FocusConfig::default();
+        assert_eq!(f.default_preset, "pomodoro");
+        assert_eq!(f.theme, "sumi");
+        assert_eq!(f.timer_shape, "ring");
+        assert_eq!(f.ring_style, "solid");
+        assert_eq!(f.numeric_emphasis, "ambient");
+        assert!(f.overflow_enabled);
+        assert!((f.glow_intensity - 0.12).abs() < 1e-6);
+        assert_eq!(f.alert_channel, NotifyChannel::Os);
+        assert!(f.alert_sound);
+        assert_eq!(f.alert_timbre, SoundTimbre::Soft);
+        assert_eq!(f.ring_min_px, 96);
+        assert_eq!(f.ring_max_px, 200);
+        assert_eq!(f.quick_focus_steps, vec![25, 50, 90]);
+        assert_eq!(f.focus_step_min, 5);
+        assert_eq!(f.focus_min_floor, 5);
+        assert_eq!(f.focus_min_ceil, 180);
+        let ids: Vec<&str> = f.presets.iter().map(|p| p.id.as_str()).collect();
+        assert!(
+            ids.contains(&"pomodoro")
+                && ids.contains(&"deep_work")
+                && ids.contains(&"ultradian")
+                && ids.contains(&"flowtime")
+        );
+        let pomo = f.presets.iter().find(|p| p.id == "pomodoro").unwrap();
+        assert_eq!(
+            (
+                pomo.focus_min,
+                pomo.break_min,
+                pomo.long_break_min,
+                pomo.cycles_before_long
+            ),
+            (25, 5, 20, 4)
+        );
+    }
+
+    #[test]
+    fn focus_preset_auto_advance_defaults_per_builtin() {
+        let f = FocusConfig::default();
+        let by_id = |id: &str| f.presets.iter().find(|p| p.id == id).unwrap();
+        assert!(by_id("pomodoro").auto_advance);
+        assert!(by_id("long_pomodoro").auto_advance);
+        assert!(by_id("ultradian").auto_advance);
+        assert!(!by_id("deep_work").auto_advance);
+        assert!(!by_id("flowtime").auto_advance);
+    }
+
+    #[test]
+    fn focus_preset_auto_advance_missing_field_defaults_false() {
+        let c = Config::from_json_or_default(
+            r#"{"focus":{"presets":[{"id":"custom","label":"Custom","focus_min":10,"break_min":2,"long_break_min":0,"cycles_before_long":1}]}}"#,
+        );
+        let preset = c.focus.presets.iter().find(|p| p.id == "custom").unwrap();
+        assert!(!preset.auto_advance);
     }
 }

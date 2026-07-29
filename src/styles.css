@@ -72,7 +72,7 @@ body {
   border-color: var(--border);
 }
 
-#titlebar-search {
+#titlebar-actions {
   position: absolute;
   right: 10px;
   top: 50%;
@@ -80,7 +80,17 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 200px;
+}
+
+#titlebar-search,
+#titlebar-dock {
+  position: static;
+  right: auto;
+  top: auto;
+  transform: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   height: 26px;
   padding: 0 11px;
   border: 1px solid var(--border);
@@ -93,20 +103,37 @@ body {
     system-ui,
     sans-serif;
   cursor: pointer;
+  appearance: none;
 }
 
-#titlebar-search:hover {
+#titlebar-search {
+  min-width: 200px;
+}
+
+#titlebar-search:hover,
+#titlebar-dock:hover {
   color: var(--fg);
   background: rgba(255, 255, 255, 0.08);
   border-color: var(--fg-dim);
 }
 
-#titlebar-search .ts-icon {
+/* No focus ring ever — not on click, keyboard, or shortcut. */
+#titlebar-search:focus,
+#titlebar-search:focus-visible,
+#titlebar-dock:focus,
+#titlebar-dock:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+#titlebar-search .ts-icon,
+#titlebar-dock .ts-icon {
   display: inline-flex;
   align-items: center;
 }
 
-#titlebar-search .ts-key {
+#titlebar-search .ts-key,
+#titlebar-dock .ts-key {
   margin-left: auto;
   padding: 1px 4px;
   border: 1px solid var(--border);
@@ -120,10 +147,6 @@ body {
 }
 
 #titlebar-update {
-  position: absolute;
-  right: 220px;
-  top: 50%;
-  margin-top: -13px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1287,6 +1310,1032 @@ body {
   .browser-chrome.collapsed::after,
   .browser-url-field,
   .browser-btn {
+    transition: none;
+  }
+}
+
+/* Size-driven sizing lives in cell.ts's ResizeObserver (--focus-ring-size +
+   data-size), not container queries: container-type:size collapses this
+   inset-sized absolute host to 0 block-size in the shipped macOS WKWebView. */
+.focus-cell {
+  padding: 0;
+  outline: none;
+  background: var(--surface-0);
+  --ring-color: var(--timer-focus);
+  --ring-fill: var(--timer-fill-focus);
+  --focus-ring-size: var(--focus-ring-min, 96px);
+}
+
+.focus-cell[data-phase="break"] {
+  --ring-color: var(--timer-break);
+  --ring-fill: var(--timer-fill-break);
+}
+
+.focus-cell[data-phase="overflow"] {
+  --ring-color: var(--timer-overflow);
+  --ring-fill: var(--timer-fill-overflow);
+}
+
+.focus-cell[data-phase="idle"] {
+  --ring-color: var(--timer-track);
+  --ring-fill: var(--timer-track);
+}
+
+/* Absolutely fills the host regardless of what display value the
+   .pin-cell > .terminal-host cascade landed the host on — grid centering
+   lives here instead of fighting that selector for `display`. */
+.focus-body {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  justify-items: center;
+  place-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.focus-cell[data-size="expanded"] .focus-body {
+  gap: var(--space-4);
+}
+
+.focus-cell[data-size="compact"] .focus-body {
+  gap: var(--space-1);
+  padding: var(--space-2);
+}
+
+.focus-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.focus-meta-compact {
+  display: none;
+}
+
+.focus-modified-dot {
+  display: none;
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--timer-focus);
+}
+
+.focus-modified-dot[data-visible="true"] {
+  display: inline-block;
+}
+
+.focus-pips {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1_5);
+}
+
+.pip {
+  flex: 0 0 auto;
+  border-radius: 50%;
+  transition:
+    background 160ms var(--ease-out),
+    opacity 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out);
+}
+
+.pip[data-kind="cycle"] {
+  width: 6px;
+  height: 6px;
+  background: var(--timer-track);
+}
+
+.pip[data-kind="break"] {
+  width: 3px;
+  height: 3px;
+  background: color-mix(in srgb, var(--timer-track) 65%, transparent);
+}
+
+.pip[data-state="pending"] {
+  opacity: 0.45;
+}
+
+.pip[data-kind="cycle"][data-state="done"] {
+  background: var(--ring-color);
+  opacity: 1;
+}
+
+.pip[data-kind="break"][data-state="done"] {
+  background: color-mix(in srgb, var(--ring-color) 45%, var(--timer-track));
+  opacity: 1;
+}
+
+.pip[data-kind="cycle"][data-state="current"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ring-color);
+  opacity: 1;
+}
+
+.pip[data-kind="break"][data-state="current"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--ring-color);
+  opacity: 1;
+}
+
+/* One-shot settle on the pip that just completed a focus/break block —
+   never a loop, and independent of the ring, which stays a linear clock. */
+@keyframes focus-pip-settle {
+  0% {
+    transform: scale(0.6);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ring-color) 60%, transparent);
+  }
+  55% {
+    transform: scale(1.18);
+    box-shadow: 0 0 7px 2px
+      color-mix(in srgb, var(--ring-color) 45%, transparent);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.pip.is-filling {
+  animation: focus-pip-settle 280ms var(--ease-out) 1;
+}
+
+.pip.is-filling[data-final="true"] {
+  animation-duration: 420ms;
+}
+
+.focus-tally {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-snug);
+}
+
+.focus-tally b {
+  color: color-mix(in srgb, var(--text) 78%, transparent);
+  font-weight: 600;
+}
+
+.focus-tally .sep {
+  opacity: 0.45;
+}
+
+.focus-cell[data-size="compact"] .focus-controls {
+  gap: var(--space-0_5);
+}
+
+.focus-cell[data-size="compact"] .focus-btn {
+  width: 22px;
+  height: 22px;
+}
+
+.focus-cell[data-size="compact"] .focus-pips {
+  gap: var(--space-1);
+}
+
+.focus-cell[data-size="compact"] .pip[data-kind="break"] {
+  display: none;
+}
+
+.focus-cell[data-size="compact"] .pip[data-kind="cycle"] {
+  width: 5px;
+  height: 5px;
+}
+
+.focus-cell[data-size="compact"] .focus-meta-full {
+  display: none;
+}
+
+.focus-cell[data-size="compact"] .focus-meta-compact {
+  display: inline;
+}
+
+.focus-ring-wrap {
+  position: relative;
+  width: var(--focus-ring-size);
+  height: var(--focus-ring-size);
+}
+
+.focus-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--ring-color) calc(var(--timer-progress) * 360deg),
+    var(--timer-track)
+  );
+  -webkit-mask-image: radial-gradient(
+    closest-side,
+    transparent calc(100% - var(--timer-ring-w) - 2px),
+    #000 calc(100% - var(--timer-ring-w) - 1px)
+  );
+  mask-image: radial-gradient(
+    closest-side,
+    transparent calc(100% - var(--timer-ring-w) - 2px),
+    #000 calc(100% - var(--timer-ring-w) - 1px)
+  );
+  transition: --timer-progress calc(900ms * var(--timer-motion)) linear;
+}
+
+/* Ring style "gradient": the same conic fill, degrading from the role color
+   toward its own track tone across the arc instead of a flat hue. */
+.focus-ring-wrap[data-ring-style="gradient"] .focus-ring {
+  background: conic-gradient(
+    var(--ring-color) 0deg,
+    color-mix(in oklch, var(--ring-color) 65%, var(--timer-track) 35%)
+      calc(var(--timer-progress) * 360deg),
+    var(--timer-track) calc(var(--timer-progress) * 360deg)
+  );
+}
+
+/* Ring style "dual-stroke": a thin full-circumference track ring sits behind
+   a smaller, inset progress arc, reading as two concentric strokes instead
+   of one donut. */
+.focus-ring-wrap[data-ring-style="dual-stroke"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--timer-track);
+  -webkit-mask-image: radial-gradient(
+    closest-side,
+    transparent calc(100% - 4px),
+    #000 calc(100% - 3px)
+  );
+  mask-image: radial-gradient(
+    closest-side,
+    transparent calc(100% - 4px),
+    #000 calc(100% - 3px)
+  );
+}
+
+.focus-ring-wrap[data-ring-style="dual-stroke"] .focus-ring {
+  inset: calc(var(--timer-ring-w) + 7px);
+}
+
+.focus-glow {
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--ring-color) 0%, transparent 70%);
+  opacity: var(--timer-glow);
+  filter: blur(20px);
+  pointer-events: none;
+  transition: opacity calc(300ms * var(--timer-motion)) var(--ease-out);
+}
+
+.focus-cell[data-phase="idle"] .focus-glow {
+  opacity: 0;
+}
+
+.focus-cell[data-phase="running"] .focus-glow,
+.focus-cell[data-phase="overflow"] .focus-glow {
+  opacity: calc(var(--timer-glow) * 1.6);
+}
+
+/* Liquid: a plain round clip. Sized off the same --focus-ring-size the ring
+   uses, so it scales identically across compact/regular/expanded. */
+.focus-liquid-wrap {
+  position: relative;
+  width: var(--focus-ring-size);
+  height: var(--focus-ring-size);
+}
+
+.focus-liquid-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--timer-track);
+}
+
+/* Coffee: same liquid engine, clipped by a mug silhouette instead of a
+   circle — a rounded cup body plus a border-arc handle, both plain CSS. */
+.focus-coffee-wrap {
+  position: relative;
+  width: var(--focus-ring-size);
+  height: var(--focus-ring-size);
+}
+
+.focus-coffee-cup {
+  position: absolute;
+  inset: 8% 16% 4% 16%;
+  overflow: hidden;
+  border-radius: 8% 8% 34% 34% / 8% 8% 46% 46%;
+  background: var(--timer-track);
+  border: calc(var(--timer-ring-w) * 0.6) solid var(--timer-field);
+}
+
+.focus-coffee-handle {
+  position: absolute;
+  top: 30%;
+  right: 6%;
+  width: 20%;
+  height: 32%;
+  border: calc(var(--timer-ring-w) * 0.6) solid var(--timer-field);
+  border-left: none;
+  border-radius: 0 60% 60% 0 / 0 50% 50% 0;
+}
+
+/* Steam rises off the mug and fades as the block fills up — densest right
+   after a fresh pour (progress 0), gone by the time the mug drains near the
+   end. Sits on .focus-coffee-wrap, a sibling of the cup, so its own
+   --timer-progress read needs the progressMirror wiring in cell.ts; the
+   inherits:false property never cascades down from the fill. */
+.focus-coffee-steam {
+  position: absolute;
+  left: 30%;
+  right: 30%;
+  top: -3%;
+  height: 26%;
+  pointer-events: none;
+  opacity: calc(1 - min(var(--timer-progress), 1));
+  transition: --timer-progress calc(900ms * var(--timer-motion)) linear;
+}
+
+.focus-coffee-wisp {
+  position: absolute;
+  bottom: 0;
+  width: 22%;
+  aspect-ratio: 1 / 3.4;
+  border-radius: 40%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--text) 52%, transparent),
+    transparent 76%
+  );
+  filter: blur(3px);
+  opacity: 0.5;
+  animation: focus-steam-rise calc(3600ms * var(--timer-motion)) ease-in-out
+    infinite;
+}
+
+.focus-coffee-wisp:nth-child(1) {
+  left: 8%;
+  animation-delay: -2400ms;
+}
+
+.focus-coffee-wisp:nth-child(2) {
+  left: 40%;
+  width: 26%;
+  animation-delay: -600ms;
+}
+
+.focus-coffee-wisp:nth-child(3) {
+  left: 70%;
+  animation-delay: -4000ms;
+}
+
+@keyframes focus-steam-rise {
+  0% {
+    transform: translateY(18%) scaleY(0.7);
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(-55%) translateX(12%) scaleY(1.25);
+    opacity: 0;
+  }
+}
+
+/* The fill itself: translated from fully drained (progress 0) to fully full
+   (progress 1), clamped so overflow's progress > 1 caps at full instead of
+   pushing the fill past the top edge. Transform + clip only, and the same
+   single --timer-progress transition the ring uses — no second motion
+   source, no rAF. */
+.focus-liquid-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--ring-fill);
+  transform: translateY(calc(min(var(--timer-progress), 1) * 100%));
+  transition: --timer-progress calc(900ms * var(--timer-motion)) linear;
+}
+
+.focus-liquid-meniscus {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: color-mix(in oklch, var(--ring-fill) 40%, var(--text) 60%);
+}
+
+/* Hourglass + bar: number-below shapes, sized narrower than the ring/liquid
+   footprint so the viz plus the core sitting under it still fit inside the
+   same --focus-ring-size budget the compact layout was tuned against. */
+.focus-hourglass-wrap,
+.focus-bar-wrap {
+  position: relative;
+  width: calc(var(--focus-ring-size) * 0.6);
+  height: calc(var(--focus-ring-size) * 0.8);
+}
+
+/* At the ring_min_px floor (96px), the 0.6/0.8 ratio above plus the below
+   .focus-core (glyph + gap + time) overruns the budget the compact layout
+   was tuned against — shrink the wrap at compact only, keeping the 3:4
+   ratio so the hourglass SVG viewBox (75x100) never gets stretched. */
+.focus-cell[data-size="compact"] .focus-hourglass-wrap,
+.focus-cell[data-size="compact"] .focus-bar-wrap {
+  width: calc(var(--focus-ring-size) * 0.4125);
+  height: calc(var(--focus-ring-size) * 0.55);
+}
+
+.focus-hourglass-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.focus-hourglass-glass {
+  fill: var(--timer-track);
+  stroke: var(--timer-field);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.focus-hourglass-sand {
+  fill: var(--ring-fill);
+}
+
+.focus-hourglass-cover-top,
+.focus-hourglass-cover-bottom {
+  fill: var(--timer-field);
+  transition: --timer-progress calc(900ms * var(--timer-motion)) linear;
+}
+
+/* --hourglass-bulb-h is emitted by buildHourglass from FocusCell.HOURGLASS_BULB_H
+   (the single source); a translate this far slides the cover fully clear of its
+   own clipped triangle either way. */
+.focus-hourglass-cover-top {
+  --timer-progress: inherit;
+  transform: translateY(
+    calc((min(var(--timer-progress), 1) - 1) * var(--hourglass-bulb-h))
+  );
+}
+
+.focus-hourglass-cover-bottom {
+  --timer-progress: inherit;
+  transform: translateY(
+    calc(-1 * min(var(--timer-progress), 1) * var(--hourglass-bulb-h))
+  );
+}
+
+.focus-bar-wrap {
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--timer-track);
+}
+
+.focus-bar-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--ring-fill);
+  transform: scaleY(calc(1 - min(var(--timer-progress), 1)));
+  transform-origin: bottom;
+  transition: --timer-progress calc(900ms * var(--timer-motion)) linear;
+}
+
+.focus-core {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-0_5);
+  /* Keep the mm:ss and glyph clear of the ring stroke at every size. */
+  padding: 0 12%;
+  text-align: center;
+}
+
+/* Below-placement shapes seat the core as a plain .focus-body grid item
+   instead of an overlay — the center-placement absolute/inset:0 above would
+   otherwise stretch it over the whole cell once it's a body sibling. */
+.focus-cell[data-shape="hourglass"] .focus-core,
+.focus-cell[data-shape="bar"] .focus-core {
+  position: static;
+  inset: auto;
+  padding: 0;
+}
+
+.focus-glyph {
+  display: inline-flex;
+  color: var(--ring-color);
+  opacity: 0.7;
+}
+
+.focus-glyph svg {
+  width: 13px;
+  height: 13px;
+}
+
+.focus-cell[data-size="compact"] .focus-glyph svg {
+  width: 11px;
+  height: 11px;
+}
+
+.focus-cell[data-size="expanded"] .focus-glyph svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* One-shot tick on an actual phase crossing (focus <-> break, into/out of
+   overflow) — never a loop, and never touches the ring itself, which stays
+   a linear clock. Re-triggered via a class remove/reflow/add in cell.ts. */
+@keyframes focus-glyph-tick {
+  from {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+}
+
+.focus-glyph.is-ticking {
+  animation: focus-glyph-tick calc(180ms * var(--timer-motion, 1))
+    var(--ease-out) 1;
+}
+
+.focus-preset {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  padding: 2px 6px 2px 9px;
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-muted);
+  font: var(--type-caption);
+  cursor: pointer;
+  transition:
+    background 130ms var(--ease-out),
+    color 130ms var(--ease-out),
+    border-color 130ms var(--ease-out);
+}
+
+.focus-preset-name {
+  max-width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focus-preset-chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.focus-preset-chevron svg {
+  width: 11px;
+  height: 11px;
+}
+
+.focus-preset:hover {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 22%, transparent);
+}
+
+.focus-preset:focus-visible {
+  outline: 2px solid var(--ring-color);
+  outline-offset: 2px;
+}
+
+.focus-cell[data-size="compact"] .focus-preset {
+  padding: 1px 5px 1px 8px;
+  font-size: var(--text-2xs);
+}
+
+/* The id row (preset pill + pencil) and the name it reveals sit below the
+   preset in the same spot across every shape — centered, shape-agnostic. */
+.focus-idrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+}
+
+.focus-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background 130ms var(--ease-out),
+    color 130ms var(--ease-out);
+}
+
+.focus-edit svg {
+  display: block;
+}
+
+.focus-edit:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.focus-edit:focus-visible {
+  outline: 2px solid var(--ring-color);
+  outline-offset: 1px;
+}
+
+.focus-cell[data-size="compact"] .focus-edit {
+  display: none;
+}
+
+.focus-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font: var(--type-label);
+  color: var(--text);
+}
+
+.focus-name-input {
+  width: 160px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid var(--ring-color);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text);
+  font: var(--type-label);
+  text-align: center;
+}
+
+.focus-name-input:focus-visible {
+  outline: none;
+}
+
+.focus-cell[data-staged="true"] .focus-preset,
+.focus-cell[data-staged="true"] .focus-meta {
+  opacity: 0.6;
+  transition: opacity 130ms var(--ease-out);
+}
+
+.focus-time {
+  min-height: 1em;
+  font-family: var(--font-ui);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-tight);
+}
+
+.focus-cell[data-size="expanded"] .focus-time {
+  font-size: var(--text-xl);
+}
+
+.focus-cell[data-size="compact"] .focus-time {
+  font-size: var(--text-md);
+}
+
+/* A duration or preset change swaps the mm:ss/meta numbers outright — this
+   nudge keeps the swap from reading as a hard cut without animating the
+   ring itself. One-shot, re-triggered the same way as the glyph tick. */
+@keyframes focus-nudge {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.focus-time.is-nudging,
+.focus-meta.is-nudging {
+  animation: focus-nudge calc(120ms * var(--timer-motion, 1)) var(--ease-out) 1;
+}
+
+.focus-cell[data-numeric-emphasis="hidden"] .focus-time {
+  display: none;
+}
+
+/* The muted fill still sits under the centered number — this hair of shadow
+   from --timer-field keeps --text reading clearly at the fullest fill level,
+   scoped to the filled shapes only; the ring's stroke never needed it. */
+.focus-cell[data-shape="liquid"] .focus-time,
+.focus-cell[data-shape="coffee"] .focus-time {
+  text-shadow: 0 1px 3px var(--timer-field);
+}
+
+.focus-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.focus-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background 130ms var(--ease-out),
+    color 130ms var(--ease-out);
+}
+
+.focus-btn svg {
+  display: block;
+}
+
+.focus-btn:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.focus-btn:active {
+  background: var(--surface-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-ring,
+  .focus-glow,
+  .focus-liquid-fill,
+  .focus-hourglass-cover-top,
+  .focus-hourglass-cover-bottom,
+  .focus-bar-fill,
+  .focus-btn,
+  .focus-preset,
+  .pip,
+  .focus-coffee-steam,
+  .focus-cell[data-staged="true"] .focus-preset,
+  .focus-cell[data-staged="true"] .focus-meta {
+    transition: none;
+  }
+
+  .focus-glyph.is-ticking,
+  .focus-time.is-nudging,
+  .focus-meta.is-nudging,
+  .pip.is-filling,
+  .focus-coffee-wisp {
+    animation: none;
+  }
+}
+
+/* Anchored at the trigger label (positioned in JS), not a centered modal —
+   the overlay itself stays transparent and only exists to catch outside
+   clicks/Esc; a plain show with no entrance transition, same as .pane-picker. */
+.focus-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: transparent;
+}
+
+.focus-panel-box {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 240px;
+  padding: var(--space-3);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    var(--elev-shadow);
+  transform-origin: top center;
+  opacity: 0;
+  transform: scale(0.96);
+  transition:
+    opacity calc(160ms * var(--timer-motion, 1)) var(--ease-out, ease),
+    transform calc(160ms * var(--timer-motion, 1)) var(--ease-out, ease);
+}
+
+.focus-panel[data-mounted="true"] .focus-panel-box {
+  opacity: 1;
+  transform: none;
+}
+
+.focus-panel[data-closing] .focus-panel-box {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+@starting-style {
+  .focus-panel-box {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.focus-panel-title {
+  font: var(--type-caption);
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+.focus-panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1_5);
+}
+
+.focus-panel-group-label {
+  font: var(--type-caption);
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+.focus-panel-presets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0_5);
+}
+
+.focus-panel-preset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1_5) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font: var(--type-label);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 130ms var(--ease-out),
+    border-color 130ms var(--ease-out);
+}
+
+.focus-panel-preset:hover {
+  background: var(--surface-2);
+}
+
+.focus-panel-preset[data-active="true"] {
+  background: color-mix(in oklch, var(--timer-focus) 16%, var(--surface-3));
+  border-color: color-mix(in oklch, var(--timer-focus) 45%, var(--border));
+}
+
+.focus-panel-preset-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1_5);
+  color: var(--text-muted);
+  font: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.focus-panel-preset-check {
+  display: inline-flex;
+  color: var(--timer-focus);
+  opacity: 0;
+}
+
+.focus-panel-preset[data-active="true"] .focus-panel-preset-check {
+  opacity: 1;
+}
+
+.focus-panel-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.focus-panel-chip {
+  padding: var(--space-0_5) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background 130ms var(--ease-out),
+    color 130ms var(--ease-out),
+    border-color 130ms var(--ease-out);
+}
+
+.focus-panel-chip:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.focus-panel-chip[data-active="true"] {
+  background: color-mix(in oklch, var(--timer-focus) 22%, var(--surface-3));
+  border-color: color-mix(in oklch, var(--timer-focus) 55%, var(--border));
+  color: var(--text);
+}
+
+.focus-panel-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.focus-panel-stepper-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font: var(--type-label);
+  cursor: pointer;
+  transition: background 130ms var(--ease-out);
+}
+
+.focus-panel-stepper-btn:hover {
+  background: var(--surface-2);
+}
+
+.focus-panel-stepper-value {
+  min-width: 5ch;
+  color: var(--text);
+  font: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.focus-panel-save {
+  padding: var(--space-1_5) var(--space-2);
+  border: 1px solid color-mix(in oklch, var(--timer-focus) 45%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--timer-focus) 12%, var(--surface-3));
+  color: var(--text);
+  font: var(--type-label);
+  cursor: pointer;
+  transition:
+    background 130ms var(--ease-out),
+    border-color 130ms var(--ease-out);
+}
+
+.focus-panel-save:hover {
+  background: color-mix(in oklch, var(--timer-focus) 22%, var(--surface-3));
+}
+
+.focus-panel-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  color: var(--text-subtle);
+  font: var(--type-caption);
+}
+
+.focus-panel-legend-sep {
+  color: var(--text-subtle);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-panel-preset,
+  .focus-panel-chip,
+  .focus-panel-stepper-btn,
+  .focus-panel-save,
+  .focus-panel-box {
     transition: none;
   }
 }

@@ -79,7 +79,7 @@ function parseHm(hm: string): number {
 // Quiet hours can wrap midnight (e.g. 22:00-08:00), so the window is defined
 // by whichever side of the wrap the boundaries fall on rather than assuming
 // start < end.
-function withinQuietHours(quiet: QuietHours, now: Date): boolean {
+export function withinQuietHours(quiet: QuietHours, now: Date): boolean {
   if (!quiet.enabled) return false;
   const start = parseHm(quiet.start);
   const end = parseHm(quiet.end);
@@ -153,7 +153,7 @@ let audioCtx: AudioContext | null = null;
 // Synthesized, not a bundled asset: keeps the sound self-contained (no
 // licensing, no binary in the repo). The darker error timbre is a lower
 // fundamental on a duller (triangle) waveform against the soft sine ping.
-function playTimbre(timbre: SoundTimbre): void {
+export function playTimbre(timbre: SoundTimbre): void {
   if (typeof AudioContext === "undefined") return;
   try {
     audioCtx ??= new AudioContext();

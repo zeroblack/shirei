@@ -7,7 +7,7 @@ use tauri::State;
 
 use crate::error::Result;
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -48,6 +48,38 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
                 count       INTEGER NOT NULL,
                 last_opened INTEGER NOT NULL
             );",
+        )?;
+        tx.pragma_update(None, "user_version", 2)?;
+        tx.commit()?;
+    }
+    if version < 3 {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS focus_session (
+                uuid               TEXT PRIMARY KEY,
+                preset_id          TEXT,
+                method             TEXT NOT NULL,
+                phase              TEXT NOT NULL,
+                planned_duration_s INTEGER NOT NULL,
+                start_ts           INTEGER NOT NULL,
+                end_ts             INTEGER,
+                actual_duration_s  INTEGER,
+                paused_duration_s  INTEGER NOT NULL DEFAULT 0,
+                status             TEXT NOT NULL,
+                pause_count        INTEGER NOT NULL DEFAULT 0,
+                interruption_count INTEGER NOT NULL DEFAULT 0,
+                interruption_kind  TEXT,
+                project_id         TEXT,
+                shirei_session_id  TEXT,
+                agent_id           TEXT,
+                energy_rating      INTEGER,
+                focus_rating       INTEGER,
+                note               TEXT,
+                created_at         INTEGER NOT NULL,
+                updated_at         INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_focus_session_status  ON focus_session(status);
+            CREATE INDEX IF NOT EXISTS idx_focus_session_project ON focus_session(project_id);",
         )?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         tx.commit()?;
@@ -205,6 +237,24 @@ mod tests {
             )
             .unwrap();
         assert_eq!(has_file_opens, 1);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn migrate_creates_focus_session_table() {
+        let path = tmp_path("migrate-focus-session");
+        let _ = std::fs::remove_file(&path);
+        let store = MetricsStore::default();
+        store.open(&path).unwrap();
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        let has_focus_session: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='focus_session'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(has_focus_session, 1);
         let _ = std::fs::remove_file(&path);
     }
 
