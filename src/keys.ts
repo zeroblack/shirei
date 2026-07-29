@@ -465,6 +465,48 @@ export const ACTIONS: ActionDef[] = [
     scope: "global",
     defaults: [{ key: "[", meta: true, ctrl: true }],
   },
+  {
+    id: "pin.timer",
+    category: "focus",
+    scope: "global",
+    defaults: [{ key: "f", meta: true, ctrl: true }],
+  },
+  {
+    id: "timer.toggle",
+    category: "focus",
+    scope: "global",
+    defaults: [{ key: "Space", meta: true, ctrl: true }],
+  },
+  {
+    id: "timer.skip",
+    category: "focus",
+    scope: "global",
+    defaults: [{ key: "s", meta: true, ctrl: true }],
+  },
+  {
+    id: "timer.reset",
+    category: "focus",
+    scope: "global",
+    defaults: [{ key: "0", meta: true, ctrl: true }],
+  },
+  {
+    id: "timer.rename",
+    category: "focus",
+    scope: "global",
+    defaults: [{ key: "n", meta: true, ctrl: true }],
+  },
+  {
+    id: "timer.focusCell",
+    category: "focus",
+    scope: "global",
+    defaults: [{ key: "f", meta: true, shift: true }],
+  },
+  {
+    id: "timer.panel",
+    category: "focus",
+    scope: "global",
+    defaults: [{ key: "e", meta: true, ctrl: true }],
+  },
 ];
 
 export function resolveBindings(

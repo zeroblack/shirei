@@ -274,6 +274,47 @@ export function numField<K extends string>(
   );
 }
 
+export interface RangeFieldOpts extends NumFieldOpts {
+  format?: (v: number) => string;
+}
+
+export function rangeField<K extends string>(
+  label: string,
+  obj: Record<K, number>,
+  key: K,
+  opts: RangeFieldOpts,
+  save: Save,
+): HTMLElement {
+  const scale = opts.scale ?? 1;
+  const format = opts.format ?? ((v: number) => String(v));
+  const shown = scale === 1 ? obj[key] : obj[key] / scale;
+
+  const wrap = document.createElement("div");
+  wrap.className = "range-control";
+
+  const input = document.createElement("input");
+  input.type = "range";
+  input.min = String(opts.min);
+  input.max = String(opts.max);
+  if (opts.step !== undefined) input.step = String(opts.step);
+  input.value = String(shown);
+
+  const out = document.createElement("span");
+  out.className = "range-value";
+  out.textContent = format(shown);
+
+  input.addEventListener("input", () => {
+    out.textContent = format(Number(input.value));
+  });
+  input.addEventListener("change", () => {
+    obj[key] = Number(input.value) * scale;
+    save();
+  });
+
+  wrap.append(input, out);
+  return field(label, wrap, { desc: opts.desc });
+}
+
 export function textField<K extends string>(
   label: string,
   obj: Record<K, string>,

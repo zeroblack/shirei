@@ -624,7 +624,7 @@ export class TerminalSession {
     return this.term.buffer.active.length * this.term.cols;
   }
 
-  async dispose(): Promise<void> {
+  async dispose(kill = false): Promise<void> {
     this.unlisten?.();
     this.unlisten = undefined;
     this.ac.abort();
@@ -633,7 +633,17 @@ export class TerminalSession {
     this.diag.dispose();
     webglPool.unregister(this.id);
     this.disposeWebgl();
-    await invoke(this.useDaemon ? "mux_detach" : "pty_kill", { id: this.id });
+    // keep_alive normally detaches so the process survives for reattach; kill
+    // forces the process down (an ephemeral pin cell owns its process). Either
+    // way local teardown must run even if the session already exited on its own.
+    const teardown = this.useDaemon
+      ? kill
+        ? "mux_kill"
+        : "mux_detach"
+      : "pty_kill";
+    try {
+      await invoke(teardown, { id: this.id });
+    } catch {}
     this.pending = [];
     this.pendingBytes = 0;
     this.term.dispose();

@@ -247,6 +247,45 @@ export interface SearchConfig {
   home_hidden: boolean;
 }
 
+export interface FocusPreset {
+  id: string;
+  label: string;
+  focus_min: number;
+  break_min: number;
+  long_break_min: number;
+  cycles_before_long: number;
+  auto_advance: boolean;
+}
+
+export interface FocusConfig {
+  presets: FocusPreset[];
+  default_preset: string;
+  theme: string;
+  role_overrides: Record<string, string>;
+  // Shape strategy for the timer viz: ring | liquid | coffee | hourglass | bar.
+  timer_shape: string;
+  // Scoped to timer_shape === "ring"; other shapes ignore it.
+  ring_style: string;
+  ring_width: number;
+  glow_intensity: number;
+  motion: string;
+  numeric_emphasis: string;
+  overflow_enabled: boolean;
+  overflow_cap_min: number;
+  start_on_open: boolean;
+  pause_on_idle: boolean;
+  session_note: boolean;
+  alert_channel: NotifyChannel;
+  alert_sound: boolean;
+  alert_timbre: SoundTimbre;
+  ring_min_px: number;
+  ring_max_px: number;
+  quick_focus_steps: number[];
+  focus_step_min: number;
+  focus_min_floor: number;
+  focus_min_ceil: number;
+}
+
 export interface CliRegistryEntry {
   id: string;
   label: string;
@@ -330,6 +369,7 @@ export interface Config {
   performance: PerformanceConfig;
   recorder: RecorderConfig;
   browser: BrowserConfig;
+  focus: FocusConfig;
   detection: DetectionConfig;
   metrics: MetricsConfig;
   notifications: NotificationsConfig;

@@ -22,7 +22,8 @@ export type SavedTab =
 
 export type PinnedCellSave =
   | { kind: "browser"; url: string }
-  | { kind: "terminal" };
+  | { kind: "terminal" }
+  | { kind: "timer"; preset?: string; name?: string };
 
 const SESSION_KEY_BASE = "shirei.session.v1";
 const PIN_KEY_BASE = "shirei.pindock.v1";
@@ -87,6 +88,13 @@ export function loadPinDock(): (PinnedCellSave | null)[] {
     return parsed.map((c) => {
       if (c?.kind === "browser" && typeof c.url === "string") return c;
       if (c?.kind === "terminal") return { kind: "terminal" as const };
+      if (c?.kind === "timer") {
+        return {
+          kind: "timer" as const,
+          ...(typeof c.preset === "string" ? { preset: c.preset } : {}),
+          ...(typeof c.name === "string" ? { name: c.name } : {}),
+        };
+      }
       return null;
     });
   } catch {

@@ -219,11 +219,17 @@ export function mediaKind(name: string): "video" | "audio" | "pdf" | null {
 export const CHEVRON =
   '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
 
+export const CHEVRON_DOWN =
+  '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+
 export const SEARCH =
   '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>';
 
 export const SIDEBAR =
   '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>';
+
+export const PANEL_RIGHT =
+  '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></svg>';
 
 export const COPY =
   '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
@@ -269,6 +275,27 @@ export const NAV_FORWARD =
 
 export const RELOAD =
   '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>';
+
+export const TIMER_PLAY =
+  '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5Z"/></svg>';
+
+export const TIMER_PAUSE =
+  '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" stroke="none"><rect x="7" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+
+export const TIMER_SKIP =
+  '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" stroke="none"><path d="M6 5v14l9-7Z"/><rect x="16" y="5" width="2.5" height="14" rx="0.5"/></svg>';
+
+export const TIMER_IDLE_GLYPH =
+  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.5"/></svg>';
+
+export const TIMER_BREAK_GLYPH =
+  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13a3 3 0 0 1 0 6h-1.3"/><path d="M4 8v6.5A2.5 2.5 0 0 0 6.5 17h5A2.5 2.5 0 0 0 14 14.5V8"/><path d="M7.5 3v2.2"/><path d="M10.5 3v2.2"/></svg>';
+
+export const PENCIL =
+  '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+
+export const TIMER_OVERFLOW_GLYPH =
+  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6"/><path d="m5.5 12.5 6.5-6.5 6.5 6.5"/></svg>';
 
 const CALLOUT_PATHS: Record<string, string> = {
   note: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',

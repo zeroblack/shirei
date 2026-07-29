@@ -121,16 +121,23 @@ const STATUS_ROLES: readonly StatusRole[] = [
 // lightness (0.64) needs its first real lift, landing around L 0.67-0.70 on
 // the catalog's dark themes: exactly the "nudge to ~0.67" the design calls
 // for, reached by measurement rather than hardcoded.
-const STATUS_MIN_LC = 42;
+export const STATUS_MIN_LC = 42;
 const STATUS_LIGHTNESS_STEP = 0.01;
 const STATUS_LIGHTNESS_MAX_STEPS = 60;
 
 // Walks the OKLCH lightness axis only (hue and chroma fixed) toward whichever
 // end clears the background, so a role keeps its curated hue instead of
 // desaturating toward the theme's fg like the generic ensureContrast mix.
-function deriveRoleColor(role: StatusRole, bg: string): string {
+// `minLc` defaults to the status-badge floor but is exposed so other role
+// systems (e.g. the focus-timer skins) can walk toward their own floor
+// without duplicating this search.
+export function deriveRoleColor(
+  role: { l: number; c: number; h: number },
+  bg: string,
+  minLc: number = STATUS_MIN_LC,
+): string {
   const base = oklchToHex(role.l, role.c, role.h);
-  if (apcaContrast(base, bg) >= STATUS_MIN_LC) return base;
+  if (apcaContrast(base, bg) >= minLc) return base;
   const step =
     screenLuminance(bg) < 0.5 ? STATUS_LIGHTNESS_STEP : -STATUS_LIGHTNESS_STEP;
   let l = role.l;
@@ -138,7 +145,7 @@ function deriveRoleColor(role: StatusRole, bg: string): string {
   for (let i = 0; i < STATUS_LIGHTNESS_MAX_STEPS; i++) {
     l = Math.min(1, Math.max(0, l + step));
     hex = oklchToHex(l, role.c, role.h);
-    if (apcaContrast(hex, bg) >= STATUS_MIN_LC || l <= 0 || l >= 1) break;
+    if (apcaContrast(hex, bg) >= minLc || l <= 0 || l >= 1) break;
   }
   return hex;
 }
