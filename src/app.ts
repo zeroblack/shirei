@@ -199,7 +199,7 @@ const CHROME: Record<"dark" | "light", Record<string, string>> = {
     "--surface-3": "#1d1f24",
     "--border-soft": "rgba(255, 255, 255, 0.06)",
     "--border-strong": "rgba(255, 255, 255, 0.12)",
-    "--text": "#ffffff",
+    "--text": "#f4f5f7",
     "--text-muted": "#a0a4ad",
     "--text-subtle": "#6e727b",
     "--accent": "#5e8bff",
@@ -527,6 +527,11 @@ export class App {
     });
     window.addEventListener("pointerdown", () => this.noteActivity(), {
       capture: true,
+    });
+    window.addEventListener("contextmenu", (e) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input, textarea, .cm-editor, .xterm, img, video")) return;
+      e.preventDefault();
     });
     void getCurrentWindow().onFocusChanged(({ payload }) => {
       this.logMetric(payload ? "app_focus" : "app_blur");
@@ -2853,6 +2858,9 @@ export class App {
     root.style.setProperty("--reveal", ms(motion.reveal_ms));
     root.style.setProperty("--reveal-stagger", ms(motion.reveal_stagger_ms));
     root.style.setProperty("--divider-snap", ms(motion.divider_snap_ms));
+    root.style.setProperty("--dur-fast", ms(motion.fast_ms));
+    root.style.setProperty("--dur-base", ms(motion.base_ms));
+    root.style.setProperty("--dur-slow", ms(motion.slow_ms));
   }
 
   private applyTodoRatio(ratio: number): void {
