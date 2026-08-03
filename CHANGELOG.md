@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.7] - 2026-08-03
+
 ### Added
 - The active tab now carries its project accent on a marker that travels with
   it: it glides on a click, hops to a neighbor, and lands instantly on direct

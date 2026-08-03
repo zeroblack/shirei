@@ -1,11 +1,11 @@
 {
   "name": "shirei",
   "private": true,
-  "version": "0.16.6",
+  "version": "0.16.7",
   "type": "module",
   "packageManager": "pnpm@10.22.0",
   "license": "MIT",
-  "author": "Dionisio Fernández",
+  "author": "Dionisio Fern\u00e1ndez",
   "description": "A keyboard-first terminal cockpit for AI coding on macOS",
   "homepage": "https://github.com/zeroblack/shirei",
   "repository": {
