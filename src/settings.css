@@ -154,8 +154,8 @@ input[type="color"] {
   background: var(--surface);
   border: 1px solid var(--line-2);
   transition:
-    background 140ms ease,
-    border-color 140ms ease;
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
 }
 .toggle::after {
   content: "";
@@ -167,8 +167,8 @@ input[type="color"] {
   border-radius: 50%;
   background: var(--fg-3);
   transition:
-    transform 160ms cubic-bezier(0.32, 0.72, 0, 1),
-    background 140ms ease;
+    transform var(--dur-fast) cubic-bezier(0.32, 0.72, 0, 1),
+    background var(--dur-fast) ease;
 }
 .toggle-input:checked + .toggle {
   background: var(--fg);
@@ -214,7 +214,7 @@ input[type="color"] {
   font-size: 10.5px;
   line-height: 1.3;
   overflow: hidden;
-  transition: box-shadow 140ms var(--ease-out, ease);
+  transition: box-shadow var(--dur-fast) var(--ease-out, ease);
 }
 
 .theme-card.selected .theme-preview {
@@ -252,7 +252,7 @@ input[type="color"] {
   display: inline-flex;
   color: var(--accent);
   opacity: 0;
-  transition: opacity 120ms var(--ease-out, ease);
+  transition: opacity var(--dur-fast) var(--ease-out, ease);
 }
 
 .theme-card.selected .theme-card-check {
@@ -428,8 +428,8 @@ body {
   transform: translateY(4px);
   pointer-events: none;
   transition:
-    opacity 140ms var(--ease-out, ease),
-    transform 140ms var(--ease-out, ease);
+    opacity var(--dur-fast) var(--ease-out, ease),
+    transform var(--dur-fast) var(--ease-out, ease);
 }
 
 .settings-saved::before {
@@ -477,12 +477,34 @@ body {
 }
 
 .settings-nav {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.settings-nav li.nav-rail {
+  display: block;
+  height: 16px;
+  padding: 0;
+  border-radius: 1px;
+  position: absolute;
+  left: 2px;
+  top: 0;
+  width: 2px;
+  background: var(--fg);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) ease;
+}
+.settings-nav li.nav-rail[data-move="snap"] {
+  transition: none;
 }
 
 .settings-nav li {
@@ -496,14 +518,14 @@ body {
   color: var(--fg-2);
   font-size: 13px;
   cursor: default;
-  transition: background 120ms var(--ease-out, ease);
+  transition: background var(--dur-fast) var(--ease-out, ease);
 }
 
 .settings-nav li .nav-icon {
   display: inline-flex;
   flex-shrink: 0;
   color: var(--fg-3);
-  transition: color 120ms var(--ease-out, ease);
+  transition: color var(--dur-fast) var(--ease-out, ease);
 }
 
 .settings-nav li:hover {
@@ -518,17 +540,6 @@ body {
 
 .settings-nav li.active .nav-icon {
   color: var(--fg);
-}
-
-.settings-nav li.active::before {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 7px;
-  bottom: 7px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--fg);
 }
 
 .settings-nav li:focus-visible {
@@ -851,6 +862,9 @@ kbd.shortcut-key--fixed {
   .rec-cursor {
     animation: none;
   }
+  .settings-nav li.nav-rail {
+    transition: none;
+  }
 }
 
 .home-title {
@@ -1094,8 +1108,8 @@ kbd.shortcut-key--fixed {
   background: var(--surface-2);
   cursor: default;
   transition:
-    border-color 140ms ease,
-    background 140ms ease;
+    border-color var(--dur-fast) ease,
+    background var(--dur-fast) ease;
 }
 .project-item:hover {
   border-color: var(--line-2);
@@ -1136,7 +1150,7 @@ kbd.shortcut-key--fixed {
   gap: 2px;
   flex-shrink: 0;
   opacity: 0;
-  transition: opacity 120ms ease;
+  transition: opacity var(--dur-fast) ease;
 }
 .project-item:hover .project-actions,
 .project-item:focus-within .project-actions {
@@ -1211,6 +1225,10 @@ kbd.shortcut-key--fixed {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   margin-bottom: 8px;
+  max-height: 52vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
 }
 .projects-grid .project-item {
   padding: 9px 11px;
@@ -1221,12 +1239,6 @@ kbd.shortcut-key--fixed {
   margin: 0 2px 8px;
   font: var(--type-caption);
   color: var(--fg-3);
-}
-.projects-grid {
-  max-height: 52vh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 2px;
 }
 
 .shortcut-group-head {
@@ -1279,9 +1291,9 @@ kbd.kc {
   font: var(--type-label);
   cursor: default;
   transition:
-    background 120ms ease,
-    color 120ms ease,
-    border-color 120ms ease;
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
 }
 .shortcut-tab:hover {
   color: var(--fg);
@@ -1353,9 +1365,9 @@ kbd.kc {
   font: var(--type-label);
   cursor: default;
   transition:
-    background 120ms ease,
-    color 120ms ease,
-    border-color 120ms ease;
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
 }
 .seg-tab:hover {
   color: var(--fg);
@@ -1413,7 +1425,7 @@ kbd.kc {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-soft);
   box-shadow: var(--edge-highlight);
-  transition: box-shadow 140ms var(--ease-out, ease);
+  transition: box-shadow var(--dur-fast) var(--ease-out, ease);
 }
 .skin-preview span {
   flex: 1;
@@ -1452,8 +1464,8 @@ kbd.kc {
   box-shadow: var(--edge-highlight);
   color: var(--fg-3);
   transition:
-    box-shadow 140ms var(--ease-out, ease),
-    color 140ms var(--ease-out, ease);
+    box-shadow var(--dur-fast) var(--ease-out, ease),
+    color var(--dur-fast) var(--ease-out, ease);
 }
 .theme-card.selected .shape-preview {
   color: var(--accent);

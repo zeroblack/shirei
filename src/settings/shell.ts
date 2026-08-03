@@ -58,6 +58,28 @@ export function mountSettings(
   let activeId = sections[0]?.id ?? "";
   let navItems: { id: string; el: HTMLLIElement }[] = [];
 
+  // Vertical sibling of the tab carriage: one persistent rail, moved with
+  // translateY. list.replaceChildren() in renderList detaches it along with
+  // the stale <li>s, so renderList re-appends this exact element afterward
+  // instead of ever creating a new one.
+  const rail = document.createElement("li");
+  rail.className = "nav-rail";
+  rail.setAttribute("role", "presentation");
+  rail.setAttribute("aria-hidden", "true");
+  list.appendChild(rail);
+
+  const syncRail = (mode: "snap" | "move"): void => {
+    const active = navItems.find((it) => it.id === activeId);
+    if (!active) {
+      rail.style.opacity = "0";
+      return;
+    }
+    const { offsetTop, offsetHeight } = active.el;
+    rail.dataset.move = mode;
+    rail.style.opacity = "1";
+    rail.style.transform = `translateY(${offsetTop + (offsetHeight - 16) / 2}px)`;
+  };
+
   const renderContent = (): void => {
     content.replaceChildren();
     const sec = sections.find((s) => s.id === activeId);
@@ -73,6 +95,7 @@ export function mountSettings(
       if (isActive) it.el.setAttribute("aria-current", "true");
       else it.el.removeAttribute("aria-current");
     }
+    syncRail("move");
     renderContent();
     if (focus) navItems.find((it) => it.id === id)?.el.focus();
   };
@@ -131,6 +154,8 @@ export function mountSettings(
       navItems.push({ id: s.id, el: li });
       list.appendChild(li);
     }
+    list.appendChild(rail);
+    syncRail("snap");
   };
 
   search.addEventListener("input", () => renderList(search.value));
@@ -148,6 +173,9 @@ export function mountSettings(
   root.append(sidebar, content, saved);
   renderList("");
   renderContent();
+  // Geist loads with font-display: swap; a late swap can resize the
+  // .nav-group headers and shift everything below, so re-snap once settled.
+  document.fonts.ready.then(() => syncRail("snap"));
 
   return {
     showSection: (id) => {
