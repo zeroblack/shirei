@@ -44,6 +44,7 @@ export interface RenderConfig {
   padding: number;
   diagnostics: boolean;
   webgl_pool_cap: number;
+  scrollbar: boolean;
 }
 
 export type LogLevel = "off" | "error" | "warn" | "info" | "debug" | "trace";

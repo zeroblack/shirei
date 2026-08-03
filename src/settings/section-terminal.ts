@@ -81,6 +81,13 @@ export const terminalSection: SettingsSection = {
           },
           save,
         ),
+        boolField(
+          t("settings.terminal.scrollbar"),
+          render,
+          "scrollbar",
+          save,
+          t("settings.terminal.scrollbarDesc"),
+        ),
         groupLabel(t("settings.terminal.group.cursor")),
         selectField(
           t("settings.terminal.cursorStyle"),

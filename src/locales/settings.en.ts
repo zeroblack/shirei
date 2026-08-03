@@ -177,6 +177,9 @@ export const settingsEn = {
   "settings.terminal.webglPool": "Simultaneous WebGL contexts (max)",
   "settings.terminal.webglPoolDesc":
     "Limit of panes with GPU render active at once.",
+  "settings.terminal.scrollbar": "Show scrollbar",
+  "settings.terminal.scrollbarDesc":
+    "Visible thumb on the terminal's scroll area.",
   "settings.terminal.cursorStyle": "Style",
   "settings.terminal.cursor.block": "Block",
   "settings.terminal.cursor.bar": "Bar",
@@ -569,7 +572,7 @@ export const settingsEn = {
   "settings.appearance.search":
     "theme themes tokyo night catppuccin dracula nord gruvbox one dark rose pine kanagawa japan neon font size color terminal editor background text cursor ansi tabs vim width prose code focus dim accent bar highlight interface language",
   "settings.terminal.search":
-    "renderer webgl gpu kitty keyboard smoothing cursor blink line height spacing contrast scrollback padding",
+    "renderer webgl gpu kitty keyboard smoothing cursor blink line height spacing contrast scrollback scrollbar padding",
   "settings.sessions.search":
     "sessions daemon keep alive confirm kill close autostart persistent restore commands rerun",
   "settings.tabs.search":

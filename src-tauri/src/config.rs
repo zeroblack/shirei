@@ -173,6 +173,7 @@ pub struct RenderConfig {
     pub padding: u16,
     pub diagnostics: bool,
     pub webgl_pool_cap: u16,
+    pub scrollbar: bool,
 }
 
 impl Default for RenderConfig {
@@ -192,6 +193,7 @@ impl Default for RenderConfig {
             padding: 8,
             diagnostics: true,
             webgl_pool_cap: 12,
+            scrollbar: true,
         }
     }
 }
@@ -1938,6 +1940,7 @@ mod tests {
         assert!(r.webgl);
         assert!(r.kitty_keyboard);
         assert!(r.shift_enter_newline);
+        assert!(r.scrollbar);
         assert_eq!(r.line_height, 1.0);
         assert_eq!(r.min_contrast, 1.0);
         assert_eq!(r.scrollback, 5000);

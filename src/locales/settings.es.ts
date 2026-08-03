@@ -185,6 +185,9 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.terminal.webglPool": "Contextos WebGL simultáneos (máx.)",
   "settings.terminal.webglPoolDesc":
     "Límite de panes con render GPU activo a la vez.",
+  "settings.terminal.scrollbar": "Mostrar barra de desplazamiento",
+  "settings.terminal.scrollbarDesc":
+    "Barra visible en el área de scroll del terminal.",
   "settings.terminal.cursorStyle": "Estilo",
   "settings.terminal.cursor.block": "Bloque",
   "settings.terminal.cursor.bar": "Barra",
@@ -589,7 +592,7 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.appearance.search":
     "tema temas tokyo night catppuccin dracula nord gruvbox one dark rose pine kanagawa japan neon fuente tamaño color terminal editor fondo texto cursor ansi pestañas vim ancho prosa codigo foco atenuar acento barra realce interfaz idioma",
   "settings.terminal.search":
-    "renderer webgl gpu kitty teclado suavizado cursor parpadeo alto línea espaciado contraste scrollback padding",
+    "renderer webgl gpu kitty teclado suavizado cursor parpadeo alto línea espaciado contraste scrollback scrollbar padding",
   "settings.sessions.search":
     "sesiones daemon mantener vivas confirmar matar cerrar auto-iniciar persistente restaurar comandos reejecutar",
   "settings.tabs.search":
