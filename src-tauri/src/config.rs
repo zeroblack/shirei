@@ -173,6 +173,7 @@ pub struct RenderConfig {
     pub padding: u16,
     pub diagnostics: bool,
     pub webgl_pool_cap: u16,
+    pub scrollbar: bool,
 }
 
 impl Default for RenderConfig {
@@ -192,6 +193,7 @@ impl Default for RenderConfig {
             padding: 8,
             diagnostics: true,
             webgl_pool_cap: 12,
+            scrollbar: true,
         }
     }
 }
@@ -429,6 +431,9 @@ pub struct MotionConfig {
     pub reveal_ms: u16,
     pub reveal_stagger_ms: u16,
     pub divider_snap_ms: u16,
+    pub fast_ms: u16,
+    pub base_ms: u16,
+    pub slow_ms: u16,
     pub respect_reduced_motion: bool,
 }
 
@@ -442,6 +447,9 @@ impl Default for MotionConfig {
             reveal_ms: 160,
             reveal_stagger_ms: 40,
             divider_snap_ms: 180,
+            fast_ms: 160,
+            base_ms: 240,
+            slow_ms: 320,
             respect_reduced_motion: true,
         }
     }
@@ -1932,6 +1940,7 @@ mod tests {
         assert!(r.webgl);
         assert!(r.kitty_keyboard);
         assert!(r.shift_enter_newline);
+        assert!(r.scrollbar);
         assert_eq!(r.line_height, 1.0);
         assert_eq!(r.min_contrast, 1.0);
         assert_eq!(r.scrollback, 5000);
@@ -2016,6 +2025,9 @@ mod tests {
         assert!(!c.layout.todo_collapsed);
         assert!(c.motion.enabled);
         assert_eq!(c.motion.task_sink_ms, 220);
+        assert_eq!(c.motion.fast_ms, 160);
+        assert_eq!(c.motion.base_ms, 240);
+        assert_eq!(c.motion.slow_ms, 320);
     }
 
     #[test]

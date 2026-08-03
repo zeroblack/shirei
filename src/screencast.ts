@@ -346,8 +346,10 @@ export function createScreencast(deps: ScreencastDeps): Screencast {
         className: "screencast-countdown",
         label: t("ui.screencast.countdownLabel"),
         onDismiss: () => done(false),
-        // Capture blocks on this exit, so any longer is dead air before recording.
-        closeDurationMs: 120,
+        // This box exits on --dur-fast, not --modal-out (see .screencast-countdown
+        // in styles.css). Capture blocks on this exit, so any longer is dead
+        // air before recording.
+        closeDurationVar: "--dur-fast",
       });
 
       let remaining = seconds;
@@ -434,7 +436,6 @@ export function createScreencast(deps: ScreencastDeps): Screencast {
       className: "screencast-selector",
       label: t("ui.screencast.recordScreen"),
       onDismiss: () => close(),
-      closeDurationMs: 140,
     });
 
     const header = document.createElement("div");
@@ -552,7 +553,6 @@ export function createScreencast(deps: ScreencastDeps): Screencast {
         className: "screencast-finish",
         label: t("ui.screencast.ready"),
         onDismiss: () => done(null),
-        closeDurationMs: 140,
       });
       const done = (choice: string | null): void => {
         close();

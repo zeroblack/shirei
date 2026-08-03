@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The active tab now carries its project accent on a marker that travels with
+  it: it glides on a click, hops to a neighbor, and lands instantly on direct
+  jumps, so keyboard switching stays immediate. The full-width accent line
+  under the tab strip steps back to a hairline to make room for it.
+- The Settings sidebar mirrors the same idea with a marker that slides to the
+  section you select.
+- The terminal scrollbar can be hidden from Settings › Terminal. It stays
+  visible by default, restyled to match the app's thin scrollbars.
+
+### Changed
+- Motion across the app now runs on a single set of configurable durations
+  (Settings › Motion), respects the reduced-motion preference everywhere, and
+  the Settings window honors it too. Overlays open and close with consistent,
+  quieter transitions; toasts ease in and out instead of popping.
+- The chrome takes a step back so the terminal reads first: text sits just off
+  pure white, separators render as true hairlines on Retina displays, panel
+  depth comes from edges rather than heavy shadows, and numbers that update
+  live no longer shift as they tick.
+- Kbd hints, paths, and other fixed-width details now use Geist Mono, pairing
+  with the UI typeface.
+- More native macOS behavior throughout: chrome text is no longer selectable,
+  cursors follow platform conventions, nested lists scroll without bouncing
+  the window, and the browser's default context menu no longer appears over
+  the app's own chrome.
+- Tab context menus and popovers stay inside the window, animate from their
+  anchor, and the color picker marks the tab's current color.
+- Live window resizing no longer flashes at the edges.
+
 ## [0.16.6] - 2026-07-29
 
 ### Added

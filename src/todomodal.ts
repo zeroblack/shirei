@@ -34,7 +34,6 @@ export function openTodoModal(opts: TodoModalOpts): void {
     label: opts.editing
       ? t("ui.todomodal.labelEdit")
       : t("ui.todomodal.labelNew"),
-    closeDurationMs: 130,
     onDismiss: () => void close(),
   });
 

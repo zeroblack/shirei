@@ -99,6 +99,7 @@ h2:has(+ .section-desc) {
 .field-label {
   font: var(--type-label);
   color: var(--fg);
+  user-select: none;
 }
 .field-desc {
   font: var(--type-desc);
@@ -129,13 +130,13 @@ input[type="color"] {
   border: 1px solid var(--line-2);
   border-radius: 4px;
   background: transparent;
-  cursor: pointer;
+  cursor: default;
 }
 
 .toggle-wrap {
   position: relative;
   display: inline-flex;
-  cursor: pointer;
+  cursor: default;
 }
 .toggle-input {
   position: absolute;
@@ -144,7 +145,7 @@ input[type="color"] {
   height: 100%;
   margin: 0;
   opacity: 0;
-  cursor: pointer;
+  cursor: default;
 }
 .toggle {
   width: 36px;
@@ -153,8 +154,8 @@ input[type="color"] {
   background: var(--surface);
   border: 1px solid var(--line-2);
   transition:
-    background 140ms ease,
-    border-color 140ms ease;
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
 }
 .toggle::after {
   content: "";
@@ -166,8 +167,8 @@ input[type="color"] {
   border-radius: 50%;
   background: var(--fg-3);
   transition:
-    transform 160ms cubic-bezier(0.32, 0.72, 0, 1),
-    background 140ms ease;
+    transform var(--dur-fast) cubic-bezier(0.32, 0.72, 0, 1),
+    background var(--dur-fast) ease;
 }
 .toggle-input:checked + .toggle {
   background: var(--fg);
@@ -195,7 +196,7 @@ input[type="color"] {
   padding: 0;
   border: 0;
   background: transparent;
-  cursor: pointer;
+  cursor: default;
   font: inherit;
   text-align: left;
 }
@@ -208,17 +209,17 @@ input[type="color"] {
   gap: 4px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-soft);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: var(--edge-highlight);
   font-family: var(--font-mono);
   font-size: 10.5px;
   line-height: 1.3;
   overflow: hidden;
-  transition: box-shadow 140ms var(--ease-out, ease);
+  transition: box-shadow var(--dur-fast) var(--ease-out, ease);
 }
 
 .theme-card.selected .theme-preview {
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    var(--edge-highlight),
     0 0 0 2px var(--bg),
     0 0 0 4px var(--accent);
 }
@@ -228,9 +229,7 @@ input[type="color"] {
 }
 
 .theme-card:focus-visible .theme-preview {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    var(--focus-ring);
+  box-shadow: var(--edge-highlight), var(--focus-ring);
 }
 
 .tp-line {
@@ -253,7 +252,7 @@ input[type="color"] {
   display: inline-flex;
   color: var(--accent);
   opacity: 0;
-  transition: opacity 120ms var(--ease-out, ease);
+  transition: opacity var(--dur-fast) var(--ease-out, ease);
 }
 
 .theme-card.selected .theme-card-check {
@@ -279,7 +278,7 @@ input[type="color"] {
   background: transparent;
   color: var(--fg-3);
   font-size: 12px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .project-remove:hover {
@@ -295,7 +294,7 @@ input[type="color"] {
   color: var(--fg-2);
   font: inherit;
   font-size: 12.5px;
-  cursor: pointer;
+  cursor: default;
   align-self: flex-start;
 }
 
@@ -333,17 +332,9 @@ input[type="color"] {
   gap: 6px;
   max-height: 46vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding-right: 2px;
   margin-bottom: 14px;
-}
-.cli-list::-webkit-scrollbar {
-  width: 8px;
-}
-.cli-list::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 8px;
-  background-clip: padding-box;
-  background-color: var(--line-2);
 }
 .cli-item {
   display: flex;
@@ -408,6 +399,7 @@ input[type="color"] {
 html,
 body {
   height: 100%;
+  background: var(--bg);
 }
 
 #settings.settings-shell {
@@ -429,17 +421,15 @@ body {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
   background: var(--surface-2);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    var(--popover-shadow);
+  box-shadow: var(--edge-highlight), var(--popover-shadow);
   color: var(--fg-2);
   font-size: 11.5px;
   opacity: 0;
   transform: translateY(4px);
   pointer-events: none;
   transition:
-    opacity 140ms var(--ease-out, ease),
-    transform 140ms var(--ease-out, ease);
+    opacity var(--dur-fast) var(--ease-out, ease),
+    transform var(--dur-fast) var(--ease-out, ease);
 }
 
 .settings-saved::before {
@@ -461,9 +451,11 @@ body {
   gap: 8px;
   min-height: 0;
   padding: 14px 10px;
-  border-right: 1px solid var(--footer-border);
+  border-right: var(--hairline) solid var(--footer-border);
   background: var(--footer-bg);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  user-select: none;
 }
 
 .settings-search,
@@ -474,6 +466,7 @@ body {
   border-radius: 7px;
   font: inherit;
   font-size: 12.5px;
+  user-select: text;
 }
 
 .settings-search-inline {
@@ -484,12 +477,34 @@ body {
 }
 
 .settings-nav {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.settings-nav li.nav-rail {
+  display: block;
+  height: 16px;
+  padding: 0;
+  border-radius: 1px;
+  position: absolute;
+  left: 2px;
+  top: 0;
+  width: 2px;
+  background: var(--fg);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) ease;
+}
+.settings-nav li.nav-rail[data-move="snap"] {
+  transition: none;
 }
 
 .settings-nav li {
@@ -502,15 +517,15 @@ body {
   border-radius: 7px;
   color: var(--fg-2);
   font-size: 13px;
-  cursor: pointer;
-  transition: background 120ms var(--ease-out, ease);
+  cursor: default;
+  transition: background var(--dur-fast) var(--ease-out, ease);
 }
 
 .settings-nav li .nav-icon {
   display: inline-flex;
   flex-shrink: 0;
   color: var(--fg-3);
-  transition: color 120ms var(--ease-out, ease);
+  transition: color var(--dur-fast) var(--ease-out, ease);
 }
 
 .settings-nav li:hover {
@@ -525,17 +540,6 @@ body {
 
 .settings-nav li.active .nav-icon {
   color: var(--fg);
-}
-
-.settings-nav li.active::before {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 7px;
-  bottom: 7px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--fg);
 }
 
 .settings-nav li:focus-visible {
@@ -565,6 +569,7 @@ body {
 .settings-content {
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 32px 32px 56px;
 }
 
@@ -575,6 +580,7 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.6px;
+  user-select: none;
 }
 
 .settings-action {
@@ -585,7 +591,7 @@ body {
   color: var(--fg-2);
   font: inherit;
   font-size: 12.5px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .settings-action:hover {
@@ -661,7 +667,7 @@ kbd.shortcut-key--fixed {
   border-radius: 6px;
   background: transparent;
   color: var(--fg-3);
-  cursor: pointer;
+  cursor: default;
 }
 
 .shortcut-edit:hover,
@@ -734,7 +740,7 @@ kbd.shortcut-key--fixed {
   color: var(--fg-3);
   font-size: 12px;
   list-style: none;
-  cursor: pointer;
+  cursor: default;
   user-select: none;
 }
 .shortcuts-fixed summary::-webkit-details-marker {
@@ -778,7 +784,7 @@ kbd.shortcut-key--fixed {
   font: inherit;
   font-size: 12px;
   white-space: nowrap;
-  cursor: pointer;
+  cursor: default;
 }
 
 .path-browse:hover {
@@ -810,7 +816,7 @@ kbd.shortcut-key--fixed {
   gap: 8px;
   padding: 6px 8px;
   border-radius: 6px;
-  cursor: pointer;
+  cursor: default;
 }
 .font-row.selected {
   background: rgba(255, 255, 255, 0.06);
@@ -825,7 +831,7 @@ kbd.shortcut-key--fixed {
   border: 1px solid var(--line-2);
   background: transparent;
   color: inherit;
-  cursor: pointer;
+  cursor: default;
 }
 .font-action:hover {
   background: rgba(255, 255, 255, 0.08);
@@ -855,6 +861,9 @@ kbd.shortcut-key--fixed {
   }
   .rec-cursor {
     animation: none;
+  }
+  .settings-nav li.nav-rail {
+    transition: none;
   }
 }
 
@@ -1052,7 +1061,7 @@ kbd.shortcut-key--fixed {
   background: transparent;
   color: var(--fg);
   font: var(--type-label);
-  cursor: pointer;
+  cursor: default;
 }
 .about-update-btn:hover {
   border-color: var(--fg-4);
@@ -1097,10 +1106,10 @@ kbd.shortcut-key--fixed {
   border: 1px solid var(--border-soft);
   border-radius: 9px;
   background: var(--surface-2);
-  cursor: pointer;
+  cursor: default;
   transition:
-    border-color 140ms ease,
-    background 140ms ease;
+    border-color var(--dur-fast) ease,
+    background var(--dur-fast) ease;
 }
 .project-item:hover {
   border-color: var(--line-2);
@@ -1141,7 +1150,7 @@ kbd.shortcut-key--fixed {
   gap: 2px;
   flex-shrink: 0;
   opacity: 0;
-  transition: opacity 120ms ease;
+  transition: opacity var(--dur-fast) ease;
 }
 .project-item:hover .project-actions,
 .project-item:focus-within .project-actions {
@@ -1157,7 +1166,7 @@ kbd.shortcut-key--fixed {
   border-radius: 6px;
   background: transparent;
   color: var(--fg-3);
-  cursor: pointer;
+  cursor: default;
 }
 .project-icon-btn:hover {
   background: rgba(255, 255, 255, 0.08);
@@ -1195,7 +1204,7 @@ kbd.shortcut-key--fixed {
   background: transparent;
   color: var(--fg-2);
   font: var(--type-label);
-  cursor: pointer;
+  cursor: default;
 }
 .project-back:hover {
   color: var(--fg);
@@ -1216,6 +1225,10 @@ kbd.shortcut-key--fixed {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   margin-bottom: 8px;
+  max-height: 52vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
 }
 .projects-grid .project-item {
   padding: 9px 11px;
@@ -1226,20 +1239,6 @@ kbd.shortcut-key--fixed {
   margin: 0 2px 8px;
   font: var(--type-caption);
   color: var(--fg-3);
-}
-.projects-grid {
-  max-height: 52vh;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-.projects-grid::-webkit-scrollbar {
-  width: 8px;
-}
-.projects-grid::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 8px;
-  background-clip: padding-box;
-  background-color: var(--line-2);
 }
 
 .shortcut-group-head {
@@ -1290,11 +1289,11 @@ kbd.kc {
   background: transparent;
   color: var(--fg-3);
   font: var(--type-label);
-  cursor: pointer;
+  cursor: default;
   transition:
-    background 120ms ease,
-    color 120ms ease,
-    border-color 120ms ease;
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
 }
 .shortcut-tab:hover {
   color: var(--fg);
@@ -1364,11 +1363,11 @@ kbd.kc {
   background: transparent;
   color: var(--fg-3);
   font: var(--type-label);
-  cursor: pointer;
+  cursor: default;
   transition:
-    background 120ms ease,
-    color 120ms ease,
-    border-color 120ms ease;
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
 }
 .seg-tab:hover {
   color: var(--fg);
@@ -1425,22 +1424,20 @@ kbd.kc {
   overflow: hidden;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-soft);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  transition: box-shadow 140ms var(--ease-out, ease);
+  box-shadow: var(--edge-highlight);
+  transition: box-shadow var(--dur-fast) var(--ease-out, ease);
 }
 .skin-preview span {
   flex: 1;
 }
 .theme-card.selected .skin-preview {
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    var(--edge-highlight),
     0 0 0 2px var(--bg),
     0 0 0 4px var(--accent);
 }
 .theme-card:focus-visible .skin-preview {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    var(--focus-ring);
+  box-shadow: var(--edge-highlight), var(--focus-ring);
 }
 
 .shape-gallery {
@@ -1464,23 +1461,21 @@ kbd.kc {
   height: 40px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-soft);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: var(--edge-highlight);
   color: var(--fg-3);
   transition:
-    box-shadow 140ms var(--ease-out, ease),
-    color 140ms var(--ease-out, ease);
+    box-shadow var(--dur-fast) var(--ease-out, ease),
+    color var(--dur-fast) var(--ease-out, ease);
 }
 .theme-card.selected .shape-preview {
   color: var(--accent);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    var(--edge-highlight),
     0 0 0 2px var(--bg),
     0 0 0 4px var(--accent);
 }
 .theme-card:focus-visible .shape-preview {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    var(--focus-ring);
+  box-shadow: var(--edge-highlight), var(--focus-ring);
 }
 
 .preset-list {
@@ -1489,17 +1484,9 @@ kbd.kc {
   gap: 8px;
   max-height: 46vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding-right: 2px;
   margin-bottom: 14px;
-}
-.preset-list::-webkit-scrollbar {
-  width: 8px;
-}
-.preset-list::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 8px;
-  background-clip: padding-box;
-  background-color: var(--line-2);
 }
 .preset-item {
   display: flex;

@@ -44,6 +44,7 @@ export interface RenderConfig {
   padding: number;
   diagnostics: boolean;
   webgl_pool_cap: number;
+  scrollbar: boolean;
 }
 
 export type LogLevel = "off" | "error" | "warn" | "info" | "debug" | "trace";
@@ -149,6 +150,9 @@ export interface MotionConfig {
   reveal_ms: number;
   reveal_stagger_ms: number;
   divider_snap_ms: number;
+  fast_ms: number;
+  base_ms: number;
+  slow_ms: number;
   respect_reduced_motion: boolean;
 }
 

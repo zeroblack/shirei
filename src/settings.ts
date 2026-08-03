@@ -8,6 +8,7 @@ import { type Config, configGet, configSet, onConfigChanged } from "./config";
 import { assignDeep } from "./deepmerge";
 import { registerInstalledFonts } from "./fonts";
 import { getLocale, setLocale } from "./i18n";
+import { applyMotionVars } from "./motion";
 import { SECTION_LAYOUT, type SectionId } from "./settings/registry";
 import { aboutSection } from "./settings/section-about";
 import { advancedSection } from "./settings/section-advanced";
@@ -60,6 +61,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (!root) return;
   config = await configGet();
   setLocale(config.locale);
+  applyMotionVars(document.documentElement, config.motion);
   await registerInstalledFonts(config.fonts).catch(() => {});
   const save = (): void => void configSet(config);
   let handle = mountSettings(root, config, save, SECTIONS);
@@ -82,6 +84,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       config as unknown as Record<string, unknown>,
       c as unknown as Record<string, unknown>,
     );
+    applyMotionVars(document.documentElement, config.motion);
     if (localeChanged) {
       setLocale(c.locale);
       handle = mountSettings(root, config, save, SECTIONS);

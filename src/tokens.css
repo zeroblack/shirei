@@ -2,7 +2,8 @@
   color-scheme: dark;
 
   --font-ui: "Geist", -apple-system, "SF Pro Text", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  --font-mono:
+    "Geist Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
 
   --type-display: 600 23px / 1.15 var(--font-ui);
   --type-title: 600 18px / 1.2 var(--font-ui);
@@ -49,8 +50,10 @@
   --border: #26282e;
   --border-soft: rgba(255, 255, 255, 0.06);
   --border-strong: rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb: color-mix(in srgb, var(--text) 14%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--text) 24%, transparent);
 
-  --text: #ffffff;
+  --text: #f4f5f7;
   --text-muted: #a0a4ad;
   --text-subtle: #6e727b;
 
@@ -74,10 +77,16 @@
 
   --elev-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
   --popover-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --hairline: 1px;
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --dur-fast: 160ms;
+  --dur-base: 240ms;
+  --dur-slow: 320ms;
 
   --atom-orbit-a: 3s;
   --atom-orbit-b: 3.7s;
@@ -85,6 +94,13 @@
   --atom-bg-opacity: 0.6;
 
   --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--accent-soft);
+
+  --tab-ind-h: 2px;
+  --tab-ind-unit: 100px;
+  --tab-ind-neutral: rgba(255, 255, 255, 0.34);
+  --tab-hat-bg: rgba(255, 255, 255, 0.03);
+  --tab-hat-border: rgba(255, 255, 255, 0.1);
+  --seam-dim: 45%;
 
   /* Sumi defaults (the shipped default skin); applyTimerTheme overwrites these
      once the config/skin resolves, this is only the pre-JS fallback. */
@@ -96,6 +112,12 @@
   --timer-ring-w: 3px;
   --timer-glow: 0.12;
   --timer-motion: 1;
+}
+
+@media (min-resolution: 2dppx) {
+  :root {
+    --hairline: 0.5px;
+  }
 }
 
 @property --timer-progress {

@@ -434,12 +434,12 @@ export class QuickOpen {
 
   private emptyState(): HTMLElement {
     const wrap = document.createElement("div");
-    wrap.className = "qo-empty";
+    wrap.className = "qo-empty overlay-empty";
     const title = document.createElement("div");
     title.className = "qo-empty-title";
     title.textContent = t("ui.quickopen.empty");
     const nudge = document.createElement("div");
-    nudge.className = "qo-empty-nudge";
+    nudge.className = "qo-empty-nudge overlay-empty-hint";
     const kbd = document.createElement("kbd");
     kbd.textContent = this.toggleKey === "Tab" ? "⇥" : this.toggleKey;
     nudge.append(

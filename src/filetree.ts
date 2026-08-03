@@ -285,11 +285,15 @@ export class FileTree {
     });
     menu.appendChild(item);
     document.body.appendChild(menu);
+    const margin = 8;
     const rect = menu.getBoundingClientRect();
-    const left = Math.min(x, window.innerWidth - rect.width - 8);
-    const top = Math.min(y, window.innerHeight - rect.height - 8);
-    menu.style.left = `${Math.max(8, left)}px`;
-    menu.style.top = `${Math.max(8, top)}px`;
+    const left = Math.min(x, window.innerWidth - rect.width - margin);
+    const flippedY = y + rect.height > window.innerHeight - margin;
+    const top = Math.min(y, window.innerHeight - rect.height - margin);
+    menu.style.left = `${Math.max(margin, left)}px`;
+    menu.style.top = `${Math.max(margin, top)}px`;
+    menu.style.transformOrigin = flippedY ? "bottom left" : "top left";
+    if (flippedY) menu.dataset.flip = "up";
     this.menu = menu;
   }
 

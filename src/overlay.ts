@@ -3,9 +3,38 @@ interface OverlayOpts {
   role?: "dialog" | "alertdialog";
   label?: string;
   onDismiss: () => void;
-  // Duration of the exit transition in ms; used as fallback if transitionend
-  // never fires (e.g. overlays with no CSS transition). Defaults to 0.
+  // CSS custom property whose live value drives this overlay's exit
+  // transition; read at close time so a fallback timer never clips a
+  // duration the user raised in Settings. Defaults to --modal-out, the
+  // token nearly every overlay animates on.
+  closeDurationVar?: string;
+  // Escape hatch for the rare exit that isn't driven by a CSS custom
+  // property at all. Bypasses closeDurationVar entirely.
   closeDurationMs?: number;
+}
+
+export const DEFAULT_CLOSE_DURATION_VAR = "--modal-out";
+// Last-resort fallback when the custom property is empty or unparsable
+// (e.g. this window never ran applyMotionVars). Matches motion.modal_out_ms's
+// own default in config.rs.
+export const FALLBACK_CLOSE_MS = 130;
+// The +50ms buffer only matters if transitionend never fires (e.g. reduced
+// motion collapses the transition to 0ms, or the box has no transition).
+export const CLOSE_FALLBACK_BUFFER_MS = 50;
+
+export function resolveCssDurationMs(
+  varName: string,
+  fallbackMs: number,
+): number {
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue(varName)
+    .trim();
+  if (!raw) return fallbackMs;
+  const value = Number.parseFloat(raw);
+  if (Number.isNaN(value)) return fallbackMs;
+  if (raw.endsWith("ms")) return value;
+  if (raw.endsWith("s")) return value * 1000;
+  return fallbackMs;
 }
 
 export interface Overlay {
@@ -93,7 +122,13 @@ export function createOverlay(opts: OverlayOpts): Overlay {
   const close = (): Promise<void> => {
     return new Promise((resolve) => {
       overlay.dataset.closing = "true";
-      const fallbackMs = (opts.closeDurationMs ?? 0) + 50;
+      const closeMs =
+        opts.closeDurationMs ??
+        resolveCssDurationMs(
+          opts.closeDurationVar ?? DEFAULT_CLOSE_DURATION_VAR,
+          FALLBACK_CLOSE_MS,
+        );
+      const fallbackMs = closeMs + CLOSE_FALLBACK_BUFFER_MS;
       let settled = false;
 
       const finish = () => {

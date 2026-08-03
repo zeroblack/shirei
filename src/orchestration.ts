@@ -288,7 +288,7 @@ export class OrchestrationBoard {
 
   private emptyState(): HTMLElement {
     const wrap = document.createElement("div");
-    wrap.className = "orch-empty";
+    wrap.className = "orch-empty overlay-empty";
     wrap.textContent = t("ui.orchestration.empty");
     return wrap;
   }

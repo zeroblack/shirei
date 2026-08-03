@@ -233,7 +233,7 @@ export class TodoPanel {
 
   private renderEmptyList(): void {
     const note = document.createElement("div");
-    note.className = "todo-empty";
+    note.className = "todo-empty overlay-empty";
     note.textContent = t("ui.todo.empty");
 
     const legend = document.createElement("div");
@@ -259,7 +259,7 @@ export class TodoPanel {
     this.rows = [];
     this.addRow.style.display = "none";
     const note = document.createElement("div");
-    note.className = "todo-empty";
+    note.className = "todo-empty overlay-empty";
     note.textContent = t("ui.todo.noProject");
     this.list.appendChild(note);
     this.updateCount();

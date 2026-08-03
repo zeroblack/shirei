@@ -95,6 +95,7 @@ fn open_window(app: &tauri::AppHandle) -> tauri::Result<()> {
             .min_inner_size(480.0, 320.0)
             .title_bar_style(tauri::TitleBarStyle::Overlay)
             .hidden_title(true)
+            .transparent(true)
             .build()?;
     let _ = win.set_focus();
     Ok(())
@@ -120,6 +121,7 @@ fn open_settings(app: &tauri::AppHandle, section: Option<&str>) {
         .inner_size(1240.0, 720.0)
         .min_inner_size(820.0, 500.0)
         .resizable(true)
+        .transparent(true)
         .build();
 }
 

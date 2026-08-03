@@ -93,7 +93,6 @@ export class GitHistory {
       className: "githist",
       label: t("ui.git.history.title"),
       onDismiss: () => this.close(),
-      closeDurationMs: 130,
     });
     this.overlay = ov;
 
@@ -154,7 +153,7 @@ export class GitHistory {
     this.list.replaceChildren();
     if (!this.commits.length) {
       const empty = document.createElement("div");
-      empty.className = "githist-empty";
+      empty.className = "githist-empty overlay-empty";
       empty.textContent = t("ui.git.history.empty");
       this.list.appendChild(empty);
       this.detailBar.replaceChildren();
