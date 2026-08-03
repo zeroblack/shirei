@@ -1,7 +1,7 @@
 :root {
   --bg: #000000;
   --bg-bar: #0c0d0f;
-  --fg: #ffffff;
+  --fg: #f4f5f7;
   --fg-dim: #6e727b;
   --task-sink: 220ms;
   --modal-in: 200ms;
@@ -120,11 +120,7 @@ body {
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--fg-dim);
-  font:
-    12px / 1 -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 12px / 1 var(--font-ui);
   cursor: default;
   appearance: none;
 }
@@ -228,6 +224,7 @@ body {
 }
 
 #tabbar {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: 2px;
@@ -241,6 +238,39 @@ body {
 
 #tabbar::-webkit-scrollbar {
   display: none;
+}
+
+.tab-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: var(--tab-ind-unit);
+  height: var(--tab-ind-h);
+  background: var(--tab-ind-color, var(--tab-ind-neutral));
+  transform-origin: 0 50%;
+  pointer-events: none;
+  will-change: transform;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.tab-indicator[data-move="hop"],
+.tab-indicator[data-move="shift"] {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.tab-indicator[data-move="snap"],
+.tab-indicator[data-move="drag"] {
+  transition: none;
+}
+
+:root.no-tab-line .tab-indicator {
+  background: var(--tab-ind-neutral);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-indicator {
+    transition: none;
+  }
 }
 
 .tab {
@@ -271,10 +301,10 @@ body {
    quiet — no project color, just a subtle lift. */
 .tab.active {
   margin-top: 5px;
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--tab-hat-border);
   border-bottom-color: transparent;
-  border-radius: 9px 9px 0 0;
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--tab-hat-bg);
   color: var(--fg);
   opacity: 1;
 }
@@ -565,10 +595,6 @@ body {
     animation: none;
     opacity: 0.78;
   }
-
-  .orch-row.state-tentative .orch-glyph {
-    animation: none;
-  }
 }
 
 #statusbar {
@@ -582,8 +608,6 @@ body {
   color: var(--text-muted);
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
   user-select: none;
 }
 
@@ -717,6 +741,10 @@ body {
   user-select: text;
 }
 
+.tab-add-slot {
+  display: contents;
+}
+
 .tab-add {
   flex-shrink: 0;
   align-self: center;
@@ -754,9 +782,13 @@ body {
   top: 0;
   left: 8px;
   right: 8px;
-  height: 2px;
+  height: var(--hairline);
   border-radius: 1px;
-  background: var(--active-accent, var(--border));
+  background: color-mix(
+    in srgb,
+    var(--active-accent, var(--border-strong)) var(--seam-dim),
+    transparent
+  );
   transition: background-color var(--dur-base) ease;
 }
 
@@ -1088,6 +1120,10 @@ body {
 
 .terminal-host .xterm {
   height: 100%;
+}
+
+:root.no-term-scrollbar .terminal-host .xterm-viewport::-webkit-scrollbar {
+  display: none;
 }
 
 .editor-host .cm-editor {
@@ -1518,15 +1554,6 @@ body {
 
 .focus-tally .sep {
   opacity: 0.45;
-}
-
-.focus-cell[data-size="compact"] .focus-controls {
-  gap: var(--space-0_5);
-}
-
-.focus-cell[data-size="compact"] .focus-btn {
-  width: 22px;
-  height: 22px;
 }
 
 .focus-cell[data-size="compact"] .focus-pips {
@@ -2142,6 +2169,15 @@ body {
   }
 }
 
+.focus-cell[data-size="compact"] .focus-controls {
+  gap: var(--space-0_5);
+}
+
+.focus-cell[data-size="compact"] .focus-btn {
+  width: 22px;
+  height: 22px;
+}
+
 /* Anchored at the trigger label (positioned in JS), not a centered modal —
    the overlay itself stays transparent and only exists to catch outside
    clicks/Esc; a plain show with no entrance transition, same as .pane-picker. */
@@ -2168,8 +2204,9 @@ body {
   transform: scale(0.96);
   user-select: none;
   transition:
-    opacity calc(160ms * var(--timer-motion, 1)) var(--ease-out, ease),
-    transform calc(160ms * var(--timer-motion, 1)) var(--ease-out, ease);
+    opacity calc(var(--dur-fast) * var(--timer-motion, 1)) var(--ease-out, ease),
+    transform calc(var(--dur-fast) * var(--timer-motion, 1))
+    var(--ease-out, ease);
 }
 
 .focus-panel[data-mounted="true"] .focus-panel-box {
@@ -2384,8 +2421,8 @@ body {
   transform-origin: top left;
   pointer-events: none;
   transition:
-    opacity var(--modal-in, 160ms) cubic-bezier(0.23, 1, 0.32, 1),
-    transform var(--modal-in, 160ms) cubic-bezier(0.23, 1, 0.32, 1);
+    opacity var(--modal-in, 160ms) var(--ease-out, ease),
+    transform var(--modal-in, 160ms) var(--ease-out, ease);
 }
 
 .cm-blame-card--in {
@@ -2395,11 +2432,7 @@ body {
 
 .cm-blame-card-summary {
   margin-bottom: 5px;
-  font:
-    13px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 13px var(--font-ui);
   color: var(--fg);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -2816,6 +2849,7 @@ body {
   background: rgba(0, 0, 0, 0.5);
 }
 
+/* Deliberately instant: keyboard-opened picker, an entrance animation would tax every open. */
 .pane-picker-box {
   min-width: 280px;
   padding: 6px;
@@ -2873,6 +2907,22 @@ body {
   background: var(--surface-3);
   box-shadow: var(--edge-highlight), var(--popover-shadow);
   user-select: none;
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+@starting-style {
+  .palette {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+
+  .palette[data-flip="up"] {
+    transform: scale(0.97) translateY(4px);
+  }
 }
 
 .palette-swatches {
@@ -2888,6 +2938,17 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 50%;
   cursor: default;
+  transition: border-color var(--dur-fast) ease;
+}
+
+.swatch:hover {
+  border-color: var(--border-strong);
+}
+
+.swatch.current {
+  box-shadow:
+    inset 0 0 0 2px var(--surface-3),
+    0 0 0 1px var(--text);
 }
 
 .swatch-clear {
@@ -2931,6 +2992,22 @@ body {
   background: var(--surface-3);
   box-shadow: var(--edge-highlight), var(--popover-shadow);
   user-select: none;
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+@starting-style {
+  .context-menu {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+
+  .context-menu[data-flip="up"] {
+    transform: scale(0.97) translateY(4px);
+  }
 }
 
 .context-menu-item {
@@ -2948,6 +3025,28 @@ body {
 
 .context-menu-item:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .palette,
+  .swatch,
+  .context-menu {
+    transition: none;
+  }
+}
+
+.overlay-empty {
+  padding: var(--space-8) var(--space-4);
+  color: var(--text-subtle);
+  font: var(--type-desc);
+  text-align: center;
+  user-select: none;
+}
+
+.overlay-empty-hint {
+  margin-top: var(--space-1_5);
+  color: var(--text-subtle);
+  font: var(--type-caption);
 }
 
 .quickopen {
@@ -2979,10 +3078,10 @@ body {
   box-shadow: var(--edge-highlight), var(--elev-shadow);
   transform-origin: top center;
   opacity: 0;
-  transform: scale(0.99) translateY(-6px);
+  transform: scale(0.99) translateY(-4px);
   transition:
-    opacity var(--modal-in, 200ms) var(--ease-out, ease),
-    transform var(--modal-in, 200ms) var(--ease-out, ease);
+    opacity var(--dur-fast, 160ms) var(--ease-out, ease),
+    transform var(--dur-fast, 160ms) var(--ease-out, ease);
 }
 
 .quickopen[data-mounted="true"] .quickopen-box {
@@ -2990,10 +3089,18 @@ body {
   transform: none;
 }
 
+.quickopen[data-closing] .quickopen-box {
+  opacity: 0;
+  transform: scale(0.99) translateY(-4px);
+  transition:
+    opacity var(--modal-out, 130ms) var(--ease-out, ease),
+    transform var(--modal-out, 130ms) var(--ease-out, ease);
+}
+
 @starting-style {
   .quickopen-box {
     opacity: 0;
-    transform: scale(0.99) translateY(-6px);
+    transform: scale(0.99) translateY(-4px);
   }
 }
 
@@ -3042,11 +3149,7 @@ body {
   border: 0;
   border-bottom: 0;
   color: var(--fg);
-  font:
-    14px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 14px var(--font-ui);
   outline: none;
 }
 
@@ -3067,11 +3170,7 @@ body {
   gap: 8px;
   padding: 6px 10px;
   border-radius: 6px;
-  font:
-    13px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 13px var(--font-ui);
   cursor: default;
 }
 
@@ -3248,10 +3347,6 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 28px 12px;
-  text-align: center;
-  user-select: none;
 }
 
 .qo-empty-title {
@@ -3263,8 +3358,6 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--fg-dim);
-  font-size: 11.5px;
 }
 
 .qo-empty-nudge kbd {
@@ -3298,6 +3391,23 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .qo-scope-spin {
     animation: none;
+  }
+
+  .quickopen-box,
+  .quickopen[data-mounted="true"] .quickopen-box,
+  .quickopen[data-closing] .quickopen-box {
+    transform: none;
+    transition: opacity var(--dur-fast, 160ms) ease;
+  }
+
+  .quickopen[data-closing] .quickopen-box {
+    transition: opacity var(--modal-out, 130ms) ease;
+  }
+
+  @starting-style {
+    .quickopen-box {
+      transform: none;
+    }
   }
 }
 
@@ -3344,6 +3454,14 @@ body {
   transform: none;
 }
 
+.orchestration[data-closing] .orchestration-box {
+  opacity: 0;
+  transform: scale(0.99) translateY(-6px);
+  transition:
+    opacity var(--modal-out, 130ms) var(--ease-out, ease),
+    transform var(--modal-out, 130ms) var(--ease-out, ease);
+}
+
 @starting-style {
   .orchestration-box {
     opacity: 0;
@@ -3355,11 +3473,7 @@ body {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   color: var(--fg);
-  font:
-    13px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 13px var(--font-ui);
   font-weight: 600;
   user-select: none;
 }
@@ -3407,11 +3521,7 @@ body {
   padding: 7px 10px;
   border-radius: 6px;
   cursor: default;
-  font:
-    13px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 13px var(--font-ui);
 }
 
 .orch-row.selected {
@@ -3478,6 +3588,12 @@ body {
   color: var(--row-color);
   opacity: 0.6;
   -webkit-text-stroke: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orch-row.state-tentative .orch-glyph {
+    animation: none;
+  }
 }
 
 /* Tentative on the board: the waiting disc is hollowed and warmed to the
@@ -3549,14 +3665,6 @@ body {
   color: var(--row-color);
 }
 
-.orch-empty {
-  padding: 32px 12px;
-  color: var(--fg-dim);
-  text-align: center;
-  font-size: 13px;
-  user-select: none;
-}
-
 .orch-footer {
   display: flex;
   gap: 14px;
@@ -3593,6 +3701,23 @@ body {
   .orch-row.flash {
     animation: none;
     background: transparent;
+  }
+
+  .orchestration-box,
+  .orchestration[data-mounted="true"] .orchestration-box,
+  .orchestration[data-closing] .orchestration-box {
+    transform: none;
+    transition: opacity var(--modal-in, 200ms) ease;
+  }
+
+  .orchestration[data-closing] .orchestration-box {
+    transition: opacity var(--modal-out, 130ms) ease;
+  }
+
+  @starting-style {
+    .orchestration-box {
+      transform: none;
+    }
   }
 }
 
@@ -3644,6 +3769,14 @@ body {
   transform: none;
 }
 
+.githist[data-closing] .githist-box {
+  opacity: 0;
+  transform: scale(0.99) translateY(-6px);
+  transition:
+    opacity var(--modal-out, 130ms) var(--ease-out, ease),
+    transform var(--modal-out, 130ms) var(--ease-out, ease);
+}
+
 @starting-style {
   .githist-box {
     opacity: 0;
@@ -3666,11 +3799,7 @@ body {
 }
 
 .githist-file-name {
-  font:
-    13px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 13px var(--font-ui);
   color: var(--fg);
 }
 
@@ -3739,11 +3868,7 @@ body {
 }
 
 .githist-bar-author {
-  font:
-    12.5px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 12.5px var(--font-ui);
   color: var(--fg);
   overflow: hidden;
   white-space: nowrap;
@@ -3818,11 +3943,7 @@ body {
   border: 0;
   background: transparent;
   color: var(--fg-dim);
-  font:
-    12px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 12px var(--font-ui);
   cursor: default;
 }
 
@@ -3879,11 +4000,7 @@ body {
 }
 
 .githist-summary {
-  font:
-    13px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 13px var(--font-ui);
   color: color-mix(in srgb, var(--fg) 88%, var(--bg));
   overflow: hidden;
   white-space: nowrap;
@@ -3902,14 +4019,10 @@ body {
   text-overflow: ellipsis;
 }
 
-.githist-empty,
 .githist-detail-message {
   padding: 16px;
   color: var(--fg-dim);
   font-size: 12.5px;
-}
-
-.githist-detail-message {
   margin: auto;
 }
 
@@ -3943,6 +4056,25 @@ body {
   font-family: var(--font-mono);
   font-size: 10px;
   line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .githist-box,
+  .githist[data-mounted="true"] .githist-box,
+  .githist[data-closing] .githist-box {
+    transform: none;
+    transition: opacity var(--modal-in, 200ms) ease;
+  }
+
+  .githist[data-closing] .githist-box {
+    transition: opacity var(--modal-out, 130ms) ease;
+  }
+
+  @starting-style {
+    .githist-box {
+      transform: none;
+    }
+  }
 }
 
 .prompt {
@@ -4066,16 +4198,16 @@ body {
   justify-content: center;
   align-items: flex-start;
   padding-top: 18vh;
-  background: rgba(0, 0, 0, 0.5);
-  -webkit-backdrop-filter: blur(8px) saturate(118%);
-  backdrop-filter: blur(8px) saturate(118%);
-  animation: confirm-overlay-in var(--dur-fast) ease;
+  background: rgba(0, 0, 0, 0);
+  transition: background var(--modal-in, 200ms) var(--ease-out, ease);
 }
 
-@keyframes confirm-overlay-in {
-  from {
-    opacity: 0;
-  }
+.confirm[data-mounted="true"] {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.confirm[data-closing] {
+  background: rgba(0, 0, 0, 0);
 }
 
 .confirm-box {
@@ -4089,18 +4221,35 @@ body {
     0 28px 70px -20px rgba(0, 0, 0, 0.8),
     0 8px 20px -10px rgba(0, 0, 0, 0.55);
   transform-origin: center top;
-  animation: confirm-pop var(--modal-in, 200ms) var(--ease-out);
+  opacity: 0;
+  transform: scale(0.99) translateY(-6px);
+  transition:
+    opacity var(--modal-in, 200ms) var(--ease-out, ease),
+    transform var(--modal-in, 200ms) var(--ease-out, ease);
+}
+
+.confirm[data-mounted="true"] .confirm-box {
+  opacity: 1;
+  transform: none;
+}
+
+.confirm[data-closing] .confirm-box {
+  opacity: 0;
+  transform: scale(0.99) translateY(-6px);
+  transition:
+    opacity var(--modal-out, 130ms) var(--ease-out, ease),
+    transform var(--modal-out, 130ms) var(--ease-out, ease);
+}
+
+@starting-style {
+  .confirm-box {
+    opacity: 0;
+    transform: scale(0.99) translateY(-6px);
+  }
 }
 
 .confirm-box:focus {
   outline: none;
-}
-
-@keyframes confirm-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.97) translateY(-4px);
-  }
 }
 
 .confirm-title {
@@ -4178,9 +4327,21 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .confirm,
-  .confirm-box {
-    animation: none;
+  .confirm-box,
+  .confirm[data-mounted="true"] .confirm-box,
+  .confirm[data-closing] .confirm-box {
+    transform: none;
+    transition: opacity var(--modal-in, 200ms) ease;
+  }
+
+  .confirm[data-closing] .confirm-box {
+    transition: opacity var(--modal-out, 130ms) ease;
+  }
+
+  @starting-style {
+    .confirm-box {
+      transform: none;
+    }
   }
 }
 
@@ -4192,10 +4353,16 @@ body {
   justify-content: center;
   align-items: flex-start;
   padding-top: 16vh;
-  background: rgba(0, 0, 0, 0.5);
-  -webkit-backdrop-filter: blur(8px) saturate(118%);
-  backdrop-filter: blur(8px) saturate(118%);
-  animation: confirm-overlay-in var(--dur-fast) ease;
+  background: rgba(0, 0, 0, 0);
+  transition: background var(--modal-in, 200ms) var(--ease-out, ease);
+}
+
+.update[data-mounted="true"] {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.update[data-closing] {
+  background: rgba(0, 0, 0, 0);
 }
 
 .update-box {
@@ -4211,7 +4378,31 @@ body {
     0 28px 70px -20px rgba(0, 0, 0, 0.8),
     0 8px 20px -10px rgba(0, 0, 0, 0.55);
   transform-origin: center top;
-  animation: confirm-pop var(--modal-in, 200ms) var(--ease-out);
+  opacity: 0;
+  transform: scale(0.99) translateY(-6px);
+  transition:
+    opacity var(--modal-in, 200ms) var(--ease-out, ease),
+    transform var(--modal-in, 200ms) var(--ease-out, ease);
+}
+
+.update[data-mounted="true"] .update-box {
+  opacity: 1;
+  transform: none;
+}
+
+.update[data-closing] .update-box {
+  opacity: 0;
+  transform: scale(0.99) translateY(-6px);
+  transition:
+    opacity var(--modal-out, 130ms) var(--ease-out, ease),
+    transform var(--modal-out, 130ms) var(--ease-out, ease);
+}
+
+@starting-style {
+  .update-box {
+    opacity: 0;
+    transform: scale(0.99) translateY(-6px);
+  }
 }
 
 .update-box:focus {
@@ -4416,10 +4607,23 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .update,
-  .update-box {
-    animation: none;
+  .update-box,
+  .update[data-mounted="true"] .update-box,
+  .update[data-closing] .update-box {
+    transform: none;
+    transition: opacity var(--modal-in, 200ms) ease;
   }
+
+  .update[data-closing] .update-box {
+    transition: opacity var(--modal-out, 130ms) ease;
+  }
+
+  @starting-style {
+    .update-box {
+      transform: none;
+    }
+  }
+
   .update-progress-fill {
     transition: none;
   }
@@ -4446,9 +4650,7 @@ body {
   justify-content: center;
   align-items: flex-start;
   padding-top: 22vh;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px) saturate(118%);
-  -webkit-backdrop-filter: blur(8px) saturate(118%);
+  background: rgba(0, 0, 0, 0.62);
 }
 
 .screencast-countdown {
@@ -4866,12 +5068,19 @@ body {
   }
 }
 
-.toast {
+.toast-slot {
   position: fixed;
   left: 50%;
   bottom: 28px;
   transform: translateX(-50%);
   z-index: 90;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -4881,15 +5090,38 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--edge-highlight), var(--elev-shadow);
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+
+.toast[data-closing] {
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--modal-out) var(--ease-out),
+    transform var(--modal-out) var(--ease-out);
+}
+
+@starting-style {
+  .toast {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .toast[data-closing] {
+    transition: none;
+  }
 }
 
 .toast-msg {
   color: var(--fg);
-  font:
-    var(--text-sm) -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: var(--text-sm) var(--font-ui);
 }
 
 .toast-action {
@@ -4899,11 +5131,7 @@ body {
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--fg);
-  font:
-    12px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 12px var(--font-ui);
   cursor: default;
   user-select: none;
 }
@@ -4969,11 +5197,7 @@ body {
   height: 24px;
   padding-right: 8px;
   color: color-mix(in srgb, var(--fg) 82%, var(--bg));
-  font:
-    13px / 1 -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 13px / 1 var(--font-ui);
   white-space: nowrap;
   cursor: default;
   transition:
@@ -5053,11 +5277,7 @@ body {
   padding: 0 10px;
   border-top: 1px solid var(--border);
   color: var(--fg-dim);
-  font:
-    12.5px / 1 -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 12.5px / 1 var(--font-ui);
   cursor: default;
 }
 
@@ -5071,13 +5291,8 @@ body {
 }
 
 .todo-empty {
-  padding: 2px 8px 6px;
-  color: var(--fg-dim);
-  font:
-    italic 11.5px / 1.3 -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  padding: var(--space-1) var(--space-2) var(--space-1_5);
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5127,11 +5342,7 @@ body {
 
 .todo-legend-label {
   color: var(--fg-dim);
-  font:
-    11.5px / 1 -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 11.5px / 1 var(--font-ui);
 }
 
 .todo-panel:not(.todo-panel--focused) .todo-row.selected {
@@ -5210,11 +5421,7 @@ body {
   gap: 7px;
   margin-bottom: 12px;
   color: var(--fg);
-  font:
-    12.5px / 1 -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 12.5px / 1 var(--font-ui);
   font-weight: 500;
   user-select: none;
 }
@@ -5247,11 +5454,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--fg);
-  font:
-    15px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 15px var(--font-ui);
   outline: none;
 }
 
@@ -5271,11 +5474,7 @@ body {
 
 .todo-modal-hint {
   color: var(--fg-dim);
-  font:
-    11px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 11px var(--font-ui);
   user-select: none;
 }
 
@@ -5328,11 +5527,7 @@ body {
   flex-shrink: 0;
   min-width: 60px;
   color: var(--fg-dim);
-  font:
-    11.5px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 11.5px var(--font-ui);
   user-select: none;
 }
 
@@ -5342,11 +5537,7 @@ body {
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--fg);
-  font:
-    12.5px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 12.5px var(--font-ui);
   cursor: default;
   user-select: none;
 }
@@ -5368,11 +5559,7 @@ body {
   border-bottom: 1px solid var(--border);
   border-radius: 0;
   color: var(--fg);
-  font:
-    12.5px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 12.5px var(--font-ui);
   outline: none;
 }
 
@@ -5391,11 +5578,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--fg);
-  font:
-    12.5px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 12.5px var(--font-ui);
   outline: none;
   resize: none;
   line-height: 1.5;
@@ -5412,11 +5595,7 @@ body {
 .todo-modal-date-echo {
   flex-shrink: 0;
   color: var(--fg-dim);
-  font:
-    11px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 11px var(--font-ui);
   font-variant-numeric: tabular-nums;
 }
 
@@ -5432,11 +5611,7 @@ body {
 
 .todo-modal-footer-hint {
   color: var(--fg-dim);
-  font:
-    11px -apple-system,
-    "SF Pro Text",
-    system-ui,
-    sans-serif;
+  font: 11px var(--font-ui);
   user-select: none;
 }
 

@@ -95,6 +95,13 @@
 
   --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--accent-soft);
 
+  --tab-ind-h: 2px;
+  --tab-ind-unit: 100px;
+  --tab-ind-neutral: rgba(255, 255, 255, 0.34);
+  --tab-hat-bg: rgba(255, 255, 255, 0.03);
+  --tab-hat-border: rgba(255, 255, 255, 0.1);
+  --seam-dim: 45%;
+
   /* Sumi defaults (the shipped default skin); applyTimerTheme overwrites these
      once the config/skin resolves, this is only the pre-JS fallback. */
   --timer-focus: oklch(0.92 0.01 0);

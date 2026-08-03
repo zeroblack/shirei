@@ -52,6 +52,7 @@ import {
   MetricsLogger,
   makeEvent,
 } from "./metrics";
+import { applyMotionVars } from "./motion";
 import {
   isTrackedAgent,
   NotificationCenter,
@@ -190,7 +191,7 @@ const CHROME: Record<"dark" | "light", Record<string, string>> = {
   dark: {
     "--bg": "#000000",
     "--bg-bar": "#0c0d0f",
-    "--fg": "#ffffff",
+    "--fg": "#f4f5f7",
     "--fg-dim": "#6e727b",
     "--border": "#26282e",
     "--surface-0": "#0c0d0f",
@@ -261,6 +262,10 @@ const CHROME: Record<"dark" | "light", Record<string, string>> = {
 // semantic colors (success/danger/perf) stay from the preset base.
 function chromeFromTheme(c: TerminalColors): Record<string, string> {
   const { bg, fg } = c;
+  // Chrome text sits 4% toward bg: full-strength fg belongs to the terminal
+  // alone, and the offset keeps the surrounding chrome from compounding its
+  // halation on pure-black themes.
+  const text = mix(fg, bg, 0.04);
   return {
     "--bg": bg,
     "--bg-bar": mix(bg, fg, 0.05),
@@ -268,8 +273,8 @@ function chromeFromTheme(c: TerminalColors): Record<string, string> {
     "--surface-1": mix(bg, fg, 0.06),
     "--surface-2": mix(bg, fg, 0.1),
     "--surface-3": mix(bg, fg, 0.14),
-    "--fg": fg,
-    "--text": fg,
+    "--fg": text,
+    "--text": text,
     "--fg-dim": mix(fg, bg, 0.5),
     "--text-muted": mix(fg, bg, 0.32),
     "--text-subtle": mix(fg, bg, 0.52),
@@ -305,6 +310,7 @@ function applyRenderCss(render: Config["render"]): void {
   const root = document.documentElement;
   root.style.setProperty("--term-padding", `${render.padding}px`);
   root.dataset.termSmoothing = render.font_smoothing;
+  root.classList.toggle("no-term-scrollbar", !render.scrollbar);
 }
 
 function applyRecColor(color: string): void {
@@ -484,7 +490,7 @@ export class App {
       .matchMedia?.("(prefers-color-scheme: dark)")
       .addEventListener("change", () => this.applyBrowserSessionsConfig());
     this.panelEl.classList.add("hidden");
-    this.applyMotionVars(config.motion);
+    applyMotionVars(document.documentElement, config.motion);
     this.applyTodoRatio(config.layout.todo_region_ratio);
     this.attachSidebarResize();
     this.attachTodoDividerResize();
@@ -1140,7 +1146,7 @@ export class App {
     applyRenderCss(c.render);
     applyRecColor(c.recorder.highlight_color);
     this.applyFocusChrome(c.chrome);
-    this.applyMotionVars(c.motion);
+    applyMotionVars(document.documentElement, c.motion);
     this.updateContextHint();
     webglPool.setCap(c.render.webgl_pool_cap);
     this.applyFocusCellsConfig(c);
@@ -2037,6 +2043,9 @@ export class App {
       className: "pane-picker",
       label: t("ui.pin.pickTitle"),
       onDismiss: () => void close(),
+      // .pane-picker[data-closing] has no CSS transition (deliberately
+      // instant), so there is no --modal-out to resolve against.
+      closeDurationMs: 0,
     });
     const row = (label: string, hint: string, onClick: () => void) => {
       const el = document.createElement("button");
@@ -2412,6 +2421,9 @@ export class App {
       className: "pane-picker",
       label: t("ui.pane.pickerTitle"),
       onDismiss: () => void close(),
+      // .pane-picker[data-closing] has no CSS transition (deliberately
+      // instant), so there is no --modal-out to resolve against.
+      closeDurationMs: 0,
     });
     const row = (label: string, hint: string, onClick?: () => void) => {
       const el = document.createElement("button");
@@ -2843,24 +2855,6 @@ export class App {
         this.current()?.fitAndResize();
       },
     });
-  }
-
-  private applyMotionVars(motion: Config["motion"]): void {
-    const root = document.documentElement;
-    const reduced =
-      motion.respect_reduced_motion &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const ms = (v: number): string =>
-      !motion.enabled || reduced ? "0ms" : `${v}ms`;
-    root.style.setProperty("--task-sink", ms(motion.task_sink_ms));
-    root.style.setProperty("--modal-in", ms(motion.modal_in_ms));
-    root.style.setProperty("--modal-out", ms(motion.modal_out_ms));
-    root.style.setProperty("--reveal", ms(motion.reveal_ms));
-    root.style.setProperty("--reveal-stagger", ms(motion.reveal_stagger_ms));
-    root.style.setProperty("--divider-snap", ms(motion.divider_snap_ms));
-    root.style.setProperty("--dur-fast", ms(motion.fast_ms));
-    root.style.setProperty("--dur-base", ms(motion.base_ms));
-    root.style.setProperty("--dur-slow", ms(motion.slow_ms));
   }
 
   private applyTodoRatio(ratio: number): void {

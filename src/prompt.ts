@@ -14,7 +14,6 @@ export function promptText(
       className: "prompt",
       label: title,
       onDismiss: () => done(null),
-      closeDurationMs: 130,
     });
 
     const label = document.createElement("div");
