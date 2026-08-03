@@ -11,6 +11,7 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
 
   "ui.tabbar.newTab": "Nueva pestaña (Cmd+T)",
   "ui.tabbar.close": "Cerrar (Cmd+W)",
+  "ui.tabbar.closeTab": "Cerrar {title}",
   "ui.tabbar.color": "Color",
   "ui.tabbar.pin": "Fijar",
   "ui.tabbar.unpin": "Desfijar",

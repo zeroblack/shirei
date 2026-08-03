@@ -9,6 +9,7 @@ export const uiEn = {
 
   "ui.tabbar.newTab": "New tab (Cmd+T)",
   "ui.tabbar.close": "Close (Cmd+W)",
+  "ui.tabbar.closeTab": "Close {title}",
   "ui.tabbar.color": "Color",
   "ui.tabbar.pin": "Pin",
   "ui.tabbar.unpin": "Unpin",

@@ -60,13 +60,17 @@ interface DragState {
   startX: number;
   slotWidth: number;
   started: boolean;
+  activeDrag: boolean;
   move: (e: PointerEvent) => void;
   up: (e: PointerEvent) => void;
 }
 
+type IndicatorMove = "slide" | "hop" | "snap" | "drag" | "shift";
+
 export class TabBar {
   private readonly root: HTMLElement;
   private readonly cb: TabBarCallbacks;
+  private readonly indicator: HTMLElement;
   private popover: HTMLElement | null = null;
   private palette: string[];
   private drag: DragState | null = null;
@@ -77,12 +81,26 @@ export class TabBar {
   // so the set of tabs already wearing a Bell is carried across renders to gate
   // the one-shot entrance.
   private bellShown = new Set<string>();
+  // Set by the click handler right before it calls onActivate, cleared at the
+  // end of the render that click synchronously triggers. Lets moveMode tell a
+  // mouse-driven activation (slide) apart from a keyboard jump (hop/snap) even
+  // though both funnel through the same onActivate callback.
+  private pointerActivation = false;
+  private lastActiveId: string | null = null;
+  private lastIds: string[] = [];
 
   constructor(root: HTMLElement, cb: TabBarCallbacks, palette: string[]) {
     this.root = root;
     this.cb = cb;
     this.palette = palette;
+    this.root.setAttribute("role", "tablist");
+    this.indicator = document.createElement("div");
+    this.indicator.className = "tab-indicator";
+    this.indicator.setAttribute("aria-hidden", "true");
+    this.indicator.style.opacity = "0";
+    this.root.appendChild(this.indicator);
     document.addEventListener("click", () => this.closePopover());
+    document.fonts.ready.then(() => this.syncIndicator("snap"));
   }
 
   setPalette(palette: string[]): void {
@@ -116,7 +134,15 @@ export class TabBar {
     states: Map<string, SessionStateEntry>,
     attention: Set<string>,
   ): void {
-    this.root.replaceChildren();
+    const mode = this.moveMode(tabs, activeId);
+    const activated = activeId !== this.lastActiveId;
+
+    // The indicator must survive every render untouched: a detached element
+    // cancels its running CSS transition, and even replaceChildren(this.indicator)
+    // counts as detaching it. Remove everything else, keep it in place.
+    for (const child of Array.from(this.root.children)) {
+      if (child !== this.indicator) child.remove();
+    }
 
     const activeTab = tabs.find((t) => t.id === activeId);
     const rootStyle = document.documentElement.style;
@@ -165,7 +191,58 @@ export class TabBar {
       e.stopPropagation();
       this.cb.onNew();
     });
-    this.root.appendChild(add);
+    const addSlot = document.createElement("div");
+    addSlot.className = "tab-add-slot";
+    addSlot.setAttribute("role", "presentation");
+    addSlot.appendChild(add);
+    this.root.appendChild(addSlot);
+
+    if (activated) {
+      this.root.querySelector<HTMLElement>(".tab.active")?.scrollIntoView({
+        inline: "nearest",
+        block: "nearest",
+        behavior: "instant",
+      });
+    }
+    this.syncIndicator(mode);
+    this.lastActiveId = activeId;
+    this.lastIds = tabs.map((tab) => tab.id);
+    this.pointerActivation = false;
+  }
+
+  private moveMode(
+    tabs: TabState[],
+    activeId: string | null,
+  ): "slide" | "hop" | "snap" {
+    if (this.pointerActivation) return "slide";
+    if (activeId === this.lastActiveId) return "snap";
+    const from = this.lastIds.indexOf(this.lastActiveId ?? "");
+    const to = tabs.findIndex((t) => t.id === activeId);
+    if (from === -1 || to === -1) return "snap";
+    if (tabs.length !== this.lastIds.length) return "snap";
+    return Math.abs(to - from) === 1 ? "hop" : "snap";
+  }
+
+  private syncIndicator(mode: IndicatorMove, dx = 0): void {
+    const el = this.root.querySelector<HTMLElement>(".tab.active");
+    if (!el) {
+      this.indicator.style.opacity = "0";
+      return;
+    }
+    const left = el.offsetLeft + dx;
+    const width = el.offsetWidth;
+    const unit = this.indicator.offsetWidth;
+    const color = el.style.getPropertyValue("--tab-color");
+    const transform = `translateX(${left}px) scaleX(${width / unit})`;
+    if (mode === "snap" && transform === this.indicator.style.transform) {
+      this.indicator.style.opacity = "1";
+      this.indicator.style.setProperty("--tab-ind-color", color || "");
+      return;
+    }
+    this.indicator.dataset.move = mode;
+    this.indicator.style.opacity = "1";
+    this.indicator.style.setProperty("--tab-ind-color", color || "");
+    this.indicator.style.transform = transform;
   }
 
   private renderTab(
@@ -178,6 +255,8 @@ export class TabBar {
   ): HTMLElement {
     const el = document.createElement("div");
     el.className = active ? "tab active" : "tab";
+    el.setAttribute("role", "tab");
+    el.setAttribute("aria-selected", active ? "true" : "false");
     if (showBell) el.classList.add("attn");
     if (showRing) el.classList.add("maybe");
     el.dataset.tabId = tab.id;
@@ -190,11 +269,17 @@ export class TabBar {
     );
     el.addEventListener("click", () => {
       if (this.suppressClick) return;
+      // Guard against a click on the already-active tab: onActivate() then
+      // early-returns without a render, and the flag would otherwise linger
+      // stale onto whatever unrelated render happens next.
+      if (!active) this.pointerActivation = true;
       this.cb.onActivate(tab.id);
     });
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      if (tab.kind === "terminal") this.openPalette(el, tab.id, tab.pinned);
+      if (tab.kind === "terminal") {
+        this.openPalette(el, tab.id, tab.pinned, tab.color);
+      }
     });
 
     if (tab.pinned) {
@@ -228,6 +313,10 @@ export class TabBar {
     close.className = "tab-close";
     close.textContent = "×";
     close.title = t("ui.tabbar.close");
+    close.setAttribute(
+      "aria-label",
+      t("ui.tabbar.closeTab", { title: tab.title }),
+    );
     close.addEventListener("click", (e) => {
       e.stopPropagation();
       this.cb.onClose(tab.id);
@@ -316,6 +405,7 @@ export class TabBar {
       startX: e.clientX,
       slotWidth: 0,
       started: false,
+      activeDrag: false,
       move,
       up,
     };
@@ -333,6 +423,7 @@ export class TabBar {
     }
     e.preventDefault();
     d.el.style.transform = `translateX(${dx}px)`;
+    if (d.activeDrag) this.syncIndicator("drag", dx);
     const toIndex = this.targetIndex(d, e.clientX);
     if (toIndex !== d.toIndex) {
       d.toIndex = toIndex;
@@ -345,6 +436,7 @@ export class TabBar {
     d.rects = d.els.map((t) => t.getBoundingClientRect());
     const gap = Number.parseFloat(getComputedStyle(this.root).gap) || 0;
     d.slotWidth = d.rects[d.fromIndex].width + gap;
+    d.activeDrag = d.el.classList.contains("active");
     d.el.classList.add("dragging");
     document.body.style.cursor = "grabbing";
     for (const t of d.els) if (t !== d.el) t.classList.add("tab-shifting");
@@ -367,6 +459,9 @@ export class TabBar {
       if (i > d.fromIndex && i <= d.toIndex) shift = -d.slotWidth;
       else if (i < d.fromIndex && i >= d.toIndex) shift = d.slotWidth;
       d.els[i].style.transform = shift ? `translateX(${shift}px)` : "";
+      if (d.els[i].classList.contains("active")) {
+        this.syncIndicator("shift", shift);
+      }
     }
   }
 
@@ -394,15 +489,22 @@ export class TabBar {
       t.classList.add("tab-shifting");
       t.style.transform = "";
     }
+    this.syncIndicator("shift");
     window.setTimeout(() => {
       for (const t of d.els) {
         t.classList.remove("tab-shifting");
         t.style.transform = "";
       }
+      this.syncIndicator("snap");
     }, TAB_SETTLE_MS);
   }
 
-  private openPalette(anchor: HTMLElement, id: string, pinned: boolean): void {
+  private openPalette(
+    anchor: HTMLElement,
+    id: string,
+    pinned: boolean,
+    color: string | null,
+  ): void {
     this.closePopover();
     const pop = document.createElement("div");
     pop.className = "palette";
@@ -439,12 +541,13 @@ export class TabBar {
 
     const swatches = document.createElement("div");
     swatches.className = "palette-swatches";
-    for (const color of this.palette) {
+    for (const swatchColor of this.palette) {
       const swatch = document.createElement("button");
       swatch.className = "swatch";
-      swatch.style.background = color;
+      if (swatchColor === color) swatch.classList.add("current");
+      swatch.style.background = swatchColor;
       swatch.addEventListener("click", () => {
-        this.cb.onRecolor(id, color);
+        this.cb.onRecolor(id, swatchColor);
         this.closePopover();
       });
       swatches.appendChild(swatch);
@@ -452,6 +555,7 @@ export class TabBar {
 
     const clear = document.createElement("button");
     clear.className = "swatch swatch-clear";
+    if (color === null) clear.classList.add("current");
     clear.textContent = "∅";
     clear.title = t("ui.tabbar.noColor");
     clear.addEventListener("click", () => {
@@ -461,11 +565,33 @@ export class TabBar {
     swatches.appendChild(clear);
     pop.appendChild(swatches);
 
-    const rect = anchor.getBoundingClientRect();
-    pop.style.left = `${rect.left}px`;
-    pop.style.top = `${rect.bottom + POPOVER_OFFSET_PX}px`;
     document.body.appendChild(pop);
+    this.positionPopover(pop, anchor.getBoundingClientRect());
     this.popover = pop;
+  }
+
+  private positionPopover(pop: HTMLElement, anchorRect: DOMRect): void {
+    const margin = 8;
+    const rect = pop.getBoundingClientRect();
+
+    const preferredLeft = anchorRect.left;
+    const clampedLeft = Math.min(
+      preferredLeft,
+      window.innerWidth - rect.width - margin,
+    );
+    const left = Math.max(margin, clampedLeft);
+    const flippedX = clampedLeft < preferredLeft;
+
+    const preferredTop = anchorRect.bottom + POPOVER_OFFSET_PX;
+    const flippedY = preferredTop + rect.height > window.innerHeight - margin;
+    const top = flippedY
+      ? Math.max(margin, anchorRect.top - rect.height - POPOVER_OFFSET_PX)
+      : preferredTop;
+
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+    pop.style.transformOrigin = `${flippedY ? "bottom" : "top"} ${flippedX ? "right" : "left"}`;
+    if (flippedY) pop.dataset.flip = "up";
   }
 
   private closePopover(): void {
