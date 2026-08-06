@@ -96,6 +96,7 @@ export const uiEn = {
   "ui.editor.fold.lines": "{n} lines",
   "ui.editor.fold.tasks": "{done}/{total} tasks",
   "ui.editor.diff.none": "No committed version to compare against.",
+  "ui.editor.preview.toggle": "Toggle HTML preview",
   "ui.editor.diff.toggle": "Toggle diff against HEAD",
   "ui.editor.diff.revert": "Revert hunk",
   "ui.editor.diff.revertHint": "Restore this hunk to its committed version",

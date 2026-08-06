@@ -487,7 +487,7 @@ export class App {
     this.attachPinSplitResize();
     this.renderPinCells();
     this.setActiveProject(null);
-    setOverlayObserver(() => this.syncBrowserVisibility());
+    setOverlayObserver(() => this.syncNativeVisibility());
     window
       .matchMedia?.("(prefers-color-scheme: dark)")
       .addEventListener("change", () => this.applyBrowserSessionsConfig());
@@ -1531,7 +1531,7 @@ export class App {
         this.refreshTreeIfVisible();
         this.persist();
         this.updateContextHint();
-        this.syncBrowserVisibility();
+        this.syncNativeVisibility();
       },
       onPickContent: (paneId) => {
         const g = this.sessions.get(id);
@@ -1713,6 +1713,7 @@ export class App {
       session.onDirtyChange = (dirty) => this.setDirty(id, dirty);
       const editorSession = session;
       editorSession.onHistory = () => void this.openHistory(editorSession);
+      editorSession.onSaveRequest = () => this.saveEditor(editorSession);
       paneKind = "editor";
     }
     this.sessions.set(id, session);
@@ -1773,6 +1774,7 @@ export class App {
       session.onDirtyChange = (dirty) => grid.setContentDirty(paneId, dirty);
       const editorSession = session;
       editorSession.onHistory = () => void this.openHistory(editorSession);
+      editorSession.onSaveRequest = () => this.saveEditor(editorSession);
     }
     return { session, container, path, title: name };
   }
@@ -1870,7 +1872,7 @@ export class App {
       return;
     }
     this.applyBrowserSessionConfig(session);
-    this.syncBrowserVisibility();
+    this.syncNativeVisibility();
     // Creating the native webview steals first responder; pull keyboard focus
     // back into the app (its address bar, a DOM field in the main webview) so
     // shortcuts like pin and pane-switch keep working without a mouse click.
@@ -1907,12 +1909,13 @@ export class App {
     }
   }
 
-  // The single authority a native child webview's visibility answers to: it
-  // fails safe to hidden whenever the pane is inactive, the browser is not
-  // its pane's frontmost content, or any overlay/dialog/settings-adjacent
-  // surface is open (a native view renders above all DOM and cannot be
-  // clipped, so it must be told explicitly to get out of the way).
-  private syncBrowserVisibility(): void {
+  // The single authority every native child webview's visibility answers to
+  // (browser panes and the HTML preview alike): it fails safe to hidden
+  // whenever the pane is inactive, the content is not its pane's frontmost,
+  // or any overlay/dialog/settings-adjacent surface is open (a native view
+  // renders above all DOM and cannot be clipped, so it must be told
+  // explicitly to get out of the way).
+  private syncNativeVisibility(): void {
     const overlayOpen = overlaysOpen();
     for (const [id, s] of this.sessions) {
       if (!(s instanceof PaneGrid)) continue;
@@ -1925,12 +1928,28 @@ export class App {
           );
         }
       }
+      for (const e of s.editorSessions()) {
+        const frontmost = s.activeContentSession(e.paneId) === e.session;
+        if (EditorSession !== null && e.session instanceof EditorSession) {
+          e.session.setPreviewVisible(paneActive && frontmost && !overlayOpen);
+        }
+      }
     }
-    // Pinned browsers live outside the grids and stay visible across every tab;
-    // only an overlay (which paints over a native view) hides them.
+    // Pinned browsers/editors live outside the grids and stay visible across
+    // every tab; only an overlay (which paints over a native view) hides them.
     for (const cell of this.pinCells) {
       if (cell?.session instanceof BrowserSession) {
         cell.session.show(!overlayOpen);
+      } else if (
+        EditorSession !== null &&
+        cell?.session instanceof EditorSession
+      ) {
+        cell.session.setPreviewVisible(!overlayOpen);
+      }
+    }
+    for (const [id, s] of this.sessions) {
+      if (EditorSession !== null && s instanceof EditorSession) {
+        s.setPreviewVisible(id === this.activeId && !overlayOpen);
       }
     }
   }
@@ -2012,7 +2031,7 @@ export class App {
       cell.session.onTitle = () => this.persist();
       cell.session.syncBounds();
     }
-    this.syncBrowserVisibility();
+    this.syncNativeVisibility();
     this.persist();
   }
 
@@ -2108,7 +2127,7 @@ export class App {
       return;
     }
     this.applyBrowserSessionConfig(session);
-    this.syncBrowserVisibility();
+    this.syncNativeVisibility();
     // A dock browser is background content; keep keyboard focus on the pane the
     // user is actually working in so shortcuts keep working.
     this.sessions.get(this.activeId ?? "")?.focus();
@@ -2227,7 +2246,7 @@ export class App {
     else void cell.session.dispose();
     cell.container.remove();
     this.showPinDock();
-    this.syncBrowserVisibility();
+    this.syncNativeVisibility();
     this.refreshTreeIfVisible();
     this.persist();
   }
@@ -2488,7 +2507,7 @@ export class App {
     this.feedDormancy(id, "shown");
     if (previousId) this.feedDormancy(previousId, "hidden");
     this.setActiveProject(projectId);
-    this.syncBrowserVisibility();
+    this.syncNativeVisibility();
   }
 
   closeTab(id: string): Promise<void> {
@@ -2642,8 +2661,19 @@ export class App {
           },
         ]
       : [];
+    const previewEditor = this.activeFileEditor(active);
+    const previewCommands = previewEditor?.isPreviewable()
+      ? [
+          {
+            id: "editor.preview-toggle",
+            name: t("ui.editor.preview.toggle"),
+            run: () => void previewEditor.togglePreview(),
+          },
+        ]
+      : [];
     return [
       ...editorCommands,
+      ...previewCommands,
       {
         id: "record.panel",
         name: t("ui.cmd.recordPanel"),
@@ -3307,6 +3337,9 @@ export class App {
         break;
       case "editor.vim-toggle":
         this.toggleVim();
+        break;
+      case "editor.preview-toggle":
+        void this.activeFileEditor(active)?.togglePreview();
         break;
       case "session.save":
         void this.saveActive();

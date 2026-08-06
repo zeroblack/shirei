@@ -160,6 +160,35 @@ export const browserClose = (label: string) =>
 export const browserSetColorScheme = (label: string, scheme: string) =>
   invoke<void>("browser_set_color_scheme", { label, scheme });
 
+export const previewOpen = (
+  label: string,
+  path: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) => invoke<void>("preview_open", { label, path, x, y, width, height });
+
+export const previewSetBounds = (
+  label: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) => invoke<void>("preview_set_bounds", { label, x, y, width, height });
+
+export const previewShow = (label: string) =>
+  invoke<void>("preview_show", { label });
+
+export const previewHide = (label: string) =>
+  invoke<void>("preview_hide", { label });
+
+export const previewReload = (label: string) =>
+  invoke<void>("preview_reload", { label });
+
+export const previewClose = (label: string) =>
+  invoke<void>("preview_close", { label });
+
 export const metricsLog = (events: MetricEvent[]) =>
   invoke<void>("metrics_log", { events });
 

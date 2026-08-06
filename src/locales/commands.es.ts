@@ -33,6 +33,7 @@ export const commandsEs: Record<keyof typeof commandsEn, string> = {
   "cmd.template.save": "Guardar como plantilla",
   "cmd.session.save": "Guardar archivo",
   "cmd.editor.vim-toggle": "Modo vim (editor)",
+  "cmd.editor.preview-toggle": "Vista previa HTML (editor)",
   "cmd.git.history": "Historial del archivo",
   "cmd.git.blame-toggle": "Alternar blame",
   "cmd.pane.split-h": "Dividir terminal verticalmente",

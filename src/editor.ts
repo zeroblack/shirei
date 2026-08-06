@@ -32,8 +32,20 @@ import {
   scrollPastEnd,
 } from "@codemirror/view";
 import { vim } from "@replit/codemirror-vim";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { gitBlame, gitFileHead, readFile, writeFile } from "./commands";
+import { contentBounds } from "./browser-core";
+import {
+  gitBlame,
+  gitFileHead,
+  previewClose,
+  previewHide,
+  previewOpen,
+  previewSetBounds,
+  previewShow,
+  readFile,
+  writeFile,
+} from "./commands";
 import type { Config, TerminalColors } from "./config";
 import { astro } from "./editor-astro";
 import { blameAnnotations } from "./editor-blame";
@@ -44,7 +56,7 @@ import { searchPanel } from "./editor-search";
 import { editorIndentMarkers, editorThemeFromPalette } from "./editor-theme";
 import { errorCode, errorMessage } from "./errors";
 import { t } from "./i18n";
-import { BLAME, CHEVRON, DIFF, HISTORY, REVERT } from "./icons";
+import { BLAME, BROWSER_GLYPH, CHEVRON, DIFF, HISTORY, REVERT } from "./icons";
 import { basename, parentDir } from "./path";
 import { showToast } from "./toast";
 
@@ -75,18 +87,36 @@ export interface ReadingConfig {
 }
 
 const PROSE_EXTS = new Set(["md", "markdown", "mdx", "txt", "text"]);
+const HTML_EXTS = new Set(["html", "htm"]);
 
 const SAVED_VISIBLE_MS = 1500;
 
+// The native preview webview floats ABOVE the DOM and would otherwise cover
+// the editor's chrome buttons (top-right, 26px tall starting at top:10px);
+// leaving this strip keeps them clickable, and a DOM click there always
+// reaches the main webview regardless of native first-responder — so the
+// globe toggle stays the exit affordance no matter what the preview holds.
+const PREVIEW_TOP_STRIP = 44;
+
+function extOf(path: string): string | undefined {
+  return (path.split("/").pop() ?? path).split(".").pop()?.toLowerCase();
+}
+
 function isProse(path: string): boolean {
-  const ext = (path.split("/").pop() ?? path).split(".").pop()?.toLowerCase();
+  const ext = extOf(path);
   return ext !== undefined && PROSE_EXTS.has(ext);
+}
+
+function isHtml(path: string): boolean {
+  const ext = extOf(path);
+  return ext !== undefined && HTML_EXTS.has(ext);
 }
 
 // Prose (markdown/txt) wraps to a readable measure; code keeps no-wrap with
 // horizontal scroll so indentation stays intact. The cap is a CSS max-width on
-// the block container — never on .cm-line's inline children, which breaks the
-// caret and click-to-position.
+// .cm-content, the block container — never on .cm-line or its inline children,
+// which throws off CodeMirror's per-visual-row vertical motion (ArrowUp/Down
+// land at the logical line start instead of the row above) and the caret.
 function readingFor(path: string, cfg: ReadingConfig): Extension {
   const prose = isProse(path);
   const wrap = prose ? cfg.wrap_prose : cfg.wrap_code;
@@ -219,12 +249,19 @@ export class EditorSession {
   private blameOn = false;
   private diffBtn: HTMLButtonElement | null = null;
   private blameBtn: HTMLButtonElement | null = null;
+  private previewBtn: HTMLButtonElement | null = null;
+  private readonly previewLabel =
+    `preview-${getCurrentWindow().label}-${crypto.randomUUID().slice(0, 8)}`;
+  private previewObserver: ResizeObserver | null = null;
+  private previewOn = false;
   private dirty = false;
   private autosaveTimer: number | null = null;
   private savedEl: HTMLElement | null = null;
   private savedTimer: number | null = null;
   onDirtyChange?: (dirty: boolean) => void;
   onHistory?: () => void;
+  onSaveRequest?: () => Promise<boolean>;
+  private previewToggling = false;
 
   constructor(
     id: string,
@@ -378,6 +415,14 @@ export class EditorSession {
       this.toggleBlame(),
     );
     group.append(history, this.diffBtn, this.blameBtn);
+    if (isHtml(this.path)) {
+      this.previewBtn = this.chromeButton(
+        BROWSER_GLYPH,
+        t("ui.editor.preview.toggle"),
+        () => void this.togglePreview(),
+      );
+      group.append(this.previewBtn);
+    }
     return group;
   }
 
@@ -399,6 +444,78 @@ export class EditorSession {
 
   toggleBlame(): void {
     void this.setBlame(!this.blameOn, true);
+  }
+
+  isPreviewable(): boolean {
+    return isHtml(this.path);
+  }
+
+  async togglePreview(): Promise<void> {
+    if (!isHtml(this.path) || this.previewToggling) return;
+    if (this.previewOn) {
+      this.previewToggling = true;
+      try {
+        this.previewObserver?.disconnect();
+        this.previewObserver = null;
+        await previewClose(this.previewLabel);
+        this.previewOn = false;
+        this.previewBtn?.classList.remove("active");
+        if (this.view) this.view.dom.style.display = "";
+        this.view?.focus();
+      } finally {
+        this.previewToggling = false;
+      }
+      return;
+    }
+    this.previewToggling = true;
+    try {
+      // Reflect unsaved edits in the render, but never show a stale preview
+      // silently: a failed/conflicted save aborts the toggle so the user keeps
+      // seeing (and can fix) their code, with the app's own save UI surfacing why.
+      if (this.dirty) {
+        const saved = this.onSaveRequest
+          ? await this.onSaveRequest()
+          : (await this.save()).ok;
+        if (!saved) return;
+      }
+      this.previewOn = true;
+      this.previewBtn?.classList.add("active");
+      if (this.view) this.view.dom.style.display = "none";
+      const b = this.previewBounds();
+      try {
+        await previewOpen(
+          this.previewLabel,
+          this.path,
+          b.x,
+          b.y,
+          b.width,
+          b.height,
+        );
+      } catch (e) {
+        this.previewOn = false;
+        this.previewBtn?.classList.remove("active");
+        if (this.view) this.view.dom.style.display = "";
+        showToast(errorMessage(e));
+        return;
+      }
+      this.previewObserver = new ResizeObserver(() => this.syncPreviewBounds());
+      this.previewObserver.observe(this.container);
+    } finally {
+      this.previewToggling = false;
+    }
+  }
+
+  private previewBounds() {
+    return contentBounds(
+      this.container.getBoundingClientRect(),
+      PREVIEW_TOP_STRIP,
+    );
+  }
+
+  private syncPreviewBounds(): void {
+    if (!this.previewOn) return;
+    const b = this.previewBounds();
+    void previewSetBounds(this.previewLabel, b.x, b.y, b.width, b.height);
   }
 
   private async setBlame(on: boolean, explicit: boolean): Promise<void> {
@@ -500,6 +617,16 @@ export class EditorSession {
     this.container.classList.toggle("active", visible);
   }
 
+  // The single authority for the preview webview's visibility: called from the
+  // app-level sync, never from show() — a content-pane file editor is shown
+  // through PaneGrid.activate() and never calls EditorSession.show() at all, so
+  // folding this into show() would leave that flow's preview stuck on-screen.
+  setPreviewVisible(visible: boolean): void {
+    if (!this.previewOn) return;
+    if (visible) void previewShow(this.previewLabel);
+    else void previewHide(this.previewLabel);
+  }
+
   focus(): void {
     this.view?.focus();
   }
@@ -584,6 +711,9 @@ export class EditorSession {
   dispose(): void {
     this.clearAutosave();
     if (this.savedTimer !== null) window.clearTimeout(this.savedTimer);
+    this.previewObserver?.disconnect();
+    this.previewObserver = null;
+    if (this.previewOn) void previewClose(this.previewLabel);
     this.view?.destroy();
     this.view = null;
     this.container.remove();

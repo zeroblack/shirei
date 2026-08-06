@@ -13,6 +13,7 @@ mod metrics;
 mod mux_client;
 mod notify;
 mod perf;
+mod preview;
 mod pty;
 #[cfg(target_os = "macos")]
 mod screencast;
@@ -465,6 +466,12 @@ pub fn run() {
             browser::browser_release_focus,
             browser::browser_close,
             browser::browser_set_color_scheme,
+            preview::preview_open,
+            preview::preview_set_bounds,
+            preview::preview_show,
+            preview::preview_hide,
+            preview::preview_reload,
+            preview::preview_close,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Focused(true) = event

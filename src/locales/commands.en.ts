@@ -31,6 +31,7 @@ export const commandsEn = {
   "cmd.template.save": "Save as template",
   "cmd.session.save": "Save file",
   "cmd.editor.vim-toggle": "Vim mode (editor)",
+  "cmd.editor.preview-toggle": "HTML preview (editor)",
   "cmd.git.history": "File history",
   "cmd.git.blame-toggle": "Toggle blame",
   "cmd.pane.split-h": "Split terminal vertically",
