@@ -65,7 +65,7 @@ export const editorSection: SettingsSection = {
           e,
           "prose_width",
           save,
-          "min(90%, 80ch)",
+          "min(92%, 96ch)",
           t("settings.editor.proseWidthDesc"),
         ),
         boolField(t("settings.editor.wrapCode"), e, "wrap_code", save),

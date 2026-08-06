@@ -308,7 +308,7 @@ impl Default for EditorConfig {
             search_case: false,
             search_regex: false,
             search_whole_word: false,
-            prose_width: "min(90%, 80ch)".into(),
+            prose_width: "min(92%, 96ch)".into(),
             wrap_prose: true,
             code_width: String::new(),
             wrap_code: false,
