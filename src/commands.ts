@@ -27,6 +27,9 @@ export const writeFile = (
 export const createFile = (path: string) =>
   invoke<void>("fs_create_file", { path });
 
+export const treeWatch = (path: string | null) =>
+  invoke<void>("tree_watch", { path });
+
 export const searchStart = (
   root: string,
   scope: "project" | "home",

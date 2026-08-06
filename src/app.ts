@@ -19,6 +19,7 @@ import {
   recordOpen,
   revealInFinder,
   revealLogs,
+  treeWatch,
 } from "./commands";
 import {
   allTemplates,
@@ -367,6 +368,7 @@ export class App {
   private panelVisible = false;
   private lastRoot: string | null = null;
   private treeRoot: string | null = null;
+  private watchedRoot: string | null = null;
   private snapshotTimer: ReturnType<typeof setInterval> | null = null;
   private ageTimer: ReturnType<typeof setInterval> | null = null;
   private lastSessionJson: string | null = null;
@@ -970,6 +972,7 @@ export class App {
   }
 
   async bindMenu(): Promise<void> {
+    await listen("tree-changed", () => this.onTreeChanged());
     await listen("menu-new-tab", () => void this.newTab());
     await listen("menu-close-tab", () => void this.closeActive());
     await listen("menu-palette", () => void this.openQuickOpen());
@@ -2734,6 +2737,7 @@ export class App {
     this.panelEl.classList.toggle("hidden", !visible);
     this.dividerEl.classList.toggle("hidden", !visible);
     this.syncSidebarButton();
+    if (!visible) this.stopTreeWatch();
     if (sidebarHadFocus) this.focusActive();
   }
 
@@ -2906,8 +2910,18 @@ export class App {
     } else {
       await this.tree.refresh();
     }
+    if (root !== this.watchedRoot) {
+      this.watchedRoot = root;
+      void treeWatch(root).catch(() => {});
+    }
     const filePath = this.activeFilePath();
     if (filePath) await this.tree.revealPath(filePath);
+  }
+
+  private stopTreeWatch(): void {
+    if (this.watchedRoot === null) return;
+    this.watchedRoot = null;
+    void treeWatch(null).catch(() => {});
   }
 
   private async activeWorkspaceRoot(): Promise<string | null> {
@@ -3003,6 +3017,18 @@ export class App {
 
   private async activeCwd(): Promise<string | undefined> {
     return (await this.activeLiveCwd()) ?? this.activeLeafCwd();
+  }
+
+  private treeChangeTimer: number | null = null;
+
+  private onTreeChanged(): void {
+    if (!this.panelVisible) return;
+    if (this.treeChangeTimer !== null)
+      window.clearTimeout(this.treeChangeTimer);
+    this.treeChangeTimer = window.setTimeout(() => {
+      this.treeChangeTimer = null;
+      if (this.panelVisible) void this.tree.refresh();
+    }, 120);
   }
 
   private refreshTreeIfVisible(): void {

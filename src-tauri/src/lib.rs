@@ -21,6 +21,7 @@ mod session;
 #[cfg(target_os = "macos")]
 mod shortcuts;
 mod todos;
+mod tree_watch;
 mod watch;
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
@@ -166,6 +167,7 @@ pub fn run() {
         .manage(perf::PerfActiveTab::default())
         .manage(todos::TodoStore::default())
         .manage(metrics::MetricsStore::default())
+        .manage(tree_watch::TreeWatch::default())
         .manage(search::session::SearchState::default());
 
     #[cfg(target_os = "macos")]
@@ -402,6 +404,7 @@ pub fn run() {
             session::session_snapshot,
             session::session_pid,
             fs::fs_read_dir,
+            tree_watch::tree_watch,
             fs::fs_read_file,
             fs::fs_image_meta,
             fs::fs_write_file,
