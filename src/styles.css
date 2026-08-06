@@ -2985,7 +2985,7 @@ body {
 .context-menu {
   position: fixed;
   z-index: 50;
-  min-width: 160px;
+  min-width: 168px;
   padding: var(--space-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -3011,26 +3011,66 @@ body {
 }
 
 .context-menu-item {
-  display: block;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--space-2);
   width: 100%;
-  padding: 6px 10px;
+  padding: var(--space-1_5) var(--space-2);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
-  color: var(--fg);
-  font-size: 12px;
+  color: var(--text);
+  font: var(--type-label);
   text-align: left;
+  white-space: nowrap;
   cursor: default;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.context-menu-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.context-menu-icon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
 }
 
 .context-menu-item:hover {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.context-menu-item:hover .context-menu-icon {
+  color: var(--text);
+}
+
+.context-menu-item:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.context-menu-item:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.context-menu-sep {
+  height: var(--hairline);
+  margin: var(--space-1) 0;
+  background: var(--border-soft);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .palette,
   .swatch,
-  .context-menu {
+  .context-menu,
+  .context-menu-item,
+  .context-menu-icon {
     transition: none;
   }
 }

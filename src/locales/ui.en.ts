@@ -187,6 +187,9 @@ export const uiEn = {
 
   "ui.filetree.truncated": "… folder truncated (too many files)",
   "ui.filetree.openInFinder": "Open in Finder",
+  "ui.filetree.copyPath": "Copy absolute path",
+  "ui.filetree.copyRelPath": "Copy relative path",
+  "ui.filetree.pathCopied": "Path copied",
   "ui.filetree.newFile": "New file",
   "ui.filetree.newFilePrompt": "New file name",
   "ui.filetree.createFailed":
