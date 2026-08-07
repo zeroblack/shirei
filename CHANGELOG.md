@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.8] - 2026-08-07
+
+### Added
+- Preview an HTML file as a page: the Dock control in the editor chrome (or
+  `⌘⇧E`) renders `.html`/`.htm` in place, styled like a browser, so reports and
+  mockups with external styles show as intended without leaving the editor.
+- The file tree refreshes on its own when files are created, removed, or renamed
+  on disk, so what a session writes appears without a manual reload.
+- Right-clicking a file tree entry offers Copy absolute path and Copy relative
+  path, alongside a refreshed context menu.
+
+### Changed
+- Markdown live preview renders inline formatting inside table cells — bold,
+  code, and links now show instead of their raw syntax — and tables take a
+  readable width with their own horizontal scroll. The default prose measure is
+  a little wider.
+
+### Fixed
+- Vertical cursor movement in a wrapped markdown or text file steps one line at
+  a time again, instead of jumping to the start of the block.
+- The pane-content shortcuts now show their names in the Settings shortcuts
+  screen instead of appearing blank.
+
 ## [0.16.7] - 2026-08-03
 
 ### Added
