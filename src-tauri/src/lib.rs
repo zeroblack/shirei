@@ -13,6 +13,7 @@ mod metrics;
 mod mux_client;
 mod notify;
 mod perf;
+mod preview;
 mod pty;
 #[cfg(target_os = "macos")]
 mod screencast;
@@ -21,6 +22,7 @@ mod session;
 #[cfg(target_os = "macos")]
 mod shortcuts;
 mod todos;
+mod tree_watch;
 mod watch;
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
@@ -166,6 +168,7 @@ pub fn run() {
         .manage(perf::PerfActiveTab::default())
         .manage(todos::TodoStore::default())
         .manage(metrics::MetricsStore::default())
+        .manage(tree_watch::TreeWatch::default())
         .manage(search::session::SearchState::default());
 
     #[cfg(target_os = "macos")]
@@ -402,6 +405,7 @@ pub fn run() {
             session::session_snapshot,
             session::session_pid,
             fs::fs_read_dir,
+            tree_watch::tree_watch,
             fs::fs_read_file,
             fs::fs_image_meta,
             fs::fs_write_file,
@@ -462,6 +466,12 @@ pub fn run() {
             browser::browser_release_focus,
             browser::browser_close,
             browser::browser_set_color_scheme,
+            preview::preview_open,
+            preview::preview_set_bounds,
+            preview::preview_show,
+            preview::preview_hide,
+            preview::preview_reload,
+            preview::preview_close,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Focused(true) = event

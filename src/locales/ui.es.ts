@@ -99,6 +99,7 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.editor.fold.lines": "{n} líneas",
   "ui.editor.fold.tasks": "{done}/{total} tareas",
   "ui.editor.diff.none": "No hay versión commiteada para comparar.",
+  "ui.editor.preview.toggle": "Alternar vista previa HTML",
   "ui.editor.diff.toggle": "Alternar diff contra HEAD",
   "ui.editor.diff.revert": "Revertir bloque",
   "ui.editor.diff.revertHint": "Restaura este bloque a su versión commiteada",
@@ -190,6 +191,9 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
 
   "ui.filetree.truncated": "… carpeta truncada (demasiados archivos)",
   "ui.filetree.openInFinder": "Abrir en Finder",
+  "ui.filetree.copyPath": "Copiar ruta absoluta",
+  "ui.filetree.copyRelPath": "Copiar ruta relativa",
+  "ui.filetree.pathCopied": "Ruta copiada",
   "ui.filetree.newFile": "Nuevo archivo",
   "ui.filetree.newFilePrompt": "Nombre del archivo nuevo",
   "ui.filetree.createFailed": "No se pudo crear el archivo (quizás ya existe).",

@@ -237,6 +237,12 @@ export const ACTIONS: ActionDef[] = [
     defaults: [{ key: "v", meta: true, shift: true }],
   },
   {
+    id: "editor.preview-toggle",
+    category: "editor",
+    scope: "global",
+    defaults: [{ key: "e", meta: true, shift: true }],
+  },
+  {
     id: "git.history",
     category: "git",
     scope: "global",

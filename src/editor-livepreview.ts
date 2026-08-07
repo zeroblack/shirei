@@ -232,12 +232,50 @@ class ImageWidget extends WidgetType {
   }
 }
 
-function parseRow(line: string): string[] {
+export function parseRow(line: string): string[] {
   return line
     .replace(/^\s*\|?/, "")
     .replace(/\|?\s*$/, "")
-    .split("|")
-    .map((c) => c.trim());
+    .split(/(?<!\\)\|/)
+    .map((c) => c.trim().replace(/\\\|/g, "|"));
+}
+
+const INLINE_TOKEN =
+  /(`+)(.+?)\1|\*\*([^*]+?)\*\*|__([^_]+?)__|\*([^*\s][^*]*?)\*|_([^_\s][^_]*?)_|~~([^~]+?)~~|\[([^\]]+?)\]\(([^)\s]+?)\)/;
+
+export function renderInlineMd(text: string, depth = 0): DocumentFragment {
+  const frag = document.createDocumentFragment();
+  let rest = text;
+  while (rest) {
+    const m = depth < 4 ? INLINE_TOKEN.exec(rest) : null;
+    if (!m) {
+      frag.appendChild(document.createTextNode(rest));
+      break;
+    }
+    if (m.index > 0)
+      frag.appendChild(document.createTextNode(rest.slice(0, m.index)));
+    const span = document.createElement("span");
+    if (m[2] !== undefined) {
+      span.className = "cm-md-code";
+      span.textContent = m[2];
+    } else if (m[8] !== undefined) {
+      span.className = "cm-md-link";
+      span.title = m[9];
+      span.appendChild(renderInlineMd(m[8], depth + 1));
+    } else if (m[7] !== undefined) {
+      span.className = "cm-md-strike";
+      span.appendChild(renderInlineMd(m[7], depth + 1));
+    } else if (m[3] !== undefined || m[4] !== undefined) {
+      span.className = "cm-md-strong";
+      span.appendChild(renderInlineMd(m[3] ?? m[4], depth + 1));
+    } else {
+      span.className = "cm-md-em";
+      span.appendChild(renderInlineMd(m[5] ?? m[6], depth + 1));
+    }
+    frag.appendChild(span);
+    rest = rest.slice(m.index + m[0].length);
+  }
+  return frag;
 }
 
 class TableWidget extends WidgetType {
@@ -260,7 +298,7 @@ class TableWidget extends WidgetType {
     const htr = document.createElement("tr");
     parseRow(rows[0] ?? "").forEach((cell, i) => {
       const th = document.createElement("th");
-      th.textContent = cell;
+      th.appendChild(renderInlineMd(cell));
       if (aligns[i]) th.style.textAlign = aligns[i];
       htr.appendChild(th);
     });
@@ -271,7 +309,7 @@ class TableWidget extends WidgetType {
       const tr = document.createElement("tr");
       parseRow(rows[i]).forEach((cell, j) => {
         const td = document.createElement("td");
-        td.textContent = cell;
+        td.appendChild(renderInlineMd(cell));
         if (aligns[j]) td.style.textAlign = aligns[j];
         tr.appendChild(td);
       });
@@ -646,18 +684,27 @@ function proseChrome(p: TerminalColors): Extension {
     ".cm-md-table-sep": { opacity: "0.4" },
     ".cm-md-table-wrap": {
       overflowX: "auto",
+      width: "fit-content",
+      minWidth: "min(100%, 40ch)",
+      maxWidth: "100%",
       border: `1px solid ${alpha(p.fg, 0.1)}`,
       borderRadius: "8px",
       margin: "0.6em 0",
+      whiteSpace: "normal",
+      wordBreak: "normal",
+      overflowWrap: "break-word",
     },
     ".cm-md-rendered-table": {
       borderCollapse: "collapse",
-      width: "100%",
+      width: "max-content",
+      maxWidth: "100%",
       fontFamily: "var(--font-ui)",
+      lineHeight: "1.5",
     },
     ".cm-md-rendered-table th, .cm-md-rendered-table td": {
       padding: "8px 14px",
       textAlign: "left",
+      verticalAlign: "top",
       fontVariantNumeric: "tabular-nums",
     },
     ".cm-md-rendered-table thead th": {

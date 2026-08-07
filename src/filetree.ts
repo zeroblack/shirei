@@ -1,6 +1,7 @@
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { createFile, readDir, revealInFinder } from "./commands";
 import { t } from "./i18n";
-import { CHEVRON, fileIcon, NEW_FILE } from "./icons";
+import { CHEVRON, COPY, EXTERNAL, fileIcon, NEW_FILE } from "./icons";
 import { promptText } from "./prompt";
 import { showToast } from "./toast";
 import type { DirEntry } from "./types";
@@ -275,15 +276,42 @@ export class FileTree {
     this.closeMenu();
     const menu = document.createElement("div");
     menu.className = "context-menu";
+    menu.setAttribute("role", "menu");
     menu.addEventListener("click", (e) => e.stopPropagation());
-    const item = document.createElement("button");
-    item.className = "context-menu-item";
-    item.textContent = t("ui.filetree.openInFinder");
-    item.addEventListener("click", () => {
-      void revealInFinder(path).catch(() => {});
-      this.closeMenu();
-    });
-    menu.appendChild(item);
+    const add = (icon: string, label: string, run: () => void): void => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "context-menu-item";
+      item.setAttribute("role", "menuitem");
+      const glyph = document.createElement("span");
+      glyph.className = "context-menu-icon";
+      glyph.setAttribute("aria-hidden", "true");
+      glyph.innerHTML = icon;
+      const text = document.createElement("span");
+      text.textContent = label;
+      item.append(glyph, text);
+      item.addEventListener("click", () => {
+        run();
+        this.closeMenu();
+      });
+      menu.appendChild(item);
+    };
+    const separator = (): void => {
+      const sep = document.createElement("div");
+      sep.className = "context-menu-sep";
+      sep.setAttribute("role", "separator");
+      menu.appendChild(sep);
+    };
+    add(
+      EXTERNAL,
+      t("ui.filetree.openInFinder"),
+      () => void revealInFinder(path).catch(() => {}),
+    );
+    separator();
+    add(COPY, t("ui.filetree.copyPath"), () => this.copyPath(path));
+    add(COPY, t("ui.filetree.copyRelPath"), () =>
+      this.copyPath(this.relativePath(path)),
+    );
     document.body.appendChild(menu);
     const margin = 8;
     const rect = menu.getBoundingClientRect();
@@ -295,6 +323,19 @@ export class FileTree {
     menu.style.transformOrigin = flippedY ? "bottom left" : "top left";
     if (flippedY) menu.dataset.flip = "up";
     this.menu = menu;
+  }
+
+  private relativePath(path: string): string {
+    const base = this.rootPath.replace(/\/$/, "");
+    if (base && (path === base || path.startsWith(`${base}/`)))
+      return path.slice(base.length + 1) || ".";
+    return path;
+  }
+
+  private copyPath(value: string): void {
+    void writeText(value)
+      .then(() => showToast(t("ui.filetree.pathCopied")))
+      .catch(() => {});
   }
 
   private closeMenu(): void {

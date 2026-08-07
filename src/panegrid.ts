@@ -524,6 +524,20 @@ export class PaneGrid {
     return out;
   }
 
+  // Every file stack entry across every pane, active or not, so the visibility
+  // authority can hide a preview that was just demoted behind a terminal or
+  // another file tab. Non-editor files (images, media) pass through too — the
+  // caller narrows with `instanceof EditorSession`, same split as browserSessions.
+  editorSessions(): { paneId: string; session: PaneContentSession }[] {
+    const out: { paneId: string; session: PaneContentSession }[] = [];
+    for (const [paneId, pane] of this.panes) {
+      for (const c of pane.contents) {
+        if (c.kind === "file") out.push({ paneId, session: c.session });
+      }
+    }
+    return out;
+  }
+
   cycleContent(dir: 1 | -1): void {
     const pane = this.panes.get(this.activeLeafId);
     if (!pane) return;
