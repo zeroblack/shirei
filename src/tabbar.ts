@@ -300,9 +300,18 @@ export class TabBar {
         tab.memory === "stale"
           ? t("ui.memory.badgeStale")
           : t("ui.memory.badge");
-      badge.onclick = (e) => {
+      badge.setAttribute("role", "button");
+      badge.tabIndex = 0;
+      const openMemory = (e: Event) => {
         e.stopPropagation();
         this.cb.onMemoryOpen?.();
+      };
+      badge.onclick = openMemory;
+      badge.onkeydown = (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openMemory(e);
+        }
       };
       el.appendChild(badge);
     }
