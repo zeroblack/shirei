@@ -28,6 +28,7 @@ import {
   type ConfirmPolicy,
   configSet,
   DEFAULT_FONT_SIZE,
+  type MemoryStatus,
   memoryInit,
   memoryStatus,
   type Project,
@@ -173,8 +174,6 @@ const TERMINAL_CONTENT_ACTIONS = new Set([
   "terminal.paste",
   "scroll.up",
   "scroll.down",
-  "memory.resume",
-  "memory.save_session",
 ]);
 
 // The inverse of TERMINAL_CONTENT_ACTIONS: these belong to a browser pane
@@ -3066,7 +3065,13 @@ export class App {
       showToast(t("ui.memory.noCwd"));
       return;
     }
-    const status = await memoryStatus(cwd);
+    let status: MemoryStatus;
+    try {
+      status = await memoryStatus(cwd);
+    } catch (e) {
+      this.notify(errorMessage(e));
+      return;
+    }
     if (
       !status.exists &&
       !(await confirmDialog({
@@ -3077,7 +3082,13 @@ export class App {
     ) {
       return;
     }
-    const overview = await memoryInit(cwd);
+    let overview: string;
+    try {
+      overview = await memoryInit(cwd);
+    } catch (e) {
+      this.notify(errorMessage(e));
+      return;
+    }
     const dir = overview.slice(0, -"overview.md".length);
     if (file === "sessions") {
       await this.revealDir(`${dir}sessions`);
