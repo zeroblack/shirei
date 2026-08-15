@@ -1732,6 +1732,10 @@ impl ConfigManager {
     pub fn performance(&self) -> PerformanceConfig {
         self.lock().performance.clone()
     }
+
+    pub fn memory(&self) -> MemoryConfig {
+        self.lock().memory.clone()
+    }
 }
 
 #[tauri::command]

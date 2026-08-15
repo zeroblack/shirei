@@ -39,7 +39,7 @@ fn absent() -> Status {
 
 #[tauri::command]
 pub fn memory_status(manager: State<'_, ConfigManager>, path: String) -> Result<Status> {
-    let cfg = manager.current().memory;
+    let cfg = manager.memory();
     let Some(root) = find_root(Path::new(&path), &cfg.dir_name, &home_dir()) else {
         return Ok(absent());
     };
@@ -54,7 +54,7 @@ pub fn memory_status(manager: State<'_, ConfigManager>, path: String) -> Result<
 
 #[tauri::command]
 pub fn memory_init(manager: State<'_, ConfigManager>, path: String) -> Result<String> {
-    let cfg = manager.current().memory;
+    let cfg = manager.memory();
     let root = resolve_root_for_write(Path::new(&path), &cfg.dir_name, &home_dir());
     let store = Store::new(&root, &cfg.dir_name);
     store
@@ -107,14 +107,14 @@ pub fn install_shim(shim: &Path, target: &Path) -> Result<()> {
 
 #[tauri::command]
 pub fn memory_shim_install(manager: State<'_, ConfigManager>) -> Result<String> {
-    let cfg = manager.current().memory;
+    let cfg = manager.memory();
     let shim = expand_home(&cfg.shim_path, &home_dir());
     install_shim(&shim, &sidecar_path()?)?;
     Ok(shim.to_string_lossy().into_owned())
 }
 
 pub fn refresh_shim_if_present(manager: &ConfigManager) {
-    let cfg = manager.current().memory;
+    let cfg = manager.memory();
     let shim = expand_home(&cfg.shim_path, &home_dir());
     if !shim.exists() {
         return;

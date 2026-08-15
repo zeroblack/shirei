@@ -438,6 +438,27 @@ export const memoryInit = (path: string) =>
   invoke<string>("memory_init", { path });
 export const memoryShimInstall = () => invoke<string>("memory_shim_install");
 
+export interface MemoryRegistration {
+  id: string;
+  detected: boolean;
+  state: "registered" | "missing" | "drifted";
+  config_path: string;
+}
+export interface MemoryPreview {
+  config_path: string;
+  before: string;
+  after: string;
+  diff: string;
+}
+export const memoryAdaptersStatus = () =>
+  invoke<MemoryRegistration[]>("memory_adapters_status");
+export const memoryAdapterPreview = (id: string) =>
+  invoke<MemoryPreview>("memory_adapter_preview", { id });
+export const memoryAdapterRegister = (id: string) =>
+  invoke<MemoryRegistration>("memory_adapter_register", { id });
+export const memoryAdapterUnregister = (id: string) =>
+  invoke<MemoryRegistration>("memory_adapter_unregister", { id });
+
 export const openConfigFile = () => invoke<void>("open_config_file");
 export const pickProjectDir = () => invoke<string | null>("pick_project_dir");
 export const pathIsGitRepo = (path: string) =>
