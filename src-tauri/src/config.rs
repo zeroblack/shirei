@@ -266,6 +266,147 @@ impl Default for EditorTheme {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]
+pub struct MemoryCliAdapter {
+    pub id: String,
+    pub display_name: String,
+    pub binary: String,
+    pub scope: String,
+    pub config_path: String,
+    pub format: String,
+    pub insertion: String,
+    pub snippet: serde_json::Value,
+}
+
+impl Default for MemoryCliAdapter {
+    fn default() -> Self {
+        MemoryCliAdapter {
+            id: String::new(),
+            display_name: String::new(),
+            binary: String::new(),
+            scope: "user".into(),
+            config_path: String::new(),
+            format: "json".into(),
+            insertion: String::new(),
+            snippet: serde_json::Value::Null,
+        }
+    }
+}
+
+fn adapter(
+    id: &str,
+    name: &str,
+    binary: &str,
+    path: &str,
+    format: &str,
+    insertion: &str,
+    snippet: serde_json::Value,
+) -> MemoryCliAdapter {
+    MemoryCliAdapter {
+        id: id.into(),
+        display_name: name.into(),
+        binary: binary.into(),
+        scope: "user".into(),
+        config_path: path.into(),
+        format: format.into(),
+        insertion: insertion.into(),
+        snippet,
+    }
+}
+
+pub fn default_cli_adapters() -> Vec<MemoryCliAdapter> {
+    let cmd = serde_json::json!({ "command": "{shim}" });
+    vec![
+        adapter(
+            "claude",
+            "Claude Code",
+            "claude",
+            "~/.claude.json",
+            "json",
+            "/mcpServers/shirei-memory",
+            serde_json::json!({ "type": "stdio", "command": "{shim}", "args": [] }),
+        ),
+        adapter(
+            "codex",
+            "Codex",
+            "codex",
+            "~/.codex/config.toml",
+            "toml",
+            "mcp_servers.shirei-memory",
+            cmd.clone(),
+        ),
+        adapter(
+            "gemini",
+            "Gemini CLI",
+            "gemini",
+            "~/.gemini/settings.json",
+            "json",
+            "/mcpServers/shirei-memory",
+            cmd.clone(),
+        ),
+        adapter(
+            "opencode",
+            "OpenCode",
+            "opencode",
+            "~/.config/opencode/opencode.json",
+            "json",
+            "/mcp/shirei-memory",
+            serde_json::json!({ "type": "local", "command": ["{shim}"] }),
+        ),
+        adapter(
+            "cursor",
+            "Cursor",
+            "cursor-agent",
+            "~/.cursor/mcp.json",
+            "json",
+            "/mcpServers/shirei-memory",
+            cmd.clone(),
+        ),
+        adapter(
+            "amp",
+            "Amp",
+            "amp",
+            "~/.config/amp/settings.json",
+            "json",
+            "/amp.mcpServers/shirei-memory",
+            cmd,
+        ),
+    ]
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct MemoryConfig {
+    pub enabled: bool,
+    pub dir_name: String,
+    pub overview_max_bytes: usize,
+    pub stale_after_days: u64,
+    pub stale_after_commits: usize,
+    pub resume_stale_hours: u64,
+    pub resume_prompt: String,
+    pub save_prompt: String,
+    pub cli_adapters: Vec<MemoryCliAdapter>,
+    pub shim_path: String,
+}
+
+impl Default for MemoryConfig {
+    fn default() -> Self {
+        MemoryConfig {
+            enabled: true,
+            dir_name: shirei_memory_core::DEFAULT_DIR_NAME.into(),
+            overview_max_bytes: 4096,
+            stale_after_days: 14,
+            stale_after_commits: 20,
+            resume_stale_hours: 72,
+            resume_prompt: "Read the project memory (memory_overview, then memory_resume) and continue from where it left off.".into(),
+            save_prompt: "Summarize this session into project memory with memory_save_session, then update memory_set_resume with the current state and next step.".into(),
+            cli_adapters: default_cli_adapters(),
+            shim_path: "~/.shirei/bin/shirei-memory".into(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
 pub struct EditorConfig {
     pub vim: bool,
     pub autosave: bool,
@@ -1406,6 +1547,8 @@ pub struct Config {
     pub session: SessionConfig,
     pub editor: EditorConfig,
     #[serde(default)]
+    pub memory: MemoryConfig,
+    #[serde(default)]
     pub git: GitConfig,
     pub logging: LoggingConfig,
     pub limits: LimitsConfig,
@@ -1455,6 +1598,7 @@ impl Default for Config {
             render: RenderConfig::default(),
             session: SessionConfig::default(),
             editor: EditorConfig::default(),
+            memory: MemoryConfig::default(),
             git: GitConfig::default(),
             logging: LoggingConfig::default(),
             limits: LimitsConfig::default(),
@@ -1611,6 +1755,29 @@ pub fn config_set(app: AppHandle, manager: State<'_, ConfigManager>, config: Con
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn memory_defaults_round_trip_and_seed_adapters() {
+        let c = Config::default();
+        assert_eq!(c.memory.dir_name, ".shirei/memory");
+        assert!(
+            c.memory
+                .cli_adapters
+                .iter()
+                .any(|a| a.id == "claude" && a.format == "json")
+        );
+        assert!(
+            c.memory
+                .cli_adapters
+                .iter()
+                .any(|a| a.id == "codex" && a.format == "toml")
+        );
+        let json = serde_json::to_string(&c).unwrap();
+        let back: Config = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.memory, c.memory);
+        let legacy: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(legacy.memory, MemoryConfig::default());
+    }
 
     #[test]
     fn session_defaults_are_sane() {

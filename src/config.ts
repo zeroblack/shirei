@@ -300,12 +300,46 @@ export interface CliRegistryEntry {
   custom: boolean;
 }
 
+export interface MemoryCliAdapter {
+  id: string;
+  display_name: string;
+  binary: string;
+  scope: "user" | "project";
+  config_path: string;
+  format: "json" | "toml";
+  insertion: string;
+  snippet: unknown;
+}
+
+export interface MemoryConfig {
+  enabled: boolean;
+  dir_name: string;
+  overview_max_bytes: number;
+  stale_after_days: number;
+  stale_after_commits: number;
+  resume_stale_hours: number;
+  resume_prompt: string;
+  save_prompt: string;
+  cli_adapters: MemoryCliAdapter[];
+  shim_path: string;
+}
+
+export interface MemoryStatus {
+  exists: boolean;
+  overview_updated: string | null;
+  stale: boolean;
+  stale_reason: string | null;
+  sessions_count: number;
+  resume_age_hours: number | null;
+}
+
 export interface Config {
   locale: Locale;
   font: { family: string; size: number };
   fonts: FontsConfig;
   render: RenderConfig;
   session: SessionConfig;
+  memory: MemoryConfig;
   editor: {
     vim: boolean;
     autosave: boolean;
@@ -398,6 +432,11 @@ export const configSet = (config: Config) =>
   invoke<void>("config_set", { config });
 export const onConfigChanged = (cb: (c: Config) => void) =>
   listen<Config>("config-changed", (e) => cb(e.payload));
+export const memoryStatus = (path: string) =>
+  invoke<MemoryStatus>("memory_status", { path });
+export const memoryInit = (path: string) =>
+  invoke<string>("memory_init", { path });
+export const memoryShimInstall = () => invoke<string>("memory_shim_install");
 
 export const openConfigFile = () => invoke<void>("open_config_file");
 export const pickProjectDir = () => invoke<string | null>("pick_project_dir");

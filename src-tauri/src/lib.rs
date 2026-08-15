@@ -9,6 +9,7 @@ mod fonts;
 mod fs;
 mod git;
 mod logs;
+mod memory;
 mod metrics;
 mod mux_client;
 mod notify;
@@ -183,6 +184,7 @@ pub fn run() {
                 std::env::consts::OS
             );
             app.state::<config::ConfigManager>().load(app.handle());
+            memory::refresh_shim_if_present(&app.state::<config::ConfigManager>());
             if let Ok(dir) = app.path().app_config_dir() {
                 let _ = std::fs::create_dir_all(&dir);
                 if let Err(e) = app.state::<todos::TodoStore>().open(&dir.join("todos.db")) {
@@ -472,6 +474,9 @@ pub fn run() {
             preview::preview_hide,
             preview::preview_reload,
             preview::preview_close,
+            memory::memory_status,
+            memory::memory_init,
+            memory::memory_shim_install,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Focused(true) = event
