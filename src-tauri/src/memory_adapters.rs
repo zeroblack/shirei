@@ -55,22 +55,24 @@ fn pointer_parts(pointer: &str) -> Vec<String> {
 fn json_parent_mut<'a>(
     root: &'a mut serde_json::Value,
     parts: &[String],
-) -> &'a mut serde_json::Map<String, serde_json::Value> {
+) -> Result<&'a mut serde_json::Map<String, serde_json::Value>> {
     let mut cur = root;
+    let mut label = "root".to_string();
     for p in &parts[..parts.len() - 1] {
         if !cur.is_object() {
-            *cur = serde_json::json!({});
+            return Err(Error::Memory(format!("{label} is not an object")));
         }
         cur = cur
             .as_object_mut()
             .unwrap()
             .entry(p.clone())
             .or_insert_with(|| serde_json::json!({}));
+        label = p.clone();
     }
     if !cur.is_object() {
-        *cur = serde_json::json!({});
+        return Err(Error::Memory(format!("{label} is not an object")));
     }
-    cur.as_object_mut().unwrap()
+    Ok(cur.as_object_mut().unwrap())
 }
 
 fn json_string(doc: &serde_json::Value) -> Result<String> {
@@ -84,9 +86,31 @@ fn toml_doc(text: &str) -> Result<toml_edit::DocumentMut> {
         .map_err(|e| Error::Memory(format!("existing config is not valid TOML: {e}")))
 }
 
-fn toml_table_from_json(v: &serde_json::Value) -> toml_edit::Table {
+fn toml_array_from_json(a: &[serde_json::Value]) -> Result<toml_edit::Array> {
+    let mut arr = toml_edit::Array::new();
+    for e in a {
+        match e {
+            serde_json::Value::String(s) => arr.push(s.as_str()),
+            serde_json::Value::Bool(b) => arr.push(*b),
+            serde_json::Value::Number(n) => match n.as_i64() {
+                Some(i) => arr.push(i),
+                None => arr.push(n.as_f64().unwrap_or(0.0)),
+            },
+            other => {
+                return Err(Error::Memory(format!(
+                    "cannot represent array element {other} in TOML"
+                )));
+            }
+        }
+    }
+    Ok(arr)
+}
+
+fn toml_table_from_json(v: &serde_json::Value) -> Result<toml_edit::Table> {
     let mut t = toml_edit::Table::new();
-    let Some(o) = v.as_object() else { return t };
+    let Some(o) = v.as_object() else {
+        return Ok(t);
+    };
     for (k, x) in o {
         let item = match x {
             serde_json::Value::String(s) => toml_edit::value(s.as_str()),
@@ -95,18 +119,17 @@ fn toml_table_from_json(v: &serde_json::Value) -> toml_edit::Table {
                 Some(i) => toml_edit::value(i),
                 None => toml_edit::value(n.as_f64().unwrap_or(0.0)),
             },
-            serde_json::Value::Array(a) => {
-                let mut arr = toml_edit::Array::new();
-                for e in a.iter().filter_map(|e| e.as_str()) {
-                    arr.push(e);
-                }
-                toml_edit::value(arr)
+            serde_json::Value::Array(a) => toml_edit::value(toml_array_from_json(a)?),
+            serde_json::Value::Object(_) => toml_edit::Item::Table(toml_table_from_json(x)?),
+            other => {
+                return Err(Error::Memory(format!(
+                    "cannot represent {k} ({other}) in TOML"
+                )));
             }
-            _ => continue,
         };
         t.insert(k, item);
     }
-    t
+    Ok(t)
 }
 
 fn toml_walk_mut<'a>(
@@ -136,7 +159,7 @@ pub fn apply(text: &str, adapter: &MemoryCliAdapter, shim: &str) -> Result<Strin
                 .last()
                 .cloned()
                 .ok_or_else(|| Error::Memory("empty insertion".into()))?;
-            json_parent_mut(&mut doc, &parts).insert(leaf, snippet);
+            json_parent_mut(&mut doc, &parts)?.insert(leaf, snippet);
             json_string(&doc)
         }
         "toml" => {
@@ -147,7 +170,10 @@ pub fn apply(text: &str, adapter: &MemoryCliAdapter, shim: &str) -> Result<Strin
                 .ok_or_else(|| Error::Memory("empty insertion".into()))?;
             let parent = toml_walk_mut(&mut doc, parents, true)
                 .ok_or_else(|| Error::Memory("insertion path is not a table".into()))?;
-            parent.insert(leaf, toml_edit::Item::Table(toml_table_from_json(&snippet)));
+            parent.insert(
+                leaf,
+                toml_edit::Item::Table(toml_table_from_json(&snippet)?),
+            );
             Ok(doc.to_string())
         }
         other => Err(Error::Memory(format!("unsupported adapter format {other}"))),
@@ -187,6 +213,43 @@ pub fn remove(text: &str, adapter: &MemoryCliAdapter) -> Result<String> {
     }
 }
 
+fn toml_value_to_json(v: &toml_edit::Value) -> Option<serde_json::Value> {
+    match v {
+        toml_edit::Value::String(s) => Some(serde_json::Value::String(s.value().clone())),
+        toml_edit::Value::Integer(i) => Some(serde_json::json!(*i.value())),
+        toml_edit::Value::Float(f) => Some(serde_json::json!(*f.value())),
+        toml_edit::Value::Boolean(b) => Some(serde_json::json!(*b.value())),
+        toml_edit::Value::Array(a) => Some(serde_json::Value::Array(
+            a.iter().filter_map(toml_value_to_json).collect(),
+        )),
+        toml_edit::Value::InlineTable(t) => Some(serde_json::Value::Object(
+            t.iter()
+                .filter_map(|(k, v)| toml_value_to_json(v).map(|j| (k.to_string(), j)))
+                .collect(),
+        )),
+        toml_edit::Value::Datetime(_) => None,
+    }
+}
+
+fn toml_table_to_json(t: &toml_edit::Table) -> serde_json::Value {
+    serde_json::Value::Object(
+        t.iter()
+            .filter_map(|(k, item)| toml_item_to_json(item).map(|j| (k.to_string(), j)))
+            .collect(),
+    )
+}
+
+fn toml_item_to_json(item: &toml_edit::Item) -> Option<serde_json::Value> {
+    match item {
+        toml_edit::Item::None => None,
+        toml_edit::Item::Value(v) => toml_value_to_json(v),
+        toml_edit::Item::Table(t) => Some(toml_table_to_json(t)),
+        toml_edit::Item::ArrayOfTables(arr) => Some(serde_json::Value::Array(
+            arr.iter().map(toml_table_to_json).collect(),
+        )),
+    }
+}
+
 fn toml_entry_as_json(text: &str, insertion: &str) -> Option<serde_json::Value> {
     let doc = toml_doc(text).ok()?;
     let mut table = doc.as_table();
@@ -196,8 +259,7 @@ fn toml_entry_as_json(text: &str, insertion: &str) -> Option<serde_json::Value> 
         table = table.get(seg)?.as_table()?;
     }
     let entry = table.get(leaf)?.as_table()?;
-    let parsed: toml::Value = entry.to_string().parse().ok()?;
-    serde_json::to_value(parsed).ok()
+    Some(toml_table_to_json(entry))
 }
 
 pub fn inspect(text: &str, adapter: &MemoryCliAdapter, shim: &str) -> &'static str {
@@ -241,12 +303,6 @@ fn adapter_by_id(cfg: &MemoryConfig, id: &str) -> Result<MemoryCliAdapter> {
         .ok_or_else(|| Error::Memory(format!("unknown adapter {id}")))
 }
 
-fn detected(binary: &str) -> bool {
-    std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p).any(|d| d.join(binary).is_file()))
-        .unwrap_or(false)
-}
-
 fn read_or_empty(path: &Path) -> Result<String> {
     match std::fs::read_to_string(path) {
         Ok(t) => Ok(t),
@@ -261,32 +317,42 @@ fn shim_string(cfg: &MemoryConfig, home: &Path) -> String {
         .into_owned()
 }
 
+fn needs_write(current_state: &str) -> bool {
+    current_state != "missing"
+}
+
 fn state_of(a: &MemoryCliAdapter, shim: &str, home: &Path) -> Result<RegistrationState> {
     let path = expand_home(&a.config_path, home);
     let text = read_or_empty(&path)?;
     Ok(RegistrationState {
         id: a.id.clone(),
-        detected: detected(&a.binary),
+        detected: crate::dialog::binary_on_path(a.binary.clone()),
         state: inspect(&text, a, shim),
         config_path: path.to_string_lossy().into_owned(),
     })
+}
+
+fn sibling(path: &Path, suffix: &str) -> std::path::PathBuf {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    path.with_file_name(format!("{name}{suffix}"))
 }
 
 fn write_with_backup(path: &Path, text: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let bak = path.with_file_name(format!(
-        "{}.bak",
-        path.file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    ));
+    let bak = sibling(path, ".bak");
     if path.exists() && !bak.exists() {
         std::fs::copy(path, &bak)?;
     }
-    let tmp = path.with_extension("tmp");
+    let tmp = sibling(path, ".tmp");
     std::fs::write(&tmp, text)?;
+    if let Ok(meta) = std::fs::metadata(path) {
+        std::fs::set_permissions(&tmp, meta.permissions())?;
+    }
     std::fs::rename(&tmp, path)?;
     Ok(())
 }
@@ -342,10 +408,15 @@ pub fn memory_adapter_unregister(
     let cfg = manager.memory();
     let home = home_dir();
     let a = adapter_by_id(&cfg, &id)?;
+    let shim = shim_string(&cfg, &home);
     let path = expand_home(&a.config_path, &home);
-    let after = remove(&read_or_empty(&path)?, &a)?;
+    let text = read_or_empty(&path)?;
+    if !needs_write(inspect(&text, &a, &shim)) {
+        return state_of(&a, &shim, &home);
+    }
+    let after = remove(&text, &a)?;
     write_with_backup(&path, &after)?;
-    state_of(&a, &shim_string(&cfg, &home), &home)
+    state_of(&a, &shim, &home)
 }
 
 #[cfg(test)]
@@ -433,5 +504,51 @@ mod tests {
     fn invalid_existing_config_is_an_error_not_a_clobber() {
         assert!(apply("{ not json", &adapter("claude"), SHIM).is_err());
         assert!(apply("[broken", &adapter("codex"), SHIM).is_err());
+    }
+
+    #[test]
+    fn non_object_intermediate_json_key_is_an_error_not_a_clobber() {
+        let a = adapter("claude");
+        let before = "{\n  \"mcpServers\": \"not-an-object\"\n}\n";
+        let err = apply(before, &a, SHIM).unwrap_err();
+        assert!(err.to_string().contains("mcpServers"), "{err}");
+    }
+
+    #[test]
+    fn toml_nested_object_round_trips_through_apply_and_inspect() {
+        let mut a = adapter("codex");
+        a.snippet = serde_json::json!({
+            "command": "{shim}",
+            "env": { "FOO": "bar", "COUNT": 2 }
+        });
+        let after = apply("", &a, SHIM).unwrap();
+        assert!(after.contains("[mcp_servers.shirei-memory.env]"), "{after}");
+        assert_eq!(inspect(&after, &a, SHIM), "registered");
+    }
+
+    #[test]
+    fn toml_array_with_unrepresentable_element_is_an_error() {
+        let mut a = adapter("codex");
+        a.snippet = serde_json::json!({ "args": [{ "nested": true }] });
+        assert!(apply("", &a, SHIM).is_err());
+    }
+
+    #[test]
+    fn write_with_backup_preserves_existing_file_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("claude.json");
+        std::fs::write(&path, "{}").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        write_with_backup(&path, "{}\n").unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn unregister_skips_the_write_when_already_missing() {
+        assert!(!needs_write("missing"));
+        assert!(needs_write("registered"));
+        assert!(needs_write("drifted"));
     }
 }
