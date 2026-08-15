@@ -228,6 +228,10 @@ impl Store {
         if id.is_empty() || id.contains('/') || id.contains("..") {
             return Err(StoreError::InvalidArgs("invalid session id".into()));
         }
+        self.ensure()?;
+        if !self.path(&format!("sessions/{id}.md")).is_file() {
+            return Err(StoreError::InvalidArgs("unknown session id".into()));
+        }
         self.read_doc(&format!("sessions/{id}.md"))
     }
 
@@ -253,7 +257,13 @@ impl Store {
             now.hour(),
             now.minute()
         );
-        let id = format!("{stamp}-{}-{}", slug(cli), slug(title));
+        let base_id = format!("{stamp}-{}-{}", slug(cli), slug(title));
+        let mut id = base_id.clone();
+        let mut suffix = 2;
+        while self.path(&format!("sessions/{id}.md")).exists() {
+            id = format!("{base_id}-{suffix}");
+            suffix += 1;
+        }
         let mut body = format!("# {title}\n\n{}\n", input.summary.trim());
         let sections = [
             ("Changes", &input.changes),
@@ -439,6 +449,43 @@ mod tests {
             s.session("../overview"),
             Err(StoreError::InvalidArgs(_))
         ));
+    }
+
+    #[test]
+    fn session_with_unknown_id_is_an_error_not_an_empty_doc() {
+        let (_t, s) = store();
+        s.init("x").unwrap();
+        assert!(matches!(
+            s.session("2099-01-01-0000-claude-code-nope"),
+            Err(StoreError::InvalidArgs(_))
+        ));
+    }
+
+    #[test]
+    fn save_session_dedupes_same_minute_same_title() {
+        let (_t, s) = store();
+        s.init("x").unwrap();
+        let input = SessionInput {
+            title: "Fix caret jump".into(),
+            summary: "first pass".into(),
+            ..Default::default()
+        };
+        let first = s
+            .save_session(&input, "x", "claude-code", None, Path::new("/p"))
+            .unwrap();
+        let second = s
+            .save_session(&input, "x", "claude-code", None, Path::new("/p"))
+            .unwrap();
+        assert_ne!(first, second);
+        assert_eq!(second, format!("{first}-2"));
+        assert_eq!(
+            s.session(&first).unwrap().body,
+            "# Fix caret jump\n\nfirst pass\n"
+        );
+        assert_eq!(
+            s.session(&second).unwrap().body,
+            "# Fix caret jump\n\nfirst pass\n"
+        );
     }
 
     #[test]
