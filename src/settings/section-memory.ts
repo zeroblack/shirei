@@ -6,7 +6,9 @@ import {
   memoryAdapterUnregister,
 } from "../config";
 import { confirmDialog } from "../confirm";
+import { errorMessage } from "../errors";
 import { type MessageKey, t } from "../i18n";
+import { showToast } from "../toast";
 import type { SettingsSection } from "./shell";
 import { boolField, groupLabel, numField, section, textField } from "./widgets";
 
@@ -88,23 +90,39 @@ export const memorySection: SettingsSection = {
     list.className = "memory-adapters";
     const labels = new Map(m.cli_adapters.map((a) => [a.id, a.display_name]));
     const refresh = async () => {
-      const regs = await memoryAdaptersStatus();
-      list.replaceChildren(
-        ...regs.map((r) =>
-          renderAdapterRow(r, labels.get(r.id) ?? r.id, {
-            onRegister: async (id) => {
-              if (await confirmPreview(id)) {
-                await memoryAdapterRegister(id);
-                await refresh();
-              }
-            },
-            onUnregister: async (id) => {
-              await memoryAdapterUnregister(id);
-              await refresh();
-            },
-          }),
-        ),
-      );
+      try {
+        const regs = await memoryAdaptersStatus();
+        list.replaceChildren(
+          ...regs.map((r) =>
+            renderAdapterRow(r, labels.get(r.id) ?? r.id, {
+              onRegister: (id) => void handleRegister(id),
+              onUnregister: (id) => void handleUnregister(id),
+            }),
+          ),
+        );
+      } catch (e) {
+        showToast(errorMessage(e));
+      }
+    };
+    const handleRegister = async (id: string): Promise<void> => {
+      try {
+        if (await confirmPreview(id)) {
+          await memoryAdapterRegister(id);
+        }
+      } catch (e) {
+        showToast(errorMessage(e));
+      } finally {
+        await refresh();
+      }
+    };
+    const handleUnregister = async (id: string): Promise<void> => {
+      try {
+        await memoryAdapterUnregister(id);
+      } catch (e) {
+        showToast(errorMessage(e));
+      } finally {
+        await refresh();
+      }
     };
     void refresh();
     return section(
