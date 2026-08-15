@@ -92,6 +92,16 @@ and blame.
 - **Inline blame (`Cmd+Shift+B`).** Per-line authorship, folded by commit, with a hover
   card. Off by default.
 
+#### Project memory, for any CLI &nbsp;<sub>· new in this release</sub>
+
+- **A memory that lives with the project.** Overview, decisions, a resume note, and session
+  summaries in `.shirei/memory/`, versioned with the repo instead of trapped in one CLI's
+  context window.
+- **Served over MCP.** A bundled `shirei-memory` server hands that memory to any AI CLI you
+  register from Settings, in a shared format instead of a proprietary one.
+- **Keyboard actions to open, resume, and save it**, plus a tab badge that flags memory gone
+  stale against the code.
+
 #### Built for the long haul
 
 - **Impeccable rendering.** xterm.js on a WebGL renderer, so box-drawing, tool-call

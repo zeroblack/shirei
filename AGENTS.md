@@ -36,15 +36,18 @@ The AI CLI session is the center; the editor, the files, and search are satellit
 
 - `pnpm tauri dev` — development (opens the window).
 - `pnpm build` — compiles the frontend (tsc + vite).
+- `pnpm build:sidecars` — builds `shirei-mux` and `shirei-memory` as sidecar binaries.
 - `pnpm lint` — Biome.
 
 ## Architecture
 
-Three layers:
+Frontend, Tauri layer, and shared crates:
 
 - **`src/` frontend** — `terminal.ts` = xterm session + WebGL/unicode11 render, `tabbar.ts`, `app.ts`, `store.ts`. `panetree.ts`/`panegrid.ts` = pane tree and grid; layout templates + `config.layout.default_template` decide what each tab is born with (falls back to a plain terminal if the template asks for a missing command). `tokens.css` = design scales (typography/spacing/color) the rest is built on. Cross-cutting helpers: `overlay.ts` (dialogs: role, focus-trap, dismiss), `drag.ts` (drag with per-frame coalescing), `errors.ts` (reads the backend's error discriminant), `colors.ts` (color mix/alpha to tint the chrome from the theme). **Settings** (`settings/`): screens registered in `registry.ts` (sidebar order + groups), each one in `section-*.ts` built with `widgets.ts` (`section`/`field`/`groupLabel`/`boolField`/`colorField`…; `section()` wraps the fields in the 2-column `.section-fields` grid); `themes.ts` = palette catalog; `shell.ts` mounts sidebar + content with global search.
 - **`src-tauri/src/` Tauri layer** — IPC commands, `config.rs`, `error.rs` (enum that serializes `{ code, message }`). Delegates PTY management to the shared crate. Multi-window app: the main one is `main` and new ones are `win-N`; **every window must be in a capability** under `capabilities/` (the `win-*` glob covers runtime ones) or it starts blank from denied permissions.
 - **`mux/` crate `shirei-mux`** — PTY logic, persistent-session daemon socket, process inspection, and locks; lives once here and the app consumes it (don't duplicate PTY across crates).
+- **`memory-core/` crate `shirei-memory-core`** — project root discovery, the `.shirei/memory/` markdown store, and staleness detection; no I/O beyond the filesystem, consumed by both the app and the MCP sidecar.
+- **`memory/` crate `shirei-memory`** — the `shirei-memory` stdio MCP server (built on `rmcp`) that exposes project memory as tools/resources to any AI CLI; built as a sidecar via `pnpm build:sidecars`.
 
 Mirrored Rust↔TS config (`config.rs` ↔ `config.ts`), nothing hardcoded.
 

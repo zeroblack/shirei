@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Project memory: a per-project `.shirei/memory/` (overview, decisions, resume note, session
+  summaries) served to any AI CLI through the bundled `shirei-memory` MCP server. Keyboard
+  actions to open it, resume from it and save the current session; Settings > Memory with
+  one-click, previewed registration for Claude Code, Codex, Gemini CLI, OpenCode, Cursor and
+  Amp; tab badge that flags stale memory.
+
 ## [0.16.8] - 2026-08-07
 
 ### Added
