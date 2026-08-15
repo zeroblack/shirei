@@ -548,6 +548,7 @@ export const settingsEn = {
   "settings.memory.unregister": "Unregister",
   "settings.memory.previewTitle": "This will edit",
   "settings.memory.apply": "Apply",
+  "settings.memory.shimInstalled": "Launcher installed at",
 
   "settings.home.title": "指令 Shirei",
   "settings.home.tagline": "The session leads. You command.",

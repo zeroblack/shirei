@@ -107,7 +107,8 @@ export const memorySection: SettingsSection = {
     const handleRegister = async (id: string): Promise<void> => {
       try {
         if (await confirmPreview(id)) {
-          await memoryAdapterRegister(id);
+          const state = await memoryAdapterRegister(id);
+          showToast(`${t("settings.memory.shimInstalled")} ${state.shim_path}`);
         }
       } catch (e) {
         showToast(errorMessage(e));

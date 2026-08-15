@@ -568,6 +568,7 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.memory.unregister": "Quitar",
   "settings.memory.previewTitle": "Esto editará",
   "settings.memory.apply": "Aplicar",
+  "settings.memory.shimInstalled": "Lanzador instalado en",
 
   "settings.home.title": "指令 Shirei",
   "settings.home.tagline": "La sesión manda. Tú comandas.",

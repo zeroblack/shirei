@@ -436,13 +436,13 @@ export const memoryStatus = (path: string) =>
   invoke<MemoryStatus>("memory_status", { path });
 export const memoryInit = (path: string) =>
   invoke<string>("memory_init", { path });
-export const memoryShimInstall = () => invoke<string>("memory_shim_install");
 
 export interface MemoryRegistration {
   id: string;
   detected: boolean;
   state: "registered" | "missing" | "drifted";
   config_path: string;
+  shim_path: string;
 }
 export interface MemoryPreview {
   config_path: string;
