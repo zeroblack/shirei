@@ -44,7 +44,6 @@ tauri-plugin-notification = "2.3.3"
 regex = "1.13.0"
 shirei-memory-core = { path = "../memory-core" }
 toml_edit = "0.22"
-toml = "0.8"
 time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
 
 [dev-dependencies]
