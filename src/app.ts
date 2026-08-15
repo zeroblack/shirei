@@ -1158,6 +1158,9 @@ export class App {
     this.updateContextHint();
     webglPool.setCap(c.render.webgl_pool_cap);
     this.applyFocusCellsConfig(c);
+    if (previous.memory.enabled !== c.memory.enabled) {
+      void this.refreshMemoryBadge();
+    }
     if (
       previous.session.snapshot_interval_secs !==
         c.session.snapshot_interval_secs ||
@@ -3125,12 +3128,11 @@ export class App {
   private treeChangeTimer: number | null = null;
 
   private onTreeChanged(): void {
-    void this.refreshMemoryBadge();
-    if (!this.panelVisible) return;
     if (this.treeChangeTimer !== null)
       window.clearTimeout(this.treeChangeTimer);
     this.treeChangeTimer = window.setTimeout(() => {
       this.treeChangeTimer = null;
+      void this.refreshMemoryBadge();
       if (this.panelVisible) void this.tree.refresh();
     }, 120);
   }
