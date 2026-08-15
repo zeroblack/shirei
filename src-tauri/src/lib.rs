@@ -477,7 +477,6 @@ pub fn run() {
             preview::preview_close,
             memory::memory_status,
             memory::memory_init,
-            memory::memory_shim_install,
             memory_adapters::memory_adapters_status,
             memory_adapters::memory_adapter_preview,
             memory_adapters::memory_adapter_register,

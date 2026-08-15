@@ -83,7 +83,12 @@ pub fn sidecar_path() -> Result<PathBuf> {
 }
 
 pub fn shim_script(target: &Path) -> String {
-    format!("#!/bin/sh\nexec \"{}\" \"$@\"\n", target.display())
+    let escaped = target
+        .display()
+        .to_string()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"");
+    format!("#!/bin/sh\nexec \"{escaped}\" \"$@\"\n")
 }
 
 pub fn install_shim(shim: &Path, target: &Path) -> Result<()> {
@@ -103,14 +108,6 @@ pub fn install_shim(shim: &Path, target: &Path) -> Result<()> {
     std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
     std::fs::rename(&tmp, shim)?;
     Ok(())
-}
-
-#[tauri::command]
-pub fn memory_shim_install(manager: State<'_, ConfigManager>) -> Result<String> {
-    let cfg = manager.memory();
-    let shim = expand_home(&cfg.shim_path, &home_dir());
-    install_shim(&shim, &sidecar_path()?)?;
-    Ok(shim.to_string_lossy().into_owned())
 }
 
 pub fn refresh_shim_if_present(manager: &ConfigManager) {
@@ -157,6 +154,15 @@ mod tests {
         assert_eq!(
             std::fs::metadata(&shim).unwrap().permissions().mode() & 0o111,
             0o111
+        );
+    }
+
+    #[test]
+    fn shim_script_escapes_quotes_and_backslashes_in_target() {
+        let script = shim_script(Path::new("/Users/me/\"weird\"\\App/shirei-memory"));
+        assert_eq!(
+            script,
+            "#!/bin/sh\nexec \"/Users/me/\\\"weird\\\"\\\\App/shirei-memory\" \"$@\"\n"
         );
     }
 }
