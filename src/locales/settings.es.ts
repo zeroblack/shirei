@@ -14,6 +14,7 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.group.system": "Sistema",
 
   "settings.home.label": "Inicio",
+  "settings.memory.label": "Memoria del proyecto",
   "settings.shortcuts.label": "Atajos",
   "settings.editor.label": "Editor",
   "settings.editor.title": "Editor",
@@ -541,6 +542,33 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
     "Agrega una carpeta y ábrela cuando quieras con su layout y color, desde el command palette.",
   "settings.projects.newProject": "＋ Nuevo proyecto",
 
+  "settings.memory.title": "Memoria del proyecto",
+  "settings.memory.desc":
+    "Notas por proyecto que cualquier CLI de IA lee y escribe vía MCP.",
+  "settings.memory.group.general": "General",
+  "settings.memory.group.staleness": "Vigencia",
+  "settings.memory.group.prompts": "Prompts",
+  "settings.memory.group.clis": "Registro en CLIs",
+  "settings.memory.enabled": "Activar memoria del proyecto",
+  "settings.memory.enabledDesc":
+    "Muestra las acciones y la insignia de memoria.",
+  "settings.memory.overviewMax": "Tope del overview (bytes)",
+  "settings.memory.staleDays": "Vencido tras (días)",
+  "settings.memory.staleCommits": "Vencido tras (commits)",
+  "settings.memory.resumeHours": "Nota de retomar vencida tras (horas)",
+  "settings.memory.resumePrompt": "Prompt para retomar",
+  "settings.memory.savePrompt": "Prompt para guardar sesión",
+  "settings.memory.detected": "en PATH",
+  "settings.memory.notDetected": "no encontrado",
+  "settings.memory.state.registered": "Registrado",
+  "settings.memory.state.missing": "Sin registrar",
+  "settings.memory.state.drifted": "Difiere",
+  "settings.memory.register": "Registrar",
+  "settings.memory.repair": "Reparar",
+  "settings.memory.unregister": "Quitar",
+  "settings.memory.previewTitle": "Esto editará",
+  "settings.memory.apply": "Aplicar",
+
   "settings.home.title": "指令 Shirei",
   "settings.home.tagline": "La sesión manda. Tú comandas.",
   "settings.home.env.theme": "Tema",
@@ -612,6 +640,7 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.updates.search":
     "actualizaciones actualizar version release upgrade descargar instalar",
   "settings.projects.search": "proyecto carpeta ruta layout plantilla",
+  "settings.memory.search": "memoria mcp retomar sesión cli registrar",
   "settings.about.search":
     "about acerca version licencia opensource dioni blog shirei significado japones agentes ia sesion mit actualizacion actualizar version nueva",
 };

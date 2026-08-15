@@ -19,6 +19,7 @@ import { editorSection } from "./settings/section-editor";
 import { focusSection } from "./settings/section-focus";
 import { gitSection } from "./settings/section-git";
 import { homeSection } from "./settings/section-home";
+import { memorySection } from "./settings/section-memory";
 import { performanceSection } from "./settings/section-performance";
 import { projectsSection } from "./settings/section-projects";
 import { recordingSection } from "./settings/section-recording";
@@ -36,6 +37,7 @@ const BY_ID: Record<SectionId, SettingsSection> = {
   editor: editorSection,
   git: gitSection,
   projects: projectsSection,
+  memory: memorySection,
   shortcuts: shortcutsSection,
   terminal: terminalSection,
   sessions: sessionSection,
