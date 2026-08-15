@@ -15,8 +15,10 @@ dist-ssr
 # Build artifacts
 src-tauri/target/
 mux/target/
+memory-core/target/
 src-tauri/binaries/
 *.dmg
+Cargo.lock
 
 # Environment
 .env
