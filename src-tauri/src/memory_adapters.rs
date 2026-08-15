@@ -11,6 +11,7 @@ pub struct RegistrationState {
     pub detected: bool,
     pub state: &'static str,
     pub config_path: String,
+    pub shim_path: String,
 }
 
 #[derive(Serialize)]
@@ -322,13 +323,28 @@ fn needs_write(current_state: &str) -> bool {
 }
 
 fn state_of(a: &MemoryCliAdapter, shim: &str, home: &Path) -> Result<RegistrationState> {
+    state_of_with(
+        a,
+        shim,
+        home,
+        crate::dialog::binary_on_path(a.binary.clone()),
+    )
+}
+
+fn state_of_with(
+    a: &MemoryCliAdapter,
+    shim: &str,
+    home: &Path,
+    detected: bool,
+) -> Result<RegistrationState> {
     let path = expand_home(&a.config_path, home);
     let text = read_or_empty(&path)?;
     Ok(RegistrationState {
         id: a.id.clone(),
-        detected: crate::dialog::binary_on_path(a.binary.clone()),
+        detected,
         state: inspect(&text, a, shim),
         config_path: path.to_string_lossy().into_owned(),
+        shim_path: shim.to_string(),
     })
 }
 
@@ -358,14 +374,31 @@ fn write_with_backup(path: &Path, text: &str) -> Result<()> {
 }
 
 #[tauri::command]
-pub fn memory_adapters_status(manager: State<'_, ConfigManager>) -> Result<Vec<RegistrationState>> {
+pub async fn memory_adapters_status(
+    manager: State<'_, ConfigManager>,
+) -> Result<Vec<RegistrationState>> {
     let cfg = manager.memory();
     let home = home_dir();
     let shim = shim_string(&cfg, &home);
-    cfg.cli_adapters
-        .iter()
-        .map(|a| state_of(a, &shim, &home))
-        .collect()
+    let adapters = cfg.cli_adapters.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let detected: Vec<bool> = std::thread::scope(|scope| {
+            adapters
+                .iter()
+                .map(|a| scope.spawn(|| crate::dialog::binary_on_path(a.binary.clone())))
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|h| h.join().unwrap_or(false))
+                .collect()
+        });
+        adapters
+            .iter()
+            .zip(detected)
+            .map(|(a, d)| state_of_with(a, &shim, &home, d))
+            .collect()
+    })
+    .await
+    .map_err(|e| Error::Os(e.to_string()))?
 }
 
 #[tauri::command]
@@ -385,7 +418,7 @@ pub fn memory_adapter_preview(manager: State<'_, ConfigManager>, id: String) -> 
 }
 
 #[tauri::command]
-pub fn memory_adapter_register(
+pub async fn memory_adapter_register(
     manager: State<'_, ConfigManager>,
     id: String,
 ) -> Result<RegistrationState> {
@@ -397,11 +430,13 @@ pub fn memory_adapter_register(
     let path = expand_home(&a.config_path, &home);
     let after = apply(&read_or_empty(&path)?, &a, &shim)?;
     write_with_backup(&path, &after)?;
-    state_of(&a, &shim, &home)
+    tauri::async_runtime::spawn_blocking(move || state_of(&a, &shim, &home))
+        .await
+        .map_err(|e| Error::Os(e.to_string()))?
 }
 
 #[tauri::command]
-pub fn memory_adapter_unregister(
+pub async fn memory_adapter_unregister(
     manager: State<'_, ConfigManager>,
     id: String,
 ) -> Result<RegistrationState> {
@@ -411,12 +446,13 @@ pub fn memory_adapter_unregister(
     let shim = shim_string(&cfg, &home);
     let path = expand_home(&a.config_path, &home);
     let text = read_or_empty(&path)?;
-    if !needs_write(inspect(&text, &a, &shim)) {
-        return state_of(&a, &shim, &home);
+    if needs_write(inspect(&text, &a, &shim)) {
+        let after = remove(&text, &a)?;
+        write_with_backup(&path, &after)?;
     }
-    let after = remove(&text, &a)?;
-    write_with_backup(&path, &after)?;
-    state_of(&a, &shim, &home)
+    tauri::async_runtime::spawn_blocking(move || state_of(&a, &shim, &home))
+        .await
+        .map_err(|e| Error::Os(e.to_string()))?
 }
 
 #[cfg(test)]
