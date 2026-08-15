@@ -2680,9 +2680,44 @@ export class App {
           },
         ]
       : [];
+    const memoryCommands = this.config.memory.enabled
+      ? [
+          {
+            id: "memory.open",
+            name: t("cmd.memory.open"),
+            run: () => void this.openProjectMemory("overview.md"),
+          },
+          {
+            id: "memory.resume",
+            name: t("cmd.memory.resume"),
+            run: () => this.sendMemoryPrompt(this.config.memory.resume_prompt),
+          },
+          {
+            id: "memory.save_session",
+            name: t("cmd.memory.save_session"),
+            run: () => this.sendMemoryPrompt(this.config.memory.save_prompt),
+          },
+          {
+            id: "memory.open_decisions",
+            name: t("cmd.memory.open_decisions"),
+            run: () => void this.openProjectMemory("decisions.md"),
+          },
+          {
+            id: "memory.open_resume",
+            name: t("cmd.memory.open_resume"),
+            run: () => void this.openProjectMemory("resume.md"),
+          },
+          {
+            id: "memory.open_sessions",
+            name: t("cmd.memory.open_sessions"),
+            run: () => void this.openProjectMemory("sessions"),
+          },
+        ]
+      : [];
     return [
       ...editorCommands,
       ...previewCommands,
+      ...memoryCommands,
       {
         id: "record.panel",
         name: t("ui.cmd.recordPanel"),
