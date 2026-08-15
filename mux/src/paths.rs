@@ -18,7 +18,7 @@ pub fn app_support_dir() -> PathBuf {
 /// `debug_assertions` reflects the profile of whoever links this crate: the
 /// app binary (dev build vs `tauri build`), correctly, since Cargo applies one
 /// profile to a build's whole dependency graph; the standalone `shirei-mux`
-/// binary always compiles `--release` (`scripts/build-mux.mjs`), so this is
+/// binary always compiles `--release` (`scripts/build-sidecar.mjs`), so this is
 /// always false there and it falls back to the production path — harmless,
 /// since the app always passes an explicit path when it spawns the daemon.
 /// Without this split, running a dev build's `tauri dev` collides with an

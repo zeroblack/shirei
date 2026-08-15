@@ -24,6 +24,7 @@ jobs:
           workspaces: |
             src-tauri
             mux
+            memory
       - run: pnpm install --frozen-lockfile
       - name: Materialize App Store Connect API key
         env:
