@@ -49,7 +49,7 @@ import { ImageSession } from "./image";
 import { Keymap } from "./keymap";
 import { eventToKeystroke, formatKeystroke, resolveBindings } from "./keys";
 import { MediaSession } from "./media";
-import { promptLine } from "./memory-actions";
+import { memoryBadgeState, promptLine } from "./memory-actions";
 import {
   type DormancyInput,
   type DormancyState,
@@ -512,6 +512,7 @@ export class App {
         onKill: (id) => this.killActiveFor(id),
         onPin: (id) => this.togglePin(id),
         onNew: () => void this.newTab(),
+        onMemoryOpen: () => void this.openProjectMemory("overview.md"),
       },
       config.theme.tabs,
     );
@@ -2491,6 +2492,7 @@ export class App {
     this.activeId = id;
     this.showActive();
     this.renderTabs();
+    void this.refreshMemoryBadge();
     this.focusActive();
     this.persist();
     if (this.panelVisible) void this.openWorkspaceTree();
@@ -3095,6 +3097,7 @@ export class App {
     } else {
       await this.openFile(`${dir}${file}`, { newTab: false });
     }
+    await this.refreshMemoryBadge();
   }
 
   private sendMemoryPrompt(prompt: string): void {
@@ -3105,9 +3108,24 @@ export class App {
     this.activeGrid()?.sendLineActive(promptLine(prompt));
   }
 
+  private async refreshMemoryBadge(): Promise<void> {
+    const tab = this.tab(this.activeId);
+    if (!tab) return;
+    const cwd = this.config.memory.enabled ? await this.activeCwd() : undefined;
+    const status = cwd ? await memoryStatus(cwd).catch(() => null) : null;
+    const next = memoryBadgeState(
+      status,
+      this.config.memory.resume_stale_hours,
+    );
+    if (tab.memory === next) return;
+    tab.memory = next;
+    this.renderTabs();
+  }
+
   private treeChangeTimer: number | null = null;
 
   private onTreeChanged(): void {
+    void this.refreshMemoryBadge();
     if (!this.panelVisible) return;
     if (this.treeChangeTimer !== null)
       window.clearTimeout(this.treeChangeTimer);

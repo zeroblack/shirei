@@ -6,6 +6,7 @@ export interface TerminalTab {
   projectId?: string;
   lastUsedAt: number;
   pinned: boolean;
+  memory?: "ok" | "stale";
 }
 
 export interface EditorTab {
@@ -17,6 +18,7 @@ export interface EditorTab {
   lastUsedAt: number;
   pinned: boolean;
   openerId?: string;
+  memory?: "ok" | "stale";
 }
 
 export type TabState = TerminalTab | EditorTab;

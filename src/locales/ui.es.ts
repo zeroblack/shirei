@@ -370,4 +370,6 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.memory.noCwd":
     "No hay un directorio de sesión activo para asociar la memoria.",
   "ui.memory.disabled": "La memoria del proyecto está desactivada en Ajustes.",
+  "ui.memory.badge": "Memoria del proyecto",
+  "ui.memory.badgeStale": "La memoria del proyecto está vencida",
 };

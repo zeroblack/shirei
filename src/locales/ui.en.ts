@@ -365,4 +365,6 @@ export const uiEn = {
   "ui.memory.initConfirmLabel": "Create",
   "ui.memory.noCwd": "No active session directory to attach memory to.",
   "ui.memory.disabled": "Project memory is disabled in Settings.",
+  "ui.memory.badge": "Project memory",
+  "ui.memory.badgeStale": "Project memory is stale",
 };
