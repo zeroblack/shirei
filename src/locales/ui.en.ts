@@ -360,4 +360,9 @@ export const uiEn = {
   "ui.update.failedTitle": "Update failed",
   "ui.update.close": "Close",
   "ui.update.noNotes": "No release notes for this version.",
+  "ui.memory.initConfirm":
+    "No project memory here yet. Create .shirei/memory in this project?",
+  "ui.memory.initConfirmLabel": "Create",
+  "ui.memory.noCwd": "No active session directory to attach memory to.",
+  "ui.memory.disabled": "Project memory is disabled in Settings.",
 };

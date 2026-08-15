@@ -28,6 +28,8 @@ import {
   type ConfirmPolicy,
   configSet,
   DEFAULT_FONT_SIZE,
+  memoryInit,
+  memoryStatus,
   type Project,
   type TerminalColors,
 } from "./config";
@@ -46,6 +48,7 @@ import { ImageSession } from "./image";
 import { Keymap } from "./keymap";
 import { eventToKeystroke, formatKeystroke, resolveBindings } from "./keys";
 import { MediaSession } from "./media";
+import { promptLine } from "./memory-actions";
 import {
   type DormancyInput,
   type DormancyState,
@@ -170,6 +173,8 @@ const TERMINAL_CONTENT_ACTIONS = new Set([
   "terminal.paste",
   "scroll.up",
   "scroll.down",
+  "memory.resume",
+  "memory.save_session",
 ]);
 
 // The inverse of TERMINAL_CONTENT_ACTIONS: these belong to a browser pane
@@ -3049,6 +3054,46 @@ export class App {
     return (await this.activeLiveCwd()) ?? this.activeLeafCwd();
   }
 
+  private async openProjectMemory(
+    file: "overview.md" | "decisions.md" | "resume.md" | "sessions",
+  ): Promise<void> {
+    if (!this.config.memory.enabled) {
+      showToast(t("ui.memory.disabled"));
+      return;
+    }
+    const cwd = await this.activeCwd();
+    if (!cwd) {
+      showToast(t("ui.memory.noCwd"));
+      return;
+    }
+    const status = await memoryStatus(cwd);
+    if (
+      !status.exists &&
+      !(await confirmDialog({
+        title: t("ui.memory.initConfirm"),
+        confirmLabel: t("ui.memory.initConfirmLabel"),
+        danger: false,
+      }))
+    ) {
+      return;
+    }
+    const overview = await memoryInit(cwd);
+    const dir = overview.slice(0, -"overview.md".length);
+    if (file === "sessions") {
+      await this.revealDir(`${dir}sessions`);
+    } else {
+      await this.openFile(`${dir}${file}`, { newTab: false });
+    }
+  }
+
+  private sendMemoryPrompt(prompt: string): void {
+    if (!this.config.memory.enabled) {
+      showToast(t("ui.memory.disabled"));
+      return;
+    }
+    this.activeGrid()?.sendLineActive(promptLine(prompt));
+  }
+
   private treeChangeTimer: number | null = null;
 
   private onTreeChanged(): void {
@@ -3334,6 +3379,24 @@ export class App {
         break;
       case "git.blame-toggle":
         if (this.isEditor(active)) active.toggleBlame();
+        break;
+      case "memory.open":
+        void this.openProjectMemory("overview.md");
+        break;
+      case "memory.open_decisions":
+        void this.openProjectMemory("decisions.md");
+        break;
+      case "memory.open_resume":
+        void this.openProjectMemory("resume.md");
+        break;
+      case "memory.open_sessions":
+        void this.openProjectMemory("sessions");
+        break;
+      case "memory.resume":
+        this.sendMemoryPrompt(this.config.memory.resume_prompt);
+        break;
+      case "memory.save_session":
+        this.sendMemoryPrompt(this.config.memory.save_prompt);
         break;
       case "editor.vim-toggle":
         this.toggleVim();

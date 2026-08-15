@@ -364,4 +364,10 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.update.failedTitle": "Falló la actualización",
   "ui.update.close": "Cerrar",
   "ui.update.noNotes": "Sin notas de la versión.",
+  "ui.memory.initConfirm":
+    "Este proyecto aún no tiene memoria. ¿Crear .shirei/memory aquí?",
+  "ui.memory.initConfirmLabel": "Crear",
+  "ui.memory.noCwd":
+    "No hay un directorio de sesión activo para asociar la memoria.",
+  "ui.memory.disabled": "La memoria del proyecto está desactivada en Ajustes.",
 };
