@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  compareEntries,
   countLabel,
   deletedIn,
   fileMark,
@@ -7,10 +8,18 @@ import {
   folderSummaries,
   type GitFileStatus,
   gitRefreshDecision,
+  insertGhosts,
   letterOf,
   stageOf,
   statusMap,
 } from "./gitstatus";
+import type { DirEntry } from "./types";
+
+const entry = (name: string, isDir = false, path = `/r/${name}`): DirEntry => ({
+  name,
+  path,
+  is_dir: isDir,
+});
 
 const f = (
   path: string,
@@ -214,7 +223,12 @@ describe("folderMark", () => {
 });
 
 describe("gitRefreshDecision", () => {
-  const base = { statusInTree: true, root: "/repo", inFlight: false };
+  const base = {
+    statusInTree: true,
+    root: "/repo",
+    panelVisible: true,
+    inFlight: false,
+  };
 
   it("runs when the feature is on, a root is known, and nothing is in flight", () => {
     expect(gitRefreshDecision(base)).toBe("run");
@@ -226,6 +240,10 @@ describe("gitRefreshDecision", () => {
 
   it("skips when no root is open yet", () => {
     expect(gitRefreshDecision({ ...base, root: null })).toBe("skip");
+  });
+
+  it("skips when the sidebar is hidden, so nobody would see the refresh", () => {
+    expect(gitRefreshDecision({ ...base, panelVisible: false })).toBe("skip");
   });
 
   it("defers, rather than drops, a trigger while a fetch is already in flight", () => {
@@ -242,5 +260,65 @@ describe("gitRefreshDecision", () => {
     expect(gitRefreshDecision({ ...base, root: null, inFlight: true })).toBe(
       "skip",
     );
+  });
+
+  it("skips instead of deferring when hidden even mid-flight", () => {
+    expect(
+      gitRefreshDecision({ ...base, panelVisible: false, inFlight: true }),
+    ).toBe("skip");
+  });
+});
+
+describe("compareEntries", () => {
+  it("sorts directories before files regardless of name", () => {
+    const dir = entry("zebra", true);
+    const file = entry("alpha", false);
+    expect(compareEntries(dir, file)).toBeLessThan(0);
+    expect(compareEntries(file, dir)).toBeGreaterThan(0);
+  });
+
+  it("folds case within the same kind, matching the backend's lowercase ordering", () => {
+    expect(compareEntries(entry("Banana"), entry("apple"))).toBeGreaterThan(0);
+    expect(compareEntries(entry("apple"), entry("Banana"))).toBeLessThan(0);
+  });
+
+  it("treats names equal under case-folding as equal", () => {
+    expect(compareEntries(entry("README"), entry("readme"))).toBe(0);
+  });
+});
+
+describe("insertGhosts", () => {
+  it("returns the original array reference when there are no ghosts", () => {
+    const entries = [entry("a"), entry("b")];
+    expect(insertGhosts(entries, [])).toBe(entries);
+  });
+
+  it("merges a ghost into the middle of an already-sorted listing", () => {
+    const entries = [entry("alpha"), entry("charlie"), entry("delta")];
+    const merged = insertGhosts(entries, [entry("bravo")]);
+    expect(merged.map((e) => e.name)).toEqual([
+      "alpha",
+      "bravo",
+      "charlie",
+      "delta",
+    ]);
+  });
+
+  it("keeps directories ahead of files after merging a ghost file", () => {
+    const entries = [entry("src", true), entry("app.ts")];
+    const merged = insertGhosts(entries, [entry("editor.ts")]);
+    expect(merged.map((e) => e.name)).toEqual(["src", "app.ts", "editor.ts"]);
+  });
+
+  it("places a ghost directory ahead of files even when it sorts last alphabetically", () => {
+    const entries = [entry("src", true), entry("app.ts")];
+    const merged = insertGhosts(entries, [entry("zulu", true)]);
+    expect(merged.map((e) => e.name)).toEqual(["src", "zulu", "app.ts"]);
+  });
+
+  it("does not mutate the original entries array", () => {
+    const entries = [entry("alpha"), entry("charlie")];
+    insertGhosts(entries, [entry("bravo")]);
+    expect(entries.map((e) => e.name)).toEqual(["alpha", "charlie"]);
   });
 });

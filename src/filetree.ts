@@ -8,6 +8,7 @@ import {
   folderMark,
   folderSummaries,
   type GitFileStatus,
+  insertGhosts,
   type MarkView,
   statusMap,
 } from "./gitstatus";
@@ -50,28 +51,6 @@ const NO_GHOSTS: ReadonlySet<string> = new Set();
 
 function ghostEntry(path: string): DirEntry {
   return { name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: false };
-}
-
-// Mirrors the backend's own order (fs.rs: dirs first, then
-// name.to_lowercase() in code-point order) so a deleted file merging into a
-// listing never reorders it — a locale-aware collation (Intl/localeCompare)
-// diverges from that ordinal comparison on accented names.
-function compareEntries(a: DirEntry, b: DirEntry): number {
-  if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
-  const an = a.name.toLowerCase();
-  const bn = b.name.toLowerCase();
-  return an < bn ? -1 : an > bn ? 1 : 0;
-}
-
-function insertGhosts(entries: DirEntry[], ghosts: DirEntry[]): DirEntry[] {
-  if (ghosts.length === 0) return entries;
-  const merged = entries.slice();
-  for (const ghost of ghosts.slice().sort(compareEntries)) {
-    let i = merged.length;
-    while (i > 0 && compareEntries(merged[i - 1], ghost) > 0) i--;
-    merged.splice(i, 0, ghost);
-  }
-  return merged;
 }
 
 export class FileTree {

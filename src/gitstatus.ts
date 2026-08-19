@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import type { DirEntry } from "./types";
 
 export type GitKind =
   | "modified"
@@ -44,17 +45,20 @@ export const statusMap = (files: GitFileStatus[]): Map<string, GitFileStatus> =>
 export type GitRefreshDecision = "run" | "skip" | "defer";
 
 /** The single-flight guard every refresh trigger checks before fetching.
- *  "skip" means there is nothing worth fetching (disabled, or no tree root
- *  open yet). "defer" means a fetch is already in flight for a root that
+ *  "skip" means there is nothing worth fetching (disabled, no tree root open
+ *  yet, or the sidebar is hidden so nobody would see the result). "defer"
+ *  means a fetch is already in flight for a root that
  *  is still worth watching, so the caller should coalesce this trigger into
  *  one more run right after the current one finishes, rather than drop it
  *  outright and risk painting stale marks until an unrelated event fires. */
 export function gitRefreshDecision(opts: {
   statusInTree: boolean;
   root: string | null;
+  panelVisible: boolean;
   inFlight: boolean;
 }): GitRefreshDecision {
-  if (!opts.statusInTree || opts.root === null) return "skip";
+  if (!opts.statusInTree || opts.root === null || !opts.panelVisible)
+    return "skip";
   return opts.inFlight ? "defer" : "run";
 }
 
@@ -88,6 +92,31 @@ export const deletedIn = (files: GitFileStatus[], dir: string): string[] =>
   files
     .filter((f) => f.kind === "deleted" && parentOf(f.path) === dir)
     .map((f) => f.path);
+
+// Mirrors the backend's own order (fs.rs: dirs first, then
+// name.to_lowercase() in code-point order) so a deleted file merging into a
+// listing never reorders it — a locale-aware collation (Intl/localeCompare)
+// diverges from that ordinal comparison on accented names.
+export function compareEntries(a: DirEntry, b: DirEntry): number {
+  if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+  const an = a.name.toLowerCase();
+  const bn = b.name.toLowerCase();
+  return an < bn ? -1 : an > bn ? 1 : 0;
+}
+
+export function insertGhosts(
+  entries: DirEntry[],
+  ghosts: DirEntry[],
+): DirEntry[] {
+  if (ghosts.length === 0) return entries;
+  const merged = entries.slice();
+  for (const ghost of ghosts.slice().sort(compareEntries)) {
+    let i = merged.length;
+    while (i > 0 && compareEntries(merged[i - 1], ghost) > 0) i--;
+    merged.splice(i, 0, ghost);
+  }
+  return merged;
+}
 
 export type MarkKind = GitKind | "count" | "conflict-dot";
 
