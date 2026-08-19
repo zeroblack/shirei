@@ -294,6 +294,9 @@ export const TIMER_IDLE_GLYPH =
 export const TIMER_BREAK_GLYPH =
   '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13a3 3 0 0 1 0 6h-1.3"/><path d="M4 8v6.5A2.5 2.5 0 0 0 6.5 17h5A2.5 2.5 0 0 0 14 14.5V8"/><path d="M7.5 3v2.2"/><path d="M10.5 3v2.2"/></svg>';
 
+export const CONFLICT_GLYPH =
+  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--git-conflict)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h17a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+
 export const PENCIL =
   '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 

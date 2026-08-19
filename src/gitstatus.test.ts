@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   countLabel,
   deletedIn,
+  fileMark,
+  folderMark,
   folderSummaries,
   type GitFileStatus,
   letterOf,
@@ -94,5 +96,112 @@ describe("statusMap", () => {
   it("keys by absolute path", () => {
     const map = statusMap([f("/r/a.ts", "modified", false, true)]);
     expect(map.get("/r/a.ts")?.kind).toBe("modified");
+  });
+});
+
+describe("fileMark", () => {
+  it("returns an empty mark for a clean file", () => {
+    expect(fileMark(undefined)).toEqual({
+      text: "",
+      kind: null,
+      stage: null,
+      conflicted: false,
+      label: "",
+    });
+  });
+
+  it("carries the letter and the staging depth for an ordinary change", () => {
+    expect(fileMark(f("/r/a.ts", "modified", false, true))).toEqual({
+      text: "M",
+      kind: "modified",
+      stage: "none",
+      conflicted: false,
+      label: "modified, unstaged",
+    });
+    expect(fileMark(f("/r/a.ts", "modified", true, true))).toMatchObject({
+      stage: "partial",
+      label: "modified, partially staged",
+    });
+    expect(fileMark(f("/r/a.ts", "added", true, false))).toMatchObject({
+      text: "A",
+      stage: "full",
+      label: "added, staged",
+    });
+  });
+
+  it("keys a conflict off kind, not off staged/unstaged, and always renders a solid chip", () => {
+    const conflict = fileMark(f("/r/a.ts", "conflicted", false, false));
+    expect(conflict).toEqual({
+      text: "!",
+      kind: "conflicted",
+      stage: "full",
+      conflicted: true,
+      label: "conflicted",
+    });
+  });
+});
+
+describe("folderMark", () => {
+  it("returns an empty mark for a folder with no changes below", () => {
+    expect(folderMark(undefined, false)).toEqual({
+      text: "",
+      kind: null,
+      stage: null,
+      conflicted: false,
+      label: "",
+    });
+  });
+
+  it("shows a neutral count only while collapsed", () => {
+    const summary = { total: 3, conflicts: 0 };
+    expect(folderMark(summary, false)).toEqual({
+      text: "3",
+      kind: "count",
+      stage: null,
+      conflicted: false,
+      label: "3 changes below",
+    });
+    expect(folderMark(summary, true)).toEqual({
+      text: "",
+      kind: null,
+      stage: null,
+      conflicted: false,
+      label: "",
+    });
+  });
+
+  it("saturates the count at 9+", () => {
+    expect(folderMark({ total: 12, conflicts: 0 }, false).text).toBe("9+");
+  });
+
+  it("renders a conflict dot whether the folder is collapsed or expanded, and it wins over the count", () => {
+    const summary = { total: 5, conflicts: 1 };
+    expect(folderMark(summary, false)).toEqual({
+      text: "",
+      kind: "conflict-dot",
+      stage: null,
+      conflicted: false,
+      label: "conflict below",
+    });
+    expect(folderMark(summary, true)).toEqual({
+      text: "",
+      kind: "conflict-dot",
+      stage: null,
+      conflicted: false,
+      label: "conflict below",
+    });
+  });
+
+  it("keeps the dot at an ancestor whose only change is a conflict two levels below", () => {
+    const files = [
+      f("/r/src/a.ts", "modified", false, true),
+      f("/r/src/deep/b.ts", "conflicted", false, false),
+    ];
+    const sums = folderSummaries(files, "/r");
+    expect(folderMark(sums.get("/r"), false).kind).toBe("conflict-dot");
+    expect(folderMark(sums.get("/r/src"), false).kind).toBe("conflict-dot");
+    expect(folderMark(sums.get("/r/src/deep"), false).kind).toBe(
+      "conflict-dot",
+    );
   });
 });

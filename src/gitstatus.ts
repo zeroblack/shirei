@@ -1,3 +1,5 @@
+import { t } from "./i18n";
+
 export type GitKind =
   | "modified"
   | "added"
@@ -69,3 +71,71 @@ export const deletedIn = (files: GitFileStatus[], dir: string): string[] =>
   files
     .filter((f) => f.kind === "deleted" && parentOf(f.path) === dir)
     .map((f) => f.path);
+
+export type MarkKind = GitKind | "count" | "conflict-dot";
+
+export interface MarkView {
+  text: string;
+  kind: MarkKind | null;
+  stage: Stage | null;
+  conflicted: boolean;
+  label: string;
+}
+
+const EMPTY_MARK: MarkView = {
+  text: "",
+  kind: null,
+  stage: null,
+  conflicted: false,
+  label: "",
+};
+
+const STAGE_KEY: Record<Stage, "staged" | "partiallyStaged" | "unstaged"> = {
+  full: "staged",
+  partial: "partiallyStaged",
+  none: "unstaged",
+};
+
+function statusLabel(kind: GitKind, stage: Stage | null): string {
+  const kindLabel = t(`ui.git.status.${kind}`);
+  return stage
+    ? `${kindLabel}, ${t(`ui.git.status.${STAGE_KEY[stage]}`)}`
+    : kindLabel;
+}
+
+export function fileMark(status: GitFileStatus | undefined): MarkView {
+  if (!status) return EMPTY_MARK;
+  const conflicted = status.kind === "conflicted";
+  const stage: Stage = conflicted ? "full" : stageOf(status);
+  return {
+    text: letterOf(status.kind),
+    kind: status.kind,
+    stage,
+    conflicted,
+    label: statusLabel(status.kind, conflicted ? null : stage),
+  };
+}
+
+export function folderMark(
+  summary: FolderSummary | undefined,
+  expanded: boolean,
+): MarkView {
+  if (!summary) return EMPTY_MARK;
+  if (summary.conflicts > 0) {
+    return {
+      text: "",
+      kind: "conflict-dot",
+      stage: null,
+      conflicted: false,
+      label: t("ui.git.status.conflictBelow"),
+    };
+  }
+  if (expanded) return EMPTY_MARK;
+  return {
+    text: countLabel(summary.total),
+    kind: "count",
+    stage: null,
+    conflicted: false,
+    label: t("ui.git.status.changesBelow", { n: summary.total }),
+  };
+}

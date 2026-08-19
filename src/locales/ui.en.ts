@@ -127,6 +127,18 @@ export const uiEn = {
 
   "ui.git.blame.notRepo": "Blame needs a Git repository.",
 
+  "ui.git.status.modified": "modified",
+  "ui.git.status.added": "added",
+  "ui.git.status.untracked": "untracked",
+  "ui.git.status.deleted": "deleted",
+  "ui.git.status.renamed": "renamed",
+  "ui.git.status.conflicted": "conflicted",
+  "ui.git.status.staged": "staged",
+  "ui.git.status.partiallyStaged": "partially staged",
+  "ui.git.status.unstaged": "unstaged",
+  "ui.git.status.conflictBelow": "conflict below",
+  "ui.git.status.changesBelow": "{n} changes below",
+
   "ui.time.now": "just now",
   "ui.time.minute": "{n} min ago",
   "ui.time.minutes": "{n} min ago",

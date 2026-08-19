@@ -130,6 +130,18 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
 
   "ui.git.blame.notRepo": "Blame necesita un repositorio Git.",
 
+  "ui.git.status.modified": "modificado",
+  "ui.git.status.added": "agregado",
+  "ui.git.status.untracked": "sin seguimiento",
+  "ui.git.status.deleted": "eliminado",
+  "ui.git.status.renamed": "renombrado",
+  "ui.git.status.conflicted": "en conflicto",
+  "ui.git.status.staged": "en stage",
+  "ui.git.status.partiallyStaged": "parcialmente en stage",
+  "ui.git.status.unstaged": "sin stage",
+  "ui.git.status.conflictBelow": "conflicto más abajo",
+  "ui.git.status.changesBelow": "{n} cambios más abajo",
+
   "ui.time.now": "recién",
   "ui.time.minute": "hace {n} min",
   "ui.time.minutes": "hace {n} min",

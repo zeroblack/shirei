@@ -995,8 +995,96 @@ body {
 }
 
 .tree-name {
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.git-mark {
+  flex: 0 0 var(--git-mark-w);
+  width: var(--git-mark-w);
+  text-align: center;
+  font: var(--type-kbd);
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--radius-xs);
+  color: var(--mark-color, var(--text-subtle));
+  opacity: 1;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.git-mark:not([data-kind]) {
+  opacity: 0;
+}
+
+.git-mark[data-kind="modified"] {
+  --mark-color: var(--git-modified);
+}
+
+.git-mark[data-kind="added"],
+.git-mark[data-kind="untracked"] {
+  --mark-color: var(--git-new);
+}
+
+.git-mark[data-kind="renamed"] {
+  --mark-color: var(--git-renamed);
+}
+
+.git-mark[data-kind="deleted"] {
+  --mark-color: var(--git-deleted);
+}
+
+.git-mark[data-kind="conflicted"] {
+  --mark-color: var(--git-conflict);
+}
+
+.git-mark[data-kind="count"] {
+  font-size: 10px;
+}
+
+.git-mark[data-kind="conflict-dot"] {
+  position: relative;
+}
+
+.git-mark[data-kind="conflict-dot"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--git-conflict);
+}
+
+/* The soft chip is a background color-mix keyed off --mark-color (never
+   opacity on the element): opacity would dim the letter too and make
+   partial staging indistinguishable from unstaged. The solid chip reads
+   --mark-color directly rather than currentColor, since this same rule
+   also overrides color to the knockout --bg. */
+.git-mark[data-stage="partial"] {
+  background: var(--git-chip-soft);
+}
+
+.git-mark[data-stage="full"] {
+  background: var(--mark-color, var(--text-subtle));
+  color: var(--bg);
+}
+
+/* box-shadow rather than background: an inset shadow paints above the row's
+   own background, so the tint stacks under hover/selection instead of
+   losing to them on a same-specificity, later-declared background rule. */
+.tree-row[data-git="conflicted"] {
+  box-shadow: inset 0 0 0 999px
+    color-mix(in oklab, var(--git-conflict) 10%, transparent);
+}
+
+.tree-row[data-git="ignored"] .tree-name {
+  color: var(--git-ignored);
+}
+
+.tree-row[data-ghost="true"] .tree-name {
+  text-decoration: line-through;
+  color: var(--text-subtle);
 }
 
 #terminals {

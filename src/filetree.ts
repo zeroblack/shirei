@@ -1,23 +1,59 @@
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { createFile, readDir, revealInFinder } from "./commands";
+import { createFile, gitFileHead, readDir, revealInFinder } from "./commands";
+import type { GitStatusReport } from "./config";
+import {
+  deletedIn,
+  fileMark,
+  folderMark,
+  folderSummaries,
+  type GitFileStatus,
+  type MarkView,
+  statusMap,
+} from "./gitstatus";
 import { t } from "./i18n";
-import { CHEVRON, COPY, EXTERNAL, fileIcon, NEW_FILE } from "./icons";
+import {
+  CHEVRON,
+  CONFLICT_GLYPH,
+  COPY,
+  EXTERNAL,
+  fileIcon,
+  NEW_FILE,
+} from "./icons";
 import { promptText } from "./prompt";
 import { showToast } from "./toast";
-import type { DirEntry } from "./types";
+import type { DirEntry, DirListing } from "./types";
 
 export interface FileTreeCallbacks {
   onOpenFile: (path: string, newTab?: boolean) => void;
+  onOpenGhost?: (path: string, content: string | null) => void;
   onEscape?: () => void;
 }
 
 interface Row {
   el: HTMLElement;
   icon: HTMLElement;
+  mark: HTMLElement;
   entry: DirEntry;
   depth: number;
   expanded: boolean;
+  ghost: boolean;
   note?: HTMLElement;
+  markState?: MarkView;
+}
+
+interface GhostListing extends DirListing {
+  ghosts: ReadonlySet<string>;
+}
+
+const NO_GHOSTS: ReadonlySet<string> = new Set();
+
+function ghostEntry(path: string): DirEntry {
+  return { name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: false };
+}
+
+function sortDirEntries(a: DirEntry, b: DirEntry): number {
+  if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 }
 
 export class FileTree {
@@ -34,6 +70,11 @@ export class FileTree {
   private highlightedEl: HTMLElement | null = null;
   private menu: HTMLElement | null = null;
   private refreshing = false;
+  private showDeleted = false;
+  private statusFiles: GitFileStatus[] = [];
+  private statusTruncated = false;
+  private statusRoot = "";
+  private hasStatuses = false;
 
   constructor(root: HTMLElement, cb: FileTreeCallbacks) {
     this.root = root;
@@ -53,6 +94,7 @@ export class FileTree {
     this.newFileBtn.addEventListener("click", () => void this.newFile());
     this.list = document.createElement("div");
     this.list.className = "tree-list";
+    this.list.setAttribute("role", "tree");
     this.root.append(this.header, this.list);
     this.root.addEventListener("keydown", (e) => this.onKey(e));
     document.addEventListener("click", () => this.closeMenu());
@@ -62,18 +104,65 @@ export class FileTree {
     this.home = home;
   }
 
+  setShowDeleted(value: boolean): void {
+    this.showDeleted = value;
+  }
+
+  /** Applies a git status report to every row in place, touching only the
+   *  DOM of rows whose computed mark actually changed (see applyMark). */
+  setStatuses(report: GitStatusReport, root: string): void {
+    this.statusFiles = report.files;
+    this.statusTruncated = report.truncated;
+    this.statusRoot = root;
+    this.hasStatuses = true;
+    const byPath = statusMap(report.files);
+    const folders = folderSummaries(report.files, root);
+    for (const row of this.rows) {
+      const own = report.truncated ? undefined : byPath.get(row.entry.path);
+      const next = row.entry.is_dir
+        ? own
+          ? fileMark(own)
+          : folderMark(folders.get(row.entry.path), row.expanded)
+        : fileMark(own);
+      this.applyMark(row, next);
+    }
+  }
+
   selectedPath(): string | null {
     return this.rows[this.selected]?.entry.path ?? null;
   }
 
+  private async listWithGhosts(path: string): Promise<GhostListing> {
+    const listing = await readDir(path);
+    if (!this.showDeleted || !this.hasStatuses) {
+      return { ...listing, ghosts: NO_GHOSTS };
+    }
+    const ghostPaths = deletedIn(this.statusFiles, path);
+    if (ghostPaths.length === 0) return { ...listing, ghosts: NO_GHOSTS };
+    const entries = [...listing.entries, ...ghostPaths.map(ghostEntry)].sort(
+      sortDirEntries,
+    );
+    return {
+      entries,
+      truncated: listing.truncated,
+      ghosts: new Set(ghostPaths),
+    };
+  }
+
   async setRoot(path: string): Promise<void> {
     this.rootPath = path;
+    // A fresh root means fresh (or not-yet-fetched) statuses: never carry a
+    // previous project's report into a new one's ghost rows or marks.
+    this.hasStatuses = false;
+    this.statusFiles = [];
+    this.statusTruncated = false;
+    this.statusRoot = "";
     this.renderHeader(path);
     this.list.replaceChildren();
     this.selected = 0;
     this.highlightedEl = null;
-    const { entries, truncated } = await readDir(path);
-    this.rows = entries.map((e) => this.makeRow(e, 0));
+    const { entries, truncated, ghosts } = await this.listWithGhosts(path);
+    this.rows = entries.map((e) => this.makeRow(e, 0, ghosts.has(e.path)));
     for (const r of this.rows) this.list.appendChild(r.el);
     if (truncated) this.list.appendChild(this.makeNote(0));
     this.highlight();
@@ -112,6 +201,7 @@ export class FileTree {
       this.highlightedEl = null;
       this.highlight();
       this.list.scrollTop = scrollTop;
+      this.reapplyStatuses();
     } finally {
       this.refreshing = false;
     }
@@ -124,10 +214,15 @@ export class FileTree {
     rows: Row[],
     els: HTMLElement[],
   ): Promise<HTMLElement | null> {
-    const listing = await readDir(path).catch(() => null);
+    const listing = await this.listWithGhosts(path).catch(() => null);
     if (!listing) return null;
     for (const e of listing.entries) {
-      const row = this.reuseOrMake(e, depth, byPath);
+      const row = this.reuseOrMake(
+        e,
+        depth,
+        byPath,
+        listing.ghosts.has(e.path),
+      );
       rows.push(row);
       els.push(row.el);
       if (e.is_dir && row.expanded) {
@@ -151,6 +246,7 @@ export class FileTree {
     entry: DirEntry,
     depth: number,
     byPath: Map<string, Row>,
+    ghost: boolean,
   ): Row {
     const prev = byPath.get(entry.path);
     if (prev && prev.entry.is_dir === entry.is_dir) {
@@ -158,10 +254,16 @@ export class FileTree {
       if (prev.depth !== depth) {
         prev.depth = depth;
         prev.el.style.paddingLeft = `${6 + depth * 12}px`;
+        prev.el.setAttribute("aria-level", String(depth + 1));
+      }
+      if (prev.ghost !== ghost) {
+        prev.ghost = ghost;
+        if (ghost) prev.el.dataset.ghost = "true";
+        else delete prev.el.dataset.ghost;
       }
       return prev;
     }
-    return this.makeRow(entry, depth);
+    return this.makeRow(entry, depth, ghost);
   }
 
   /** Keyed reconcile: reuses surviving nodes (no flicker), drops the gone,
@@ -239,10 +341,16 @@ export class FileTree {
     return full;
   }
 
-  private makeRow(entry: DirEntry, depth: number): Row {
+  private makeRow(entry: DirEntry, depth: number, ghost = false): Row {
     const el = document.createElement("div");
     el.className = "tree-row";
     el.style.paddingLeft = `${6 + depth * 12}px`;
+    el.setAttribute("role", "treeitem");
+    el.setAttribute("aria-level", String(depth + 1));
+    el.setAttribute("aria-selected", "false");
+    el.setAttribute("aria-label", entry.name);
+    if (entry.is_dir) el.setAttribute("aria-expanded", "false");
+    if (ghost) el.dataset.ghost = "true";
 
     const twist = document.createElement("span");
     twist.className = "tree-twist";
@@ -256,8 +364,12 @@ export class FileTree {
     name.className = "tree-name";
     name.textContent = entry.name;
 
-    el.append(twist, icon, name);
-    const row: Row = { el, icon, entry, depth, expanded: false };
+    const mark = document.createElement("span");
+    mark.className = "git-mark";
+    mark.setAttribute("aria-hidden", "true");
+
+    el.append(twist, icon, name, mark);
+    const row: Row = { el, icon, mark, entry, depth, expanded: false, ghost };
     el.addEventListener("click", (e) => {
       this.selected = this.rows.indexOf(row);
       this.highlight();
@@ -344,6 +456,11 @@ export class FileTree {
   }
 
   private async activate(row: Row, newTab = false): Promise<void> {
+    if (row.ghost) {
+      const content = await gitFileHead(row.entry.path);
+      this.cb.onOpenGhost?.(row.entry.path, content);
+      return;
+    }
     if (!row.entry.is_dir) {
       this.cb.onOpenFile(row.entry.path, newTab);
       return;
@@ -355,10 +472,15 @@ export class FileTree {
   private async expand(row: Row): Promise<void> {
     row.expanded = true;
     row.el.classList.add("expanded");
+    row.el.setAttribute("aria-expanded", "true");
     row.icon.innerHTML = fileIcon(row.entry.name, true, true);
-    const { entries, truncated } = await readDir(row.entry.path);
+    const { entries, truncated, ghosts } = await this.listWithGhosts(
+      row.entry.path,
+    );
     const index = this.rows.indexOf(row);
-    const children = entries.map((e) => this.makeRow(e, row.depth + 1));
+    const children = entries.map((e) =>
+      this.makeRow(e, row.depth + 1, ghosts.has(e.path)),
+    );
     const frag = document.createDocumentFragment();
     for (const c of children) frag.appendChild(c.el);
     if (truncated) {
@@ -368,11 +490,13 @@ export class FileTree {
     row.el.after(frag);
     this.rows.splice(index + 1, 0, ...children);
     this.highlight();
+    this.reapplyStatuses();
   }
 
   private collapse(row: Row): void {
     row.expanded = false;
     row.el.classList.remove("expanded");
+    row.el.setAttribute("aria-expanded", "false");
     row.icon.innerHTML = fileIcon(row.entry.name, true, false);
     const start = this.rows.indexOf(row) + 1;
     let end = start;
@@ -389,6 +513,15 @@ export class FileTree {
     else if (this.selected >= end) this.selected -= end - start;
     if (this.selected < 0) this.selected = 0;
     this.highlight();
+    this.reapplyStatuses();
+  }
+
+  private reapplyStatuses(): void {
+    if (!this.hasStatuses) return;
+    this.setStatuses(
+      { files: this.statusFiles, truncated: this.statusTruncated },
+      this.statusRoot,
+    );
   }
 
   async revealPath(absPath: string): Promise<void> {
@@ -446,9 +579,44 @@ export class FileTree {
     const el = this.rows[this.selected]?.el ?? null;
     if (this.highlightedEl !== el) {
       this.highlightedEl?.classList.remove("selected");
+      this.highlightedEl?.setAttribute("aria-selected", "false");
       el?.classList.add("selected");
+      el?.setAttribute("aria-selected", "true");
       this.highlightedEl = el;
     }
     el?.scrollIntoView({ block: "nearest" });
+  }
+
+  /** Mirrors highlight()'s discipline: writes to the DOM only when the
+   *  computed mark differs from what is already there, so the opacity
+   *  transition on .git-mark fires solely for rows whose status changed. */
+  private applyMark(row: Row, next: MarkView): void {
+    const prev = row.markState;
+    if (
+      prev &&
+      prev.text === next.text &&
+      prev.kind === next.kind &&
+      prev.stage === next.stage &&
+      prev.conflicted === next.conflicted &&
+      prev.label === next.label
+    ) {
+      return;
+    }
+    row.markState = next;
+    row.mark.textContent = next.text;
+    if (next.kind) row.mark.dataset.kind = next.kind;
+    else delete row.mark.dataset.kind;
+    if (next.stage) row.mark.dataset.stage = next.stage;
+    else delete row.mark.dataset.stage;
+    row.mark.title = next.label;
+    if (next.conflicted) row.el.dataset.git = "conflicted";
+    else delete row.el.dataset.git;
+    row.el.setAttribute(
+      "aria-label",
+      next.label ? `${row.entry.name}, ${next.label}` : row.entry.name,
+    );
+    row.icon.innerHTML = next.conflicted
+      ? CONFLICT_GLYPH
+      : fileIcon(row.entry.name, row.entry.is_dir, row.expanded);
   }
 }
