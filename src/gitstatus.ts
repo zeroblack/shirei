@@ -41,6 +41,17 @@ export function stageOf(s: GitFileStatus): Stage {
 export const statusMap = (files: GitFileStatus[]): Map<string, GitFileStatus> =>
   new Map(files.map((f) => [f.path, f]));
 
+/** The single-flight guard a refresh trigger checks before fetching: no
+ *  point asking for a root-less tree, a disabled feature, or a fetch
+ *  that is already running. */
+export function shouldRunGitRefresh(opts: {
+  statusInTree: boolean;
+  root: string | null;
+  inFlight: boolean;
+}): boolean {
+  return opts.statusInTree && opts.root !== null && !opts.inFlight;
+}
+
 const parentOf = (path: string): string => path.slice(0, path.lastIndexOf("/"));
 
 export function folderSummaries(

@@ -210,6 +210,9 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.filetree.newFile": "Nuevo archivo",
   "ui.filetree.newFilePrompt": "Nombre del archivo nuevo",
   "ui.filetree.createFailed": "No se pudo crear el archivo (quizás ya existe).",
+  "ui.filetree.headTabTitle": "{name} (HEAD)",
+  "ui.filetree.ghostUnavailable":
+    "No se pudo leer la versión HEAD de ese archivo.",
   "ui.prompt.hintConfirm": "confirmar",
   "ui.prompt.hintCancel": "cancelar",
 

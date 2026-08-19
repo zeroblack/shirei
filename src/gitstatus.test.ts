@@ -7,6 +7,7 @@ import {
   folderSummaries,
   type GitFileStatus,
   letterOf,
+  shouldRunGitRefresh,
   stageOf,
   statusMap,
 } from "./gitstatus";
@@ -209,5 +210,25 @@ describe("folderMark", () => {
     expect(folderMark(sums.get("/r/src/deep"), false).kind).toBe(
       "conflict-dot",
     );
+  });
+});
+
+describe("shouldRunGitRefresh", () => {
+  const base = { statusInTree: true, root: "/repo", inFlight: false };
+
+  it("runs when the feature is on, a root is known, and nothing is in flight", () => {
+    expect(shouldRunGitRefresh(base)).toBe(true);
+  });
+
+  it("skips when the feature is disabled in config", () => {
+    expect(shouldRunGitRefresh({ ...base, statusInTree: false })).toBe(false);
+  });
+
+  it("skips when no root is open yet", () => {
+    expect(shouldRunGitRefresh({ ...base, root: null })).toBe(false);
+  });
+
+  it("skips a second call while one is already in flight", () => {
+    expect(shouldRunGitRefresh({ ...base, inFlight: true })).toBe(false);
   });
 });

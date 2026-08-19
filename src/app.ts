@@ -28,6 +28,7 @@ import {
   type ConfirmPolicy,
   configSet,
   DEFAULT_FONT_SIZE,
+  gitStatuses,
   type MemoryProjectDoc,
   type MemoryStatus,
   memoryInit,
@@ -47,6 +48,7 @@ import { FocusCell, type FocusCellShortcuts } from "./focus/cell";
 import type { Phase } from "./focus/machine";
 import { fontStack, isFontLoaded, registerFont } from "./fonts";
 import { GitHistory } from "./githistory";
+import { shouldRunGitRefresh } from "./gitstatus";
 import { setLocale, t } from "./i18n";
 import { isImage, mediaKind, PANEL_RIGHT, SEARCH, SIDEBAR } from "./icons";
 import { ImageSession } from "./image";
@@ -386,6 +388,8 @@ export class App {
   private lastRoot: string | null = null;
   private treeRoot: string | null = null;
   private watchedRoot: string | null = null;
+  private gitStatusInFlight = false;
+  private gitStatusTimer: number | null = null;
   private snapshotTimer: ReturnType<typeof setInterval> | null = null;
   private ageTimer: ReturnType<typeof setInterval> | null = null;
   private lastSessionJson: string | null = null;
@@ -460,8 +464,10 @@ export class App {
         void recordOpen(path).catch(() => {});
         void this.openFile(path, { newTab });
       },
+      onOpenGhost: (path, content) => void this.openGhostFile(path, content),
       onEscape: () => this.sessions.get(this.activeId ?? "")?.focus(),
     });
+    this.tree.setShowDeleted(config.git.status.show_deleted);
     this.todoDividerEl = document.querySelector<HTMLElement>(
       "#todo-divider",
     ) as HTMLElement;
@@ -554,6 +560,10 @@ export class App {
     window.addEventListener("focus", () => {
       this.cmdAvailable.clear();
       this.current()?.recoverRenderers(false);
+      // A file edited in place or `git add` from the terminal never touches
+      // the tree's structural watch, so returning focus to the window is the
+      // trigger that catches both.
+      this.refreshGitStatuses();
     });
     window.addEventListener("pointerdown", () => this.noteActivity(), {
       capture: true,
@@ -996,6 +1006,7 @@ export class App {
 
   async bindMenu(): Promise<void> {
     await listen("tree-changed", () => this.onTreeChanged());
+    await listen("git-changed", () => this.refreshGitStatuses());
     await listen("menu-new-tab", () => void this.newTab());
     await listen("menu-close-tab", () => void this.closeActive());
     await listen("menu-palette", () => void this.openQuickOpen());
@@ -1178,6 +1189,10 @@ export class App {
     this.updateContextHint();
     webglPool.setCap(c.render.webgl_pool_cap);
     this.applyFocusCellsConfig(c);
+    this.tree.setShowDeleted(c.git.status.show_deleted);
+    if (!previous.git.status.status_in_tree && c.git.status.status_in_tree) {
+      this.refreshGitStatuses();
+    }
     if (previous.memory.enabled !== c.memory.enabled) {
       void this.refreshMemoryBadge();
     }
@@ -1775,6 +1790,82 @@ export class App {
     session.focus();
     this.persist();
     if (this.panelVisible) void this.openWorkspaceTree();
+    this.setActiveProject(null);
+  }
+
+  private openGhostFile(path: string, content: string | null): Promise<void> {
+    return this.enqueue(() => this.doOpenGhostFile(path, content));
+  }
+
+  // No genuinely read-only viewer exists in the app yet, so a ghost row opens
+  // as an ordinary editor tab, wired with the HEAD content instead of a disk
+  // read and locked to read-only inside EditorSession; the title marks it
+  // as the committed snapshot so it never reads as the live (deleted) file.
+  private async doOpenGhostFile(
+    path: string,
+    content: string | null,
+  ): Promise<void> {
+    if (content == null) {
+      this.notify(t("ui.filetree.ghostUnavailable"));
+      return;
+    }
+    const existing = this.tabs.find(
+      (tab) => tab.kind === "editor" && tab.path === path && tab.ghost,
+    );
+    if (existing) {
+      this.activate(existing.id);
+      return;
+    }
+    const id = nextId();
+    const name = basename(path);
+    const tab: EditorTab = {
+      id,
+      kind: "editor",
+      title: t("ui.filetree.headTabTitle", { name }),
+      path,
+      dirty: false,
+      lastUsedAt: Date.now(),
+      pinned: false,
+      ghost: true,
+    };
+    this.tabs.push(tab);
+
+    const container = document.createElement("div");
+    container.className = "terminal-host editor-host";
+    this.host.appendChild(container);
+
+    const ES = await loadEditor();
+    const session = new ES(id, path, container, {
+      fontFamily: fontStack(this.config.font.family, this.config.fonts),
+      fontSize: this.config.font.size,
+      palette: this.config.theme.terminal,
+      preset: this.config.theme.preset,
+      editor: this.config.editor,
+      git: this.config.git,
+      readOnlyContent: content,
+    });
+    session.onHistory = () => void this.openHistory(session);
+    this.sessions.set(id, session);
+    this.logMetric("tab_created", {
+      tabId: id,
+      projectId: null,
+      payload: JSON.stringify({ paneKind: "editor", has_project: false }),
+    });
+    this.trackNewTabDormancy(id);
+
+    this.activeId = id;
+    this.showActive();
+    try {
+      await session.open();
+    } catch (e) {
+      console.error("open ghost file failed:", path, e);
+      this.notify(t("ui.app.cannotShowFile"));
+      await this.doCloseTab(id);
+      return;
+    }
+    this.renderTabs();
+    session.focus();
+    this.persist();
     this.setActiveProject(null);
   }
 
@@ -3031,6 +3122,7 @@ export class App {
     }
     const filePath = this.activeFilePath();
     if (filePath) await this.tree.revealPath(filePath);
+    this.refreshGitStatuses();
   }
 
   private stopTreeWatch(): void {
@@ -3384,7 +3476,45 @@ export class App {
       this.treeChangeTimer = null;
       void this.refreshMemoryBadge();
       if (this.panelVisible) void this.tree.refresh();
+      this.refreshGitStatuses();
     }, 120);
+  }
+
+  /** Single-flight, debounced entry point for every git-status refresh
+   *  trigger: the tree watcher, the dedicated `git-changed` event, window
+   *  focus, and project/root switches. */
+  private refreshGitStatuses(): void {
+    if (this.gitStatusTimer !== null) window.clearTimeout(this.gitStatusTimer);
+    this.gitStatusTimer = window.setTimeout(
+      () => {
+        this.gitStatusTimer = null;
+        void this.runGitStatusRefresh();
+      },
+      Math.max(0, this.config.git.status.refresh_debounce_ms),
+    );
+  }
+
+  private async runGitStatusRefresh(): Promise<void> {
+    if (
+      !shouldRunGitRefresh({
+        statusInTree: this.config.git.status.status_in_tree,
+        root: this.treeRoot,
+        inFlight: this.gitStatusInFlight,
+      })
+    ) {
+      return;
+    }
+    const root = this.treeRoot as string;
+    this.gitStatusInFlight = true;
+    try {
+      const report = await gitStatuses(root);
+      this.tree.setStatuses(report, root);
+    } catch {
+      // A directory that is not a git repo is the common case, not an error
+      // to surface.
+    } finally {
+      this.gitStatusInFlight = false;
+    }
   }
 
   private refreshTreeIfVisible(): void {
@@ -4297,32 +4427,37 @@ export class App {
 
   private persist(): void {
     if (this.restoring) return;
-    const session: SavedTab[] = this.tabs.map((t) => {
-      const active = t.id === this.activeId;
-      if (t.kind === "terminal") {
-        const grid = this.sessions.get(t.id);
+    // A ghost view's content lives only in this session's memory; persisting
+    // its path would restore it as a normal (and broken) open of a file that
+    // no longer exists on disk.
+    const session: SavedTab[] = this.tabs
+      .filter((t) => t.kind !== "editor" || !t.ghost)
+      .map((t) => {
+        const active = t.id === this.activeId;
+        if (t.kind === "terminal") {
+          const grid = this.sessions.get(t.id);
+          return {
+            kind: "terminal" as const,
+            tree:
+              grid instanceof PaneGrid
+                ? grid.serialize()
+                : ({ kind: "leaf", id: t.id } as PaneNode),
+            projectId: t.projectId,
+            title: t.title,
+            color: t.color,
+            lastUsedAt: t.lastUsedAt,
+            pinned: t.pinned,
+            active,
+          };
+        }
         return {
-          kind: "terminal" as const,
-          tree:
-            grid instanceof PaneGrid
-              ? grid.serialize()
-              : ({ kind: "leaf", id: t.id } as PaneNode),
-          projectId: t.projectId,
-          title: t.title,
-          color: t.color,
+          kind: "editor" as const,
+          path: t.path,
           lastUsedAt: t.lastUsedAt,
           pinned: t.pinned,
           active,
         };
-      }
-      return {
-        kind: "editor" as const,
-        path: t.path,
-        lastUsedAt: t.lastUsedAt,
-        pinned: t.pinned,
-        active,
-      };
-    });
+      });
     const dock = this.pinCells.map((cell) => {
       if (cell?.session instanceof BrowserSession) {
         return { kind: "browser" as const, url: cell.session.path };

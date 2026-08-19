@@ -24,7 +24,8 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.git.label": "Git",
   "settings.git.title": "Git",
   "settings.git.desc": "Diff, historial y blame dentro del editor.",
-  "settings.git.search": "git blame historial diff commit autor anotar gutter",
+  "settings.git.search":
+    "git blame historial diff commit autor anotar gutter estado árbol eliminados fantasma",
   "settings.git.blameEnabled": "Blame en línea al abrir",
   "settings.git.blameEnabledDesc":
     "Muestra la autoría por línea al abrir un archivo. Se alterna cuando quieras con el botón del editor o su atajo.",
@@ -37,6 +38,12 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.git.historyViewDiff": "Diff (cambio del commit)",
   "settings.git.historyViewWorking": "Árbol de trabajo",
   "settings.git.historyViewFull": "Archivo",
+  "settings.git.statusInTree": "Mostrar el estado de git en el árbol",
+  "settings.git.statusInTreeDesc":
+    "Marca en línea, mientras navegas, los archivos modificados, en stage, sin seguimiento o en conflicto.",
+  "settings.git.showDeleted": "Mostrar archivos eliminados como filas fantasma",
+  "settings.git.showDeletedDesc":
+    "Lista los archivos borrados del disco pero aún rastreados por git, atenuados, para volver a abrir su última versión en el commit.",
   "settings.editor.group.saving": "Guardado",
   "settings.editor.group.markdown": "Markdown",
   "settings.editor.group.editing": "Edición",

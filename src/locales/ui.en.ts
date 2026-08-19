@@ -208,6 +208,8 @@ export const uiEn = {
   "ui.filetree.newFilePrompt": "New file name",
   "ui.filetree.createFailed":
     "Couldn't create the file (it may already exist).",
+  "ui.filetree.headTabTitle": "{name} (HEAD)",
+  "ui.filetree.ghostUnavailable": "Couldn't read that file's HEAD version.",
   "ui.prompt.hintConfirm": "confirm",
   "ui.prompt.hintCancel": "cancel",
 

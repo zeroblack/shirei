@@ -268,6 +268,7 @@ export class EditorSession {
   private preset: "dark" | "light";
   private editorCfg: EditorConfig;
   private gitCfg: GitConfig;
+  private readonly readOnlyContent: string | null;
   private diffOn = false;
   private blameOn = false;
   private diffBtn: HTMLButtonElement | null = null;
@@ -297,6 +298,7 @@ export class EditorSession {
       preset: "dark" | "light";
       editor: EditorConfig;
       git: GitConfig;
+      readOnlyContent?: string;
     },
   ) {
     this.id = id;
@@ -308,6 +310,7 @@ export class EditorSession {
     this.preset = look.preset;
     this.editorCfg = look.editor;
     this.gitCfg = look.git;
+    this.readOnlyContent = look.readOnlyContent ?? null;
   }
 
   private indentExt(): Extension {
@@ -325,7 +328,7 @@ export class EditorSession {
   // Toggles an inline diff of the working file against its committed (HEAD)
   // version; chunks can be reverted in place. Git commits stay in the console.
   async toggleDiff(): Promise<void> {
-    if (!this.view) return;
+    if (!this.view || this.readOnlyContent !== null) return;
     if (this.diffOn) {
       this.diffOn = false;
       this.diffBtn?.classList.remove("active");
@@ -354,11 +357,21 @@ export class EditorSession {
   }
 
   async open(): Promise<void> {
-    const file = await readFile(this.path);
-    this.baseMtime = file.mtime;
+    const readOnly = this.readOnlyContent !== null;
+    let doc: string;
+    if (readOnly) {
+      doc = this.readOnlyContent as string;
+    } else {
+      const file = await readFile(this.path);
+      this.baseMtime = file.mtime;
+      doc = file.content;
+    }
     const state = EditorState.create({
-      doc: file.content,
+      doc,
       extensions: [
+        readOnly
+          ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
+          : [],
         vimConf.of(this.editorCfg.vim ? vim() : []),
         highlightSpecialChars(),
         history(),
@@ -421,7 +434,7 @@ export class EditorSession {
     this.container.appendChild(this.savedIndicator());
     const lang = await languageFor(this.path);
     if (lang) this.view.dispatch({ effects: languageConf.reconfigure(lang) });
-    if (this.gitCfg.blame.enabled) void this.setBlame(true, false);
+    if (!readOnly && this.gitCfg.blame.enabled) void this.setBlame(true, false);
   }
 
   private chromeButtons(): HTMLElement {
@@ -430,16 +443,21 @@ export class EditorSession {
     const history = this.chromeButton(HISTORY, t("cmd.git.history"), () =>
       this.onHistory?.(),
     );
-    this.diffBtn = this.chromeButton(
-      DIFF,
-      t("ui.editor.diff.toggle"),
-      () => void this.toggleDiff(),
-    );
-    this.blameBtn = this.chromeButton(BLAME, t("cmd.git.blame-toggle"), () =>
-      this.toggleBlame(),
-    );
-    group.append(history, this.diffBtn, this.blameBtn);
-    if (isHtml(this.path)) {
+    group.append(history);
+    // Diffing and blaming a HEAD snapshot against itself carries no signal,
+    // so a read-only ghost view keeps only history from the working toolbar.
+    if (this.readOnlyContent === null) {
+      this.diffBtn = this.chromeButton(
+        DIFF,
+        t("ui.editor.diff.toggle"),
+        () => void this.toggleDiff(),
+      );
+      this.blameBtn = this.chromeButton(BLAME, t("cmd.git.blame-toggle"), () =>
+        this.toggleBlame(),
+      );
+      group.append(this.diffBtn, this.blameBtn);
+    }
+    if (this.readOnlyContent === null && isHtml(this.path)) {
       this.previewBtn = this.chromeButton(
         BROWSER_GLYPH,
         t("ui.editor.preview.toggle"),
@@ -467,11 +485,12 @@ export class EditorSession {
   }
 
   toggleBlame(): void {
+    if (this.readOnlyContent !== null) return;
     void this.setBlame(!this.blameOn, true);
   }
 
   isPreviewable(): boolean {
-    return isHtml(this.path);
+    return this.readOnlyContent === null && isHtml(this.path);
   }
 
   async togglePreview(): Promise<void> {
@@ -566,10 +585,15 @@ export class EditorSession {
   }
 
   async save(): Promise<SaveResult> {
+    // A ghost/HEAD view is never dirty, but Cmd+S reaches every editor
+    // unconditionally — without this guard it would happily recreate a
+    // deleted file on disk from its own read-only buffer.
+    if (this.readOnlyContent !== null) return { ok: true };
     return this.write(this.baseMtime);
   }
 
   async saveForce(): Promise<SaveResult> {
+    if (this.readOnlyContent !== null) return { ok: true };
     return this.write(null);
   }
 

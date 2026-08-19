@@ -22,7 +22,8 @@ export const settingsEn = {
   "settings.git.label": "Git",
   "settings.git.title": "Git",
   "settings.git.desc": "Diff, history, and blame inside the editor.",
-  "settings.git.search": "git blame history diff commit author annotate gutter",
+  "settings.git.search":
+    "git blame history diff commit author annotate gutter status tree deleted ghost",
   "settings.git.blameEnabled": "Inline blame on open",
   "settings.git.blameEnabledDesc":
     "Show per-line authorship when a file opens. Toggle anytime with the editor button or its shortcut.",
@@ -35,6 +36,12 @@ export const settingsEn = {
   "settings.git.historyViewDiff": "Diff (commit change)",
   "settings.git.historyViewWorking": "Working tree",
   "settings.git.historyViewFull": "File",
+  "settings.git.statusInTree": "Show git status in the file tree",
+  "settings.git.statusInTreeDesc":
+    "Mark modified, staged, untracked, and conflicted files inline as you browse.",
+  "settings.git.showDeleted": "Show deleted files as ghost rows",
+  "settings.git.showDeletedDesc":
+    "List files removed from disk but still tracked by git, dimmed, so you can reopen their last committed version.",
   "settings.editor.group.saving": "Saving",
   "settings.editor.group.markdown": "Markdown",
   "settings.editor.group.editing": "Editing",
