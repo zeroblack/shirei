@@ -7,12 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.9] - 2026-08-19
+
 ### Added
 - Project memory: a per-project `.shirei/memory/` (overview, decisions, resume note, session
   summaries) served to any AI CLI through the bundled `shirei-memory` MCP server. Keyboard
   actions to open it, resume from it and save the current session; Settings > Memory with
-  one-click, previewed registration for Claude Code, Codex, Gemini CLI, OpenCode, Cursor and
-  Amp; tab badge that flags stale memory.
+  one-click, previewed registration for Claude Code, Codex, Gemini CLI, Antigravity, OpenCode,
+  Cursor and Amp; tab badge that flags stale memory.
+- Activating memory on a project now also reaches the CLIs. Registering the MCP server is
+  user-scoped and only makes the tools reachable; CLIs that defer MCP tools never look them
+  up unless the project's instructions file says the memory exists. Opening project memory
+  writes that note into `AGENTS.md`, `CLAUDE.md` or `GEMINI.md` — whichever the registered,
+  installed CLIs read — after showing which files it would touch. The block sits between
+  markers, so it updates in place and leaves the rest of the file untouched.
+- A project whose memory is still empty gets seeded on its own: when an agent finishes work
+  there, Shirei asks it once to fill the overview, so the first session is not spent
+  dictating what to write.
+- The prompts and the overview template are editable in Settings and follow the app language,
+  so an empty field means the built-in default and anything typed replaces it.
+- Autosave, off by default: when an agent finishes a stretch of work, Shirei asks it to save
+  the session, for the times it forgets on its own.
+- Settings > Memory reports whether the memory server actually answers, with its name and how
+  many tools it listed. A written config file only proves the text landed; this catches a
+  stale shim or a broken binary at registration time instead of leaving an agent silently
+  without memory.
+
+### Fixed
+- Codex is registered with `default_tools_approval_mode = "auto"`, so memory calls stop
+  going through its approval gate. Registered without it, a memory call surfaces as
+  `user cancelled MCP tool call`, which points nowhere near approval as the cause. Existing
+  registrations show as drifted and Repair updates them.
+- Selecting a file with `⌘A` and copying with `⌘C` now copies the whole document. Only the
+  lines rendered on screen made it to the clipboard, because the editor draws just the
+  viewport and the copy was serialising the screen instead of the file.
+- Closing a browser pane no longer starts the paused video in it. The teardown emptied the
+  page's media elements, which its player read as the video having ended, so it began the
+  next one while the pane was closing.
 
 ## [0.16.8] - 2026-08-07
 
@@ -358,7 +389,8 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.16.2...HEAD
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.16.9...HEAD
+[0.16.9]: https://github.com/zeroblack/shirei/compare/v0.16.8...v0.16.9
 [0.16.2]: https://github.com/zeroblack/shirei/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/zeroblack/shirei/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/zeroblack/shirei/compare/v0.15.0...v0.16.0
