@@ -15,16 +15,37 @@ pub struct Thresholds {
 pub struct Status {
     pub exists: bool,
     pub overview_updated: Option<String>,
+    pub overview_filled: bool,
     pub stale: bool,
     pub stale_reason: Option<String>,
     pub sessions_count: usize,
     pub resume_age_hours: Option<u64>,
 }
 
+fn has_prose(body: &str) -> bool {
+    body.lines().any(|line| {
+        let trimmed = line.trim();
+        !trimmed.is_empty() && !is_heading(trimmed)
+    })
+}
+
+fn is_heading(trimmed: &str) -> bool {
+    let Some(rest) = trimmed.strip_prefix('#') else {
+        return false;
+    };
+    let hashes = 1 + rest.chars().take_while(|c| *c == '#').count();
+    if hashes > 6 {
+        return false;
+    }
+    let after = &trimmed[hashes..];
+    after.is_empty() || after.starts_with(char::is_whitespace)
+}
+
 pub fn status(store: &Store, root: &Path, th: &Thresholds, now: OffsetDateTime) -> Status {
     let mut st = Status {
         exists: store.exists(),
         overview_updated: None,
+        overview_filled: false,
         stale: false,
         stale_reason: None,
         sessions_count: 0,
@@ -37,7 +58,11 @@ pub fn status(store: &Store, root: &Path, th: &Thresholds, now: OffsetDateTime) 
     if let Some(fm) = store.resume().ok().and_then(|d| d.front) {
         st.resume_age_hours = Some((now - fm.updated).whole_hours().max(0) as u64);
     }
-    let Some(fm) = store.overview().ok().and_then(|d| d.front) else {
+    let Ok(overview) = store.overview() else {
+        return st;
+    };
+    st.overview_filled = has_prose(&overview.body);
+    let Some(fm) = overview.front else {
         return st;
     };
     st.overview_updated = fm.updated.format(&Rfc3339).ok();
@@ -73,6 +98,7 @@ pub fn overview_status_line(s: &Status) -> String {
 mod tests {
     use super::*;
     use crate::frontmatter::{self, FrontMatter};
+    use crate::store::Skeleton;
     use std::fs;
     use tempfile::TempDir;
     use time::Duration;
@@ -86,7 +112,7 @@ mod tests {
     fn store_with_overview_age(days: i64) -> (TempDir, Store) {
         let tmp = TempDir::new().unwrap();
         let s = Store::new(tmp.path(), crate::DEFAULT_DIR_NAME);
-        s.init("x").unwrap();
+        s.init("x", &Skeleton::builtin()).unwrap();
         let mut fm = FrontMatter::now("x");
         fm.updated = OffsetDateTime::now_utc() - Duration::days(days);
         fs::write(
@@ -114,6 +140,37 @@ mod tests {
                     .unwrap(),
             );
         }
+    }
+
+    #[test]
+    fn has_prose_is_false_for_skeleton_only_body() {
+        assert!(!has_prose(
+            "# Project overview\n\n## Purpose\n\n## Stack\n\n## Gotchas\n"
+        ));
+    }
+
+    #[test]
+    fn has_prose_is_true_once_a_heading_has_content() {
+        assert!(has_prose(
+            "# Project overview\n\n## Purpose\n\nA CLI-first terminal cockpit.\n"
+        ));
+    }
+
+    #[test]
+    fn has_prose_is_false_for_empty_body() {
+        assert!(!has_prose(""));
+    }
+
+    #[test]
+    fn has_prose_is_false_for_blank_lines_and_headings_only() {
+        assert!(!has_prose("# Overview\n\n\n## Stack\n   \n"));
+    }
+
+    #[test]
+    fn has_prose_is_true_for_a_bullet_list() {
+        assert!(has_prose(
+            "# Overview\n\n- built on Tauri 2\n- Rust + xterm.js\n"
+        ));
     }
 
     #[test]
@@ -163,6 +220,20 @@ mod tests {
             )
             .stale
         );
+    }
+
+    #[test]
+    fn overview_filled_reflects_skeleton_versus_prose() {
+        let tmp = TempDir::new().unwrap();
+        let s = Store::new(tmp.path(), crate::DEFAULT_DIR_NAME);
+        s.init("x", &Skeleton::builtin()).unwrap();
+        let skeleton_status = status(&s, tmp.path(), &TH, OffsetDateTime::now_utc());
+        assert!(skeleton_status.exists);
+        assert!(!skeleton_status.overview_filled);
+
+        let (_tmp2, s2) = store_with_overview_age(0);
+        let filled_status = status(&s2, tmp.path(), &TH, OffsetDateTime::now_utc());
+        assert!(filled_status.overview_filled);
     }
 
     #[test]

@@ -8,6 +8,22 @@ use time::{Date, OffsetDateTime};
 
 pub const OVERVIEW_SKELETON: &str =
     "# Project overview\n\n## Purpose\n\n## Stack\n\n## Run and test\n\n## Conventions\n\n## Gotchas\n";
+pub const DECISIONS_SKELETON: &str = "# Decisions\n";
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Skeleton {
+    pub overview: String,
+    pub decisions: String,
+}
+
+impl Skeleton {
+    pub fn builtin() -> Self {
+        Self {
+            overview: OVERVIEW_SKELETON.to_string(),
+            decisions: DECISIONS_SKELETON.to_string(),
+        }
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -111,13 +127,13 @@ impl Store {
         Ok(())
     }
 
-    pub fn init(&self, by: &str) -> Result<()> {
+    pub fn init(&self, by: &str, skeleton: &Skeleton) -> Result<()> {
         if self.exists() {
             return Ok(());
         }
         fs::create_dir_all(self.dir.join("sessions"))?;
-        self.write_atomic("overview.md", &FrontMatter::now(by), OVERVIEW_SKELETON)?;
-        self.write_atomic("decisions.md", &FrontMatter::now(by), "# Decisions\n")?;
+        self.write_atomic("overview.md", &FrontMatter::now(by), &skeleton.overview)?;
+        self.write_atomic("decisions.md", &FrontMatter::now(by), &skeleton.decisions)?;
         self.write_atomic("resume.md", &FrontMatter::now(by), "")
     }
 
@@ -341,14 +357,27 @@ mod tests {
     fn init_is_idempotent_and_writes_skeleton() {
         let (_t, s) = store();
         assert!(!s.exists());
-        s.init("claude-code").unwrap();
+        s.init("claude-code", &Skeleton::builtin()).unwrap();
         assert!(s.exists());
         let doc = s.overview().unwrap();
         assert_eq!(doc.body, OVERVIEW_SKELETON);
         assert_eq!(doc.front.unwrap().by, "claude-code");
         s.write_overview("custom", "codex", 4096).unwrap();
-        s.init("claude-code").unwrap();
+        s.init("claude-code", &Skeleton::builtin()).unwrap();
         assert_eq!(s.overview().unwrap().body, "custom");
+    }
+
+    #[test]
+    fn init_writes_a_custom_skeleton() {
+        let (_t, s) = store();
+        let skeleton = Skeleton {
+            overview: "# Custom overview\n".to_string(),
+            decisions: "# Custom decisions\n".to_string(),
+        };
+        s.init("claude-code", &skeleton).unwrap();
+        assert_eq!(s.overview().unwrap().body, "# Custom overview\n");
+        let all = s.decisions(None, None).unwrap();
+        assert_eq!(all.trim(), "");
     }
 
     #[test]
@@ -361,7 +390,7 @@ mod tests {
     #[test]
     fn overview_cap_warns_but_writes() {
         let (_t, s) = store();
-        s.init("x").unwrap();
+        s.init("x", &Skeleton::builtin()).unwrap();
         let big = "a".repeat(5000);
         let out = s.write_overview(&big, "x", 4096).unwrap();
         assert!(out.warning.unwrap().contains("4096"));
@@ -371,7 +400,7 @@ mod tests {
     #[test]
     fn decisions_append_and_filter() {
         let (_t, s) = store();
-        s.init("x").unwrap();
+        s.init("x", &Skeleton::builtin()).unwrap();
         s.record_decision(
             "Use rmcp",
             "Official SDK.",
@@ -397,7 +426,7 @@ mod tests {
     #[test]
     fn resume_overwrites() {
         let (_t, s) = store();
-        s.init("x").unwrap();
+        s.init("x", &Skeleton::builtin()).unwrap();
         s.set_resume("first", "a").unwrap();
         s.set_resume("second", "b").unwrap();
         let doc = s.resume().unwrap();
@@ -408,7 +437,7 @@ mod tests {
     #[test]
     fn sessions_are_listed_newest_first_and_readable() {
         let (_t, s) = store();
-        s.init("x").unwrap();
+        s.init("x", &Skeleton::builtin()).unwrap();
         let input = SessionInput {
             title: "Fix caret jump".into(),
             summary: "moved cap to cm-content".into(),
@@ -436,7 +465,7 @@ mod tests {
     #[test]
     fn save_session_rejects_empty_title_and_bad_ids() {
         let (_t, s) = store();
-        s.init("x").unwrap();
+        s.init("x", &Skeleton::builtin()).unwrap();
         let bad = SessionInput {
             title: "  ".into(),
             ..Default::default()
@@ -454,7 +483,7 @@ mod tests {
     #[test]
     fn session_with_unknown_id_is_an_error_not_an_empty_doc() {
         let (_t, s) = store();
-        s.init("x").unwrap();
+        s.init("x", &Skeleton::builtin()).unwrap();
         assert!(matches!(
             s.session("2099-01-01-0000-claude-code-nope"),
             Err(StoreError::InvalidArgs(_))
@@ -464,7 +493,7 @@ mod tests {
     #[test]
     fn save_session_dedupes_same_minute_same_title() {
         let (_t, s) = store();
-        s.init("x").unwrap();
+        s.init("x", &Skeleton::builtin()).unwrap();
         let input = SessionInput {
             title: "Fix caret jump".into(),
             summary: "first pass".into(),

@@ -28,9 +28,13 @@ import {
   type ConfirmPolicy,
   configSet,
   DEFAULT_FONT_SIZE,
+  type MemoryProjectDoc,
   type MemoryStatus,
   memoryInit,
+  memoryProjectActivate,
+  memoryProjectPreview,
   memoryStatus,
+  memoryWriteDefaults,
   type Project,
   type TerminalColors,
 } from "./config";
@@ -49,7 +53,13 @@ import { ImageSession } from "./image";
 import { Keymap } from "./keymap";
 import { eventToKeystroke, formatKeystroke, resolveBindings } from "./keys";
 import { MediaSession } from "./media";
-import { memoryBadgeState, promptLine } from "./memory-actions";
+import {
+  memoryBadgeState,
+  promptLine,
+  resolveTemplate,
+  shouldAutosave,
+  shouldBootstrapMemory,
+} from "./memory-actions";
 import {
   type DormancyInput,
   type DormancyState,
@@ -93,6 +103,7 @@ import type { Screencast } from "./screencast";
 import type { CssRect } from "./screencast-core";
 import { resolveSearchRoot, type ScopeRoots } from "./searchscope";
 import {
+  type Confidence,
   cycleWaitingId,
   getSessionState,
   initSessionState,
@@ -405,6 +416,10 @@ export class App {
   private readonly metricsSessionId = crypto.randomUUID();
   private readonly tabDormancy = new Map<string, DormancyState>();
   private readonly agentMetricsState = new Map<string, SessionState>();
+  private readonly autosaveState = new Map<string, SessionState>();
+  private readonly autosaveLastFiredAt = new Map<string, number>();
+  private readonly bootstrapState = new Map<string, SessionState>();
+  private readonly bootstrappedProjects = new Set<string>();
   private readonly seenProjectIds = new Set<string>();
   private activeProjectId: string | null = null;
   private metricsTimer: ReturnType<typeof setInterval> | null = null;
@@ -932,6 +947,7 @@ export class App {
 
   async init(): Promise<void> {
     this.logMetric("session_start");
+    void this.syncMemoryDefaults();
     this.tree.setHome(await homeDir());
     const saved = loadSession();
     if (saved.length === 0) {
@@ -1036,6 +1052,8 @@ export class App {
       );
       this.notifications.sync(this.notificationRows());
       this.emitAgentMetrics();
+      this.maybeAutosaveMemory();
+      this.maybeBootstrapMemory();
     });
   }
 
@@ -1160,6 +1178,13 @@ export class App {
     this.applyFocusCellsConfig(c);
     if (previous.memory.enabled !== c.memory.enabled) {
       void this.refreshMemoryBadge();
+    }
+    if (
+      previous.memory.overview_skeleton !== c.memory.overview_skeleton ||
+      previous.memory.decisions_header !== c.memory.decisions_header ||
+      previous.locale !== c.locale
+    ) {
+      void this.syncMemoryDefaults();
     }
     if (
       previous.session.snapshot_interval_secs !==
@@ -2541,6 +2566,8 @@ export class App {
     const projectId = tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
     this.logMetric("tab_closed", { tabId: id, projectId });
     this.untrackTabMetrics(id);
+    this.autosaveState.delete(id);
+    this.autosaveLastFiredAt.delete(id);
 
     this.sessions.delete(id);
     this.tabs = this.tabs.filter((t) => t.id !== id);
@@ -2690,12 +2717,24 @@ export class App {
           {
             id: "memory.resume",
             name: t("cmd.memory.resume"),
-            run: () => this.sendMemoryPrompt(this.config.memory.resume_prompt),
+            run: () =>
+              this.sendMemoryPrompt(
+                resolveTemplate(
+                  this.config.memory.resume_prompt,
+                  t("ui.memory.prompt.resume"),
+                ),
+              ),
           },
           {
             id: "memory.save_session",
             name: t("cmd.memory.save_session"),
-            run: () => this.sendMemoryPrompt(this.config.memory.save_prompt),
+            run: () =>
+              this.sendMemoryPrompt(
+                resolveTemplate(
+                  this.config.memory.save_prompt,
+                  t("ui.memory.prompt.save"),
+                ),
+              ),
           },
           {
             id: "memory.open_decisions",
@@ -3124,11 +3163,21 @@ export class App {
     }
     let overview: string;
     try {
-      overview = await memoryInit(cwd);
+      overview = await memoryInit(cwd, {
+        overview: resolveTemplate(
+          this.config.memory.overview_skeleton,
+          t("ui.memory.skeleton.overview"),
+        ),
+        decisions: resolveTemplate(
+          this.config.memory.decisions_header,
+          t("ui.memory.skeleton.decisions"),
+        ),
+      });
     } catch (e) {
       this.notify(errorMessage(e));
       return;
     }
+    await this.activateProjectDocs(cwd);
     const dir = overview.slice(0, -"overview.md".length);
     if (file === "sessions") {
       await this.revealDir(`${dir}sessions`);
@@ -3138,12 +3187,176 @@ export class App {
     await this.refreshMemoryBadge();
   }
 
+  // Registering the MCP server is user-scoped and only makes the tools reachable. CLIs that
+  // defer MCP tools need a line in the project's instructions file before their model looks
+  // them up, so activating memory here also lands that block in every registered CLI's file.
+  private async activateProjectDocs(cwd: string): Promise<void> {
+    const block = resolveTemplate(
+      this.config.memory.project_doc_block,
+      t("ui.memory.projectDoc.block"),
+    );
+    let docs: MemoryProjectDoc[];
+    try {
+      docs = await memoryProjectPreview(cwd, block);
+    } catch (e) {
+      this.notify(errorMessage(e));
+      return;
+    }
+    const pending = docs.filter((d) => d.state !== "current");
+    if (pending.length === 0) return;
+    const confirmed = await confirmDialog({
+      title: t("ui.memory.projectDoc.confirm"),
+      detail: pending
+        .map((d) => `${d.doc_path}  ·  ${d.adapters.join(", ")}`)
+        .join("\n"),
+      confirmLabel: t("ui.memory.projectDoc.confirmLabel"),
+      danger: false,
+    });
+    if (!confirmed) return;
+    try {
+      const written = await memoryProjectActivate(cwd, block);
+      if (written.length > 0) {
+        showToast(t("ui.memory.projectDoc.done", { count: written.length }));
+      }
+    } catch (e) {
+      this.notify(errorMessage(e));
+    }
+  }
+
   private sendMemoryPrompt(prompt: string): void {
     if (!this.config.memory.enabled) {
       showToast(t("ui.memory.disabled"));
       return;
     }
     this.activeGrid()?.sendLineActive(promptLine(prompt));
+  }
+
+  // The safety net for when the agent forgets to save on its own: types the
+  // save prompt into the terminal on a high-confidence "done", scoped to the
+  // active tab only. A "waiting" agent is asking the user something, so it is
+  // deliberately excluded even though tabSessionStates() would surface it —
+  // typing the save prompt there would answer the agent's own prompt with
+  // prose instead of a real answer.
+  private maybeAutosaveMemory(): void {
+    if (!this.config.memory.enabled || !this.config.memory.autosave) return;
+    const tab = this.tab(this.activeId);
+    if (!tab) return;
+    const entry = this.tabSessionStates().get(tab.id);
+    const prev = this.autosaveState.get(tab.id);
+    if (entry) this.autosaveState.set(tab.id, entry.state);
+    else this.autosaveState.delete(tab.id);
+    if (!entry) return;
+
+    const cooldownMin = this.config.memory.autosave_cooldown_min;
+    const lastFiredAt = this.autosaveLastFiredAt.get(tab.id);
+    if (
+      !shouldAutosave(
+        prev,
+        entry.state,
+        entry.confidence,
+        lastFiredAt,
+        cooldownMin,
+        Date.now(),
+      )
+    ) {
+      return;
+    }
+
+    void this.fireAutosave(tab.id);
+  }
+
+  private async fireAutosave(tabId: string): Promise<void> {
+    try {
+      const cwd = await this.activeCwd();
+      if (!cwd) return;
+      const status = await memoryStatus(cwd);
+      if (!status.exists || this.activeId !== tabId) return;
+      this.autosaveLastFiredAt.set(tabId, Date.now());
+      this.activeGrid()?.sendLineActive(
+        promptLine(
+          resolveTemplate(
+            this.config.memory.save_prompt,
+            t("ui.memory.prompt.save"),
+          ),
+        ),
+      );
+    } catch {
+      // Fires on a background poll, not a user action: swallow IPC errors.
+    }
+  }
+
+  // Seeds project memory the first time an agent finishes work in a project
+  // that has none, scoped to the active tab and fired once per project root
+  // for the app's lifetime so a declining agent is not nagged on every idle.
+  private maybeBootstrapMemory(): void {
+    if (!this.config.memory.enabled || !this.config.memory.bootstrap_auto) {
+      return;
+    }
+    const tab = this.tab(this.activeId);
+    if (!tab) return;
+    const entry = this.tabSessionStates().get(tab.id);
+    const prev = this.bootstrapState.get(tab.id);
+    if (entry) this.bootstrapState.set(tab.id, entry.state);
+    else this.bootstrapState.delete(tab.id);
+    if (!entry) return;
+    if (entry.state.kind !== "done" || entry.confidence !== "high") return;
+    if (prev?.kind === "done") return;
+
+    void this.fireBootstrap(tab.id, prev, entry.state, entry.confidence);
+  }
+
+  private async fireBootstrap(
+    tabId: string,
+    prev: SessionState | undefined,
+    next: SessionState,
+    confidence: Confidence,
+  ): Promise<void> {
+    try {
+      const cwd = await this.activeCwd();
+      if (!cwd) return;
+      const alreadySeeded = this.bootstrappedProjects.has(cwd);
+      const status = alreadySeeded ? null : await memoryStatus(cwd);
+      if (
+        !shouldBootstrapMemory(
+          this.activeId === tabId,
+          status,
+          prev,
+          next,
+          confidence,
+          alreadySeeded,
+        )
+      ) {
+        return;
+      }
+      this.bootstrappedProjects.add(cwd);
+      this.activeGrid()?.sendLineActive(
+        promptLine(
+          resolveTemplate(
+            this.config.memory.bootstrap_prompt,
+            t("ui.memory.prompt.bootstrap"),
+          ),
+        ),
+      );
+    } catch {
+      // Fires on a background poll, not a user action: swallow IPC errors.
+    }
+  }
+
+  private async syncMemoryDefaults(): Promise<void> {
+    try {
+      await memoryWriteDefaults(
+        resolveTemplate(
+          this.config.memory.overview_skeleton,
+          t("ui.memory.skeleton.overview"),
+        ),
+        resolveTemplate(
+          this.config.memory.decisions_header,
+          t("ui.memory.skeleton.decisions"),
+        ),
+      );
+    } catch (e) {
+      console.error("failed to sync memory defaults", e);
+    }
   }
 
   private async refreshMemoryBadge(): Promise<void> {
@@ -3457,10 +3670,20 @@ export class App {
         void this.openProjectMemory("sessions");
         break;
       case "memory.resume":
-        this.sendMemoryPrompt(this.config.memory.resume_prompt);
+        this.sendMemoryPrompt(
+          resolveTemplate(
+            this.config.memory.resume_prompt,
+            t("ui.memory.prompt.resume"),
+          ),
+        );
         break;
       case "memory.save_session":
-        this.sendMemoryPrompt(this.config.memory.save_prompt);
+        this.sendMemoryPrompt(
+          resolveTemplate(
+            this.config.memory.save_prompt,
+            t("ui.memory.prompt.save"),
+          ),
+        );
         break;
       case "editor.vim-toggle":
         this.toggleVim();

@@ -11,6 +11,7 @@ mod git;
 mod logs;
 mod memory;
 mod memory_adapters;
+mod memory_project;
 mod metrics;
 mod mux_client;
 mod notify;
@@ -477,10 +478,15 @@ pub fn run() {
             preview::preview_close,
             memory::memory_status,
             memory::memory_init,
+            memory::memory_write_defaults,
             memory_adapters::memory_adapters_status,
             memory_adapters::memory_adapter_preview,
             memory_adapters::memory_adapter_register,
             memory_adapters::memory_adapter_unregister,
+            memory_adapters::memory_handshake,
+            memory_project::memory_project_preview,
+            memory_project::memory_project_activate,
+            memory_project::memory_project_deactivate,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Focused(true) = event

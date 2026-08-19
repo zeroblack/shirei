@@ -367,4 +367,20 @@ export const uiEn = {
   "ui.memory.disabled": "Project memory is disabled in Settings.",
   "ui.memory.badge": "Project memory",
   "ui.memory.badgeStale": "Project memory is stale",
+  "ui.memory.prompt.resume":
+    "Read the project memory (memory_overview, then memory_resume) and continue from where it left off.",
+  "ui.memory.prompt.save":
+    "Summarize this session into project memory with memory_save_session, then update memory_set_resume with the current state and next step.",
+  "ui.memory.prompt.bootstrap":
+    "This project has no memory yet. Call memory_init, then read the repository and fill the overview with memory_update_overview. Record the stack choice with memory_record_decision, and set the next step with memory_set_resume.",
+  "ui.memory.skeleton.overview":
+    "# Project overview\n\n## Purpose\n\n## Stack\n\n## Run and test\n\n## Conventions\n\n## Gotchas\n",
+  "ui.memory.skeleton.decisions": "# Decisions\n",
+  "ui.memory.projectDoc.confirm":
+    "CLIs only find the memory if their instructions file says it exists. Write that note?",
+  "ui.memory.projectDoc.confirmLabel": "Write",
+  "ui.memory.projectDoc.done":
+    "Memory activated in {count} instructions file(s).",
+  "ui.memory.projectDoc.block":
+    "## Project memory\n\nThis project has persistent memory behind the `shirei-memory` MCP server. Depending on the CLI its tools may be deferred: if you do not see them listed, look them up in the tool registry before assuming they are absent.\n\n- `memory_overview` at the start of any task, before touching code.\n- `memory_resume` when continuing previous work.\n- `memory_record_decision` the moment you make a non-obvious choice, reject an alternative or hit a constraint.\n- `memory_set_resume` whenever you pause mid-task.\n- `memory_save_session` before the session ends or the task is done.\n- `memory_update_overview` when the stack, commands or conventions change.\n",
 };

@@ -1,6 +1,6 @@
 use crate::config::{ConfigManager, MemoryConfig};
 use crate::error::{Error, Result};
-use shirei_memory_core::store::Store;
+use shirei_memory_core::store::{Skeleton, Store};
 use shirei_memory_core::{Status, Thresholds, find_root, resolve_root_for_write, status};
 use std::path::{Path, PathBuf};
 use tauri::State;
@@ -30,6 +30,7 @@ fn absent() -> Status {
     Status {
         exists: false,
         overview_updated: None,
+        overview_filled: false,
         stale: false,
         stale_reason: None,
         sessions_count: 0,
@@ -52,19 +53,78 @@ pub fn memory_status(manager: State<'_, ConfigManager>, path: String) -> Result<
     ))
 }
 
+#[derive(serde::Deserialize)]
+pub struct MemorySkeleton {
+    pub overview: String,
+    pub decisions: String,
+}
+
+fn resolve_skeleton(skeleton: Option<MemorySkeleton>) -> Skeleton {
+    let builtin = Skeleton::builtin();
+    match skeleton {
+        None => builtin,
+        Some(s) => Skeleton {
+            overview: if s.overview.trim().is_empty() {
+                builtin.overview
+            } else {
+                s.overview
+            },
+            decisions: if s.decisions.trim().is_empty() {
+                builtin.decisions
+            } else {
+                s.decisions
+            },
+        },
+    }
+}
+
 #[tauri::command]
-pub fn memory_init(manager: State<'_, ConfigManager>, path: String) -> Result<String> {
+pub fn memory_init(
+    manager: State<'_, ConfigManager>,
+    path: String,
+    skeleton: Option<MemorySkeleton>,
+) -> Result<String> {
     let cfg = manager.memory();
     let root = resolve_root_for_write(Path::new(&path), &cfg.dir_name, &home_dir());
     let store = Store::new(&root, &cfg.dir_name);
     store
-        .init("human")
+        .init("human", &resolve_skeleton(skeleton))
         .map_err(|e| Error::Memory(e.to_string()))?;
     Ok(store
         .dir()
         .join("overview.md")
         .to_string_lossy()
         .into_owned())
+}
+
+#[derive(serde::Serialize)]
+struct MemoryDefaultsFile {
+    overview_skeleton: String,
+    decisions_header: String,
+}
+
+fn memory_defaults_path() -> PathBuf {
+    home_dir().join(".shirei/memory-defaults.json")
+}
+
+fn write_defaults_file(path: &Path, overview: String, decisions: String) -> Result<String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let payload = MemoryDefaultsFile {
+        overview_skeleton: overview,
+        decisions_header: decisions,
+    };
+    let text = serde_json::to_string_pretty(&payload).map_err(|e| Error::Memory(e.to_string()))?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, text)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub fn memory_write_defaults(overview: String, decisions: String) -> Result<String> {
+    write_defaults_file(&memory_defaults_path(), overview, decisions)
 }
 
 pub fn sidecar_path() -> Result<PathBuf> {
@@ -164,5 +224,55 @@ mod tests {
             script,
             "#!/bin/sh\nexec \"/Users/me/\\\"weird\\\"\\\\App/shirei-memory\" \"$@\"\n"
         );
+    }
+    #[test]
+    fn resolve_skeleton_falls_back_to_builtin_when_none() {
+        let s = resolve_skeleton(None);
+        assert_eq!(s, Skeleton::builtin());
+    }
+
+    #[test]
+    fn resolve_skeleton_falls_back_per_field_when_blank() {
+        let s = resolve_skeleton(Some(MemorySkeleton {
+            overview: "  ".into(),
+            decisions: "# Custom decisions\n".into(),
+        }));
+        assert_eq!(s.overview, Skeleton::builtin().overview);
+        assert_eq!(s.decisions, "# Custom decisions\n");
+    }
+
+    #[test]
+    fn resolve_skeleton_keeps_non_empty_overrides() {
+        let s = resolve_skeleton(Some(MemorySkeleton {
+            overview: "# Custom overview\n".into(),
+            decisions: "# Custom decisions\n".into(),
+        }));
+        assert_eq!(s.overview, "# Custom overview\n");
+        assert_eq!(s.decisions, "# Custom decisions\n");
+    }
+    #[test]
+    fn write_defaults_file_creates_parent_and_writes_json() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("nested/memory-defaults.json");
+        let written = write_defaults_file(
+            &path,
+            "# Custom overview\n".into(),
+            "# Custom decisions\n".into(),
+        )
+        .unwrap();
+        assert_eq!(written, path.to_string_lossy());
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("# Custom overview"));
+        assert!(text.contains("# Custom decisions"));
+    }
+
+    #[test]
+    fn write_defaults_file_accepts_empty_strings() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("memory-defaults.json");
+        write_defaults_file(&path, String::new(), String::new()).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("\"overview_skeleton\": \"\""));
+        assert!(text.contains("\"decisions_header\": \"\""));
     }
 }

@@ -309,6 +309,7 @@ export interface MemoryCliAdapter {
   format: "json" | "toml";
   insertion: string;
   snippet: unknown;
+  project_doc: string;
 }
 
 export interface MemoryConfig {
@@ -320,13 +321,26 @@ export interface MemoryConfig {
   resume_stale_hours: number;
   resume_prompt: string;
   save_prompt: string;
+  bootstrap_prompt: string;
+  bootstrap_auto: boolean;
+  overview_skeleton: string;
+  decisions_header: string;
+  project_doc_block: string;
   cli_adapters: MemoryCliAdapter[];
   shim_path: string;
+  autosave: boolean;
+  autosave_cooldown_min: number;
+}
+
+export interface MemorySkeleton {
+  overview: string;
+  decisions: string;
 }
 
 export interface MemoryStatus {
   exists: boolean;
   overview_updated: string | null;
+  overview_filled: boolean;
   stale: boolean;
   stale_reason: string | null;
   sessions_count: number;
@@ -434,8 +448,10 @@ export const onConfigChanged = (cb: (c: Config) => void) =>
   listen<Config>("config-changed", (e) => cb(e.payload));
 export const memoryStatus = (path: string) =>
   invoke<MemoryStatus>("memory_status", { path });
-export const memoryInit = (path: string) =>
-  invoke<string>("memory_init", { path });
+export const memoryInit = (path: string, skeleton?: MemorySkeleton) =>
+  invoke<string>("memory_init", { path, skeleton });
+export const memoryWriteDefaults = (overview: string, decisions: string) =>
+  invoke<string>("memory_write_defaults", { overview, decisions });
 
 export interface MemoryRegistration {
   id: string;
@@ -458,6 +474,30 @@ export const memoryAdapterRegister = (id: string) =>
   invoke<MemoryRegistration>("memory_adapter_register", { id });
 export const memoryAdapterUnregister = (id: string) =>
   invoke<MemoryRegistration>("memory_adapter_unregister", { id });
+
+export interface MemoryHandshake {
+  ok: boolean;
+  shim_path: string;
+  server: string;
+  tools: string[];
+  error: string;
+}
+export interface MemoryProjectDoc {
+  doc_path: string;
+  adapters: string[];
+  state: "current" | "missing" | "outdated";
+  before: string;
+  after: string;
+  diff: string;
+}
+export const memoryHandshake = () =>
+  invoke<MemoryHandshake>("memory_handshake");
+export const memoryProjectPreview = (path: string, block: string) =>
+  invoke<MemoryProjectDoc[]>("memory_project_preview", { path, block });
+export const memoryProjectActivate = (path: string, block: string) =>
+  invoke<string[]>("memory_project_activate", { path, block });
+export const memoryProjectDeactivate = (path: string) =>
+  invoke<string[]>("memory_project_deactivate", { path });
 
 export const openConfigFile = () => invoke<void>("open_config_file");
 export const pickProjectDir = () => invoke<string | null>("pick_project_dir");

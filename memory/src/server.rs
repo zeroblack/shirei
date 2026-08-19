@@ -5,7 +5,7 @@ use rmcp::{
     schemars, tool, tool_handler, tool_router, ErrorData as McpError, RoleServer, ServerHandler,
 };
 use shirei_memory_core::gitinfo::current_branch;
-use shirei_memory_core::store::{slug, SessionInput, Store, StoreError};
+use shirei_memory_core::store::{slug, SessionInput, Skeleton, Store, StoreError};
 use shirei_memory_core::{
     find_root, overview_status_line, resolve_root_for_write, status, Thresholds, DEFAULT_DIR_NAME,
 };
@@ -15,6 +15,7 @@ use time::OffsetDateTime;
 const OVERVIEW_URI: &str = "shirei://memory/overview";
 const NO_PROJECT: &str = "no project memory found from this directory";
 const NOT_INIT: &str = "call memory_init first";
+const NUDGE: &str = "\n\n---\nReminder: call memory_record_decision the moment you make a non-obvious choice, reject an alternative, or hit a constraint worth remembering, not in a batch at the end. Before this session ends, call memory_save_session and refresh the resume note with memory_set_resume.";
 
 #[derive(Clone, Debug)]
 pub struct Settings {
@@ -23,19 +24,51 @@ pub struct Settings {
     pub dir_name: String,
     pub max_bytes: usize,
     pub thresholds: Thresholds,
+    pub skeleton: Skeleton,
+}
+
+#[derive(serde::Deserialize, Default)]
+struct SkeletonDefaultsFile {
+    overview_skeleton: Option<String>,
+    decisions_header: Option<String>,
+}
+
+fn load_skeleton(home: &std::path::Path) -> Skeleton {
+    let path = std::env::var_os("SHIREI_MEMORY_DEFAULTS")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".shirei/memory-defaults.json"));
+    let builtin = Skeleton::builtin();
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return builtin;
+    };
+    let Ok(file) = serde_json::from_str::<SkeletonDefaultsFile>(&text) else {
+        return builtin;
+    };
+    Skeleton {
+        overview: file
+            .overview_skeleton
+            .filter(|s| !s.is_empty())
+            .unwrap_or(builtin.overview),
+        decisions: file
+            .decisions_header
+            .filter(|s| !s.is_empty())
+            .unwrap_or(builtin.decisions),
+    }
 }
 
 impl Settings {
     pub fn from_env() -> Self {
         let env = |k: &str| std::env::var(k).ok();
         let num = |k: &str, d: u64| env(k).and_then(|v| v.parse().ok()).unwrap_or(d);
+        let home = env("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("/"));
         Self {
             cwd: env("SHIREI_MEMORY_CWD")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"))),
-            home: env("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("/")),
+            skeleton: load_skeleton(&home),
+            home,
             dir_name: env("SHIREI_MEMORY_DIR_NAME").unwrap_or_else(|| DEFAULT_DIR_NAME.to_string()),
             max_bytes: num("SHIREI_MEMORY_MAX_BYTES", 4096) as usize,
             thresholds: Thresholds {
@@ -105,6 +138,10 @@ fn ok(text: impl Into<String>) -> ToolResult {
     )]))
 }
 
+fn ok_with_nudge(text: impl Into<String>) -> ToolResult {
+    ok(format!("{}{NUDGE}", text.into()))
+}
+
 fn fail(code: &str, msg: impl std::fmt::Display) -> ToolResult {
     Ok(CallToolResult::error(vec![ContentBlock::text(format!(
         "{code}: {msg}"
@@ -171,18 +208,18 @@ impl MemoryServer {
     }
 
     #[tool(
-        description = "Read the project overview (purpose, stack, run/test, conventions, gotchas). Call this at the start of every task. Prefixed with a freshness note."
+        description = "Call this at the start of any task in this project, before you touch code. Reads the project overview (purpose, stack, run/test, conventions, gotchas), prefixed with a freshness note."
     )]
     async fn memory_overview(&self) -> ToolResult {
         match self.overview_text() {
-            Ok(t) => ok(t),
+            Ok(t) => ok_with_nudge(t),
             Err(StoreError::NotInitialised) => ok("No project memory yet. Call memory_init to create it, then fill the overview with memory_update_overview."),
             Err(e) => store_err(e),
         }
     }
 
     #[tool(
-        description = "Read 'where I left off' (resume note) plus the newest session summary. Call this when continuing previous work."
+        description = "Call this when continuing previous work in this project. Reads 'where I left off' (resume note) plus the newest session summary."
     )]
     async fn memory_resume(&self) -> ToolResult {
         let Some((_, store)) = self.read_store() else {
@@ -203,7 +240,7 @@ impl MemoryServer {
                 s.title, s.cli, s.updated, s.id
             ));
         }
-        ok(out)
+        ok_with_nudge(out)
     }
 
     #[tool(
@@ -252,18 +289,21 @@ impl MemoryServer {
     }
 
     #[tool(
-        description = "Create the project memory (.shirei/memory) with an overview skeleton. Idempotent."
+        description = "Create the project memory (.shirei/memory) with an overview skeleton. Call this once, the first time a project has no memory. Idempotent."
     )]
     async fn memory_init(&self, ctx: RequestContext<RoleServer>) -> ToolResult {
         let store = self.write_store();
-        match store.init(&client_name(&ctx)) {
-            Ok(()) => ok(format!("Project memory ready at {}", store.dir().display())),
+        match store.init(&client_name(&ctx), &self.settings.skeleton) {
+            Ok(()) => ok(format!(
+                "Project memory ready at {}. Next: fill the overview now with memory_update_overview (purpose, stack, run/test commands, conventions).",
+                store.dir().display()
+            )),
             Err(e) => store_err(e),
         }
     }
 
     #[tool(
-        description = "Replace the project overview body (markdown). Keep it to one screen; a warning is returned above the size cap."
+        description = "Call this whenever the stack, commands, or conventions change, to keep overview.md current. Replaces the project overview body (markdown). Keep it to one screen; a warning is returned above the size cap."
     )]
     async fn memory_update_overview(
         &self,
@@ -283,7 +323,7 @@ impl MemoryServer {
     }
 
     #[tool(
-        description = "Append a decision (title, why, optional alternatives rejected) to the decisions log."
+        description = "Call this the moment you make a non-obvious choice, reject an alternative, or hit a constraint worth remembering, while you work, not batched at the end. Appends a decision (title, why, optional alternatives rejected) to the decisions log."
     )]
     async fn memory_record_decision(
         &self,
@@ -305,7 +345,7 @@ impl MemoryServer {
     }
 
     #[tool(
-        description = "Overwrite the resume note: what you were doing, current state, next step. Call before ending a session."
+        description = "Call this whenever you pause mid-task, not only at the end of a session. Overwrites the resume note: what you were doing, current state, next step."
     )]
     async fn memory_set_resume(
         &self,
@@ -322,7 +362,7 @@ impl MemoryServer {
     }
 
     #[tool(
-        description = "Save a distilled summary of this session (title, summary, changes, decisions, dead_ends, next). Offer this before ending a session. Returns the session id."
+        description = "Call this before the session ends or the task is done, not only when asked. Saves a distilled summary of this session (title, summary, changes, decisions, dead_ends, next). Returns the session id."
     )]
     async fn memory_save_session(
         &self,
@@ -360,7 +400,16 @@ impl ServerHandler for MemoryServer {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().enable_resources().build())
             .with_server_info(Implementation::from_build_env())
             .with_instructions(
-                "Project memory for this repository. Read memory_overview at the start of a task and memory_resume when continuing work. Before finishing, offer memory_save_session and memory_set_resume. Record non-obvious choices with memory_record_decision."
+                "Project memory for this repository. Follow these rules without waiting to be asked:\n\
+                 1. Call memory_overview at the start of any task in this project, and memory_resume \
+                 when continuing previous work.\n\
+                 2. Call memory_record_decision at the moment you make a non-obvious choice, reject an \
+                 alternative, or hit a constraint worth remembering. Do this as you work, not batched at \
+                 the end.\n\
+                 3. Call memory_set_resume whenever you pause mid-task, and memory_save_session before the \
+                 session ends or the task is done.\n\
+                 4. Call memory_update_overview to keep overview.md current whenever the stack, commands, \
+                 or conventions change."
                     .to_string(),
             )
     }

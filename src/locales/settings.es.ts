@@ -548,18 +548,31 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.memory.group.general": "General",
   "settings.memory.group.staleness": "Vigencia",
   "settings.memory.group.prompts": "Prompts",
+  "settings.memory.group.templates": "Plantillas",
   "settings.memory.group.clis": "Registro en CLIs",
   "settings.memory.enabled": "Activar memoria del proyecto",
   "settings.memory.enabledDesc":
     "Muestra las acciones y la insignia de memoria.",
   "settings.memory.overviewMax": "Tope del overview (bytes)",
+  "settings.memory.bootstrapAuto": "Sembrar proyectos nuevos",
+  "settings.memory.bootstrapAutoDesc":
+    "Le pide al agente que llene la memoria la primera vez que termina un trabajo en un proyecto que no la tiene.",
+  "settings.memory.bootstrapPrompt": "Prompt de siembra",
+  "settings.memory.overviewSkeleton": "Plantilla del overview",
+  "settings.memory.decisionsHeader": "Encabezado de decisiones",
+  "settings.memory.autosave": "Autoguardar sesion",
+  "settings.memory.autosaveDesc":
+    "Escribe el prompt de guardado en el terminal cuando el agente termina.",
+  "settings.memory.autosaveCooldown": "Espera entre autoguardados (minutos)",
   "settings.memory.staleDays": "Vencido tras (días)",
   "settings.memory.staleCommits": "Vencido tras (commits)",
   "settings.memory.resumeHours": "Nota de retomar vencida tras (horas)",
   "settings.memory.resumePrompt": "Prompt para retomar",
   "settings.memory.savePrompt": "Prompt para guardar sesión",
-  "settings.memory.detected": "en PATH",
   "settings.memory.notDetected": "no encontrado",
+  "settings.memory.handshake": "Servidor de memoria",
+  "settings.memory.handshakeOk": "Responde",
+  "settings.memory.handshakeFail": "No responde",
   "settings.memory.state.registered": "Registrado",
   "settings.memory.state.missing": "Sin registrar",
   "settings.memory.state.drifted": "Difiere",
@@ -641,7 +654,8 @@ export const settingsEs: Record<keyof typeof settingsEn, string> = {
   "settings.updates.search":
     "actualizaciones actualizar version release upgrade descargar instalar",
   "settings.projects.search": "proyecto carpeta ruta layout plantilla",
-  "settings.memory.search": "memoria mcp retomar sesión cli registrar",
+  "settings.memory.search":
+    "memoria mcp retomar sesión cli registrar sembrar plantilla overview decisiones",
   "settings.about.search":
     "about acerca version licencia opensource dioni blog shirei significado japones agentes ia sesion mit actualizacion actualizar version nueva",
 };

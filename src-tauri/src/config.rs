@@ -275,6 +275,10 @@ pub struct MemoryCliAdapter {
     pub format: String,
     pub insertion: String,
     pub snippet: serde_json::Value,
+    // Filename, relative to the project root, of the instructions file this CLI reads.
+    // Registering the server is not enough for CLIs that defer MCP tools instead of
+    // listing them: without a line in this file their model never looks the tools up.
+    pub project_doc: String,
 }
 
 impl Default for MemoryCliAdapter {
@@ -288,7 +292,15 @@ impl Default for MemoryCliAdapter {
             format: "json".into(),
             insertion: String::new(),
             snippet: serde_json::Value::Null,
+            project_doc: String::new(),
         }
+    }
+}
+
+impl MemoryCliAdapter {
+    fn reading(mut self, project_doc: &str) -> Self {
+        self.project_doc = project_doc.into();
+        self
     }
 }
 
@@ -310,6 +322,7 @@ fn adapter(
         format: format.into(),
         insertion: insertion.into(),
         snippet,
+        project_doc: String::new(),
     }
 }
 
@@ -324,7 +337,8 @@ pub fn default_cli_adapters() -> Vec<MemoryCliAdapter> {
             "json",
             "/mcpServers/shirei-memory",
             serde_json::json!({ "type": "stdio", "command": "{shim}", "args": [] }),
-        ),
+        )
+        .reading("CLAUDE.md"),
         adapter(
             "codex",
             "Codex",
@@ -332,8 +346,11 @@ pub fn default_cli_adapters() -> Vec<MemoryCliAdapter> {
             "~/.codex/config.toml",
             "toml",
             "mcp_servers.shirei-memory",
-            cmd.clone(),
-        ),
+            // Codex routes MCP calls through its approval gate, and a denied call surfaces
+            // as "user cancelled MCP tool call" with no hint that approval was the cause.
+            serde_json::json!({ "command": "{shim}", "default_tools_approval_mode": "auto" }),
+        )
+        .reading("AGENTS.md"),
         adapter(
             "gemini",
             "Gemini CLI",
@@ -342,7 +359,18 @@ pub fn default_cli_adapters() -> Vec<MemoryCliAdapter> {
             "json",
             "/mcpServers/shirei-memory",
             cmd.clone(),
-        ),
+        )
+        .reading("GEMINI.md"),
+        adapter(
+            "antigravity",
+            "Antigravity",
+            "agy",
+            "~/.gemini/config/mcp_config.json",
+            "json",
+            "/mcpServers/shirei-memory",
+            cmd.clone(),
+        )
+        .reading("AGENTS.md"),
         adapter(
             "opencode",
             "OpenCode",
@@ -351,7 +379,8 @@ pub fn default_cli_adapters() -> Vec<MemoryCliAdapter> {
             "json",
             "/mcp/shirei-memory",
             serde_json::json!({ "type": "local", "command": ["{shim}"] }),
-        ),
+        )
+        .reading("AGENTS.md"),
         adapter(
             "cursor",
             "Cursor",
@@ -360,7 +389,8 @@ pub fn default_cli_adapters() -> Vec<MemoryCliAdapter> {
             "json",
             "/mcpServers/shirei-memory",
             cmd.clone(),
-        ),
+        )
+        .reading("AGENTS.md"),
         adapter(
             "amp",
             "Amp",
@@ -369,7 +399,8 @@ pub fn default_cli_adapters() -> Vec<MemoryCliAdapter> {
             "json",
             "/amp.mcpServers/shirei-memory",
             cmd,
-        ),
+        )
+        .reading("AGENTS.md"),
     ]
 }
 
@@ -384,8 +415,15 @@ pub struct MemoryConfig {
     pub resume_stale_hours: u64,
     pub resume_prompt: String,
     pub save_prompt: String,
+    pub bootstrap_prompt: String,
+    pub bootstrap_auto: bool,
+    pub overview_skeleton: String,
+    pub decisions_header: String,
+    pub project_doc_block: String,
     pub cli_adapters: Vec<MemoryCliAdapter>,
     pub shim_path: String,
+    pub autosave: bool,
+    pub autosave_cooldown_min: u64,
 }
 
 impl Default for MemoryConfig {
@@ -397,10 +435,17 @@ impl Default for MemoryConfig {
             stale_after_days: 14,
             stale_after_commits: 20,
             resume_stale_hours: 72,
-            resume_prompt: "Read the project memory (memory_overview, then memory_resume) and continue from where it left off.".into(),
-            save_prompt: "Summarize this session into project memory with memory_save_session, then update memory_set_resume with the current state and next step.".into(),
+            resume_prompt: String::new(),
+            save_prompt: String::new(),
+            bootstrap_prompt: String::new(),
+            bootstrap_auto: true,
+            overview_skeleton: String::new(),
+            decisions_header: String::new(),
+            project_doc_block: String::new(),
             cli_adapters: default_cli_adapters(),
             shim_path: "~/.shirei/bin/shirei-memory".into(),
+            autosave: false,
+            autosave_cooldown_min: 30,
         }
     }
 }

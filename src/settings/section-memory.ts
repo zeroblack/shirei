@@ -1,16 +1,25 @@
 import {
+  type MemoryHandshake,
   type MemoryRegistration,
   memoryAdapterPreview,
   memoryAdapterRegister,
   memoryAdaptersStatus,
   memoryAdapterUnregister,
+  memoryHandshake,
 } from "../config";
 import { confirmDialog } from "../confirm";
 import { errorMessage } from "../errors";
 import { type MessageKey, t } from "../i18n";
 import { showToast } from "../toast";
 import type { SettingsSection } from "./shell";
-import { boolField, groupLabel, numField, section, textField } from "./widgets";
+import {
+  boolField,
+  groupLabel,
+  numField,
+  section,
+  textAreaField,
+  textField,
+} from "./widgets";
 
 interface RowHandlers {
   onRegister: (id: string) => void;
@@ -25,30 +34,25 @@ export function renderAdapterRow(
   const row = document.createElement("div");
   row.className = "memory-adapter";
   row.dataset.state = reg.state;
+  row.dataset.detected = String(reg.detected);
 
   const name = document.createElement("span");
   name.className = "memory-adapter-name";
   name.textContent = label;
-
-  const detected = document.createElement("span");
-  detected.className = "memory-adapter-detected";
-  detected.textContent = reg.detected
-    ? t("settings.memory.detected")
-    : t("settings.memory.notDetected");
-
-  const state = document.createElement("span");
-  state.className = "memory-adapter-state";
-  state.dataset.state = reg.state;
-  state.textContent = t(`settings.memory.state.${reg.state}` as MessageKey);
 
   const path = document.createElement("code");
   path.className = "memory-adapter-path";
   path.textContent = reg.config_path;
   path.title = reg.config_path;
 
+  const state = document.createElement("span");
+  state.className = "memory-adapter-state";
+  state.dataset.state = reg.state;
+  state.textContent = t(`settings.memory.state.${reg.state}` as MessageKey);
+
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = "memory-adapter-action";
+  btn.className = "settings-action";
   if (reg.state === "registered") {
     btn.dataset.action = "unregister";
     btn.textContent = t("settings.memory.unregister");
@@ -61,7 +65,42 @@ export function renderAdapterRow(
         : t("settings.memory.register");
     btn.onclick = () => h.onRegister(reg.id);
   }
-  row.append(name, detected, state, path, btn);
+  row.append(name, path);
+  if (!reg.detected) {
+    const missing = document.createElement("span");
+    missing.className = "memory-adapter-detected";
+    missing.textContent = t("settings.memory.notDetected");
+    row.append(missing);
+  }
+  row.append(state, btn);
+  return row;
+}
+
+// A written config file only proves the text landed. This row reports whether the server
+// behind it actually answers, so a stale shim or a broken binary is visible here instead of
+// showing up later as an agent that quietly has no memory.
+export function renderHandshakeRow(h: MemoryHandshake): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "memory-handshake";
+  row.dataset.ok = String(h.ok);
+
+  const name = document.createElement("span");
+  name.className = "memory-adapter-name";
+  name.textContent = t("settings.memory.handshake");
+
+  const detail = document.createElement("code");
+  detail.className = "memory-adapter-path";
+  detail.textContent = h.ok ? `${h.server} · ${h.tools.length} tools` : h.error;
+  detail.title = h.shim_path;
+
+  const state = document.createElement("span");
+  state.className = "memory-adapter-state";
+  state.dataset.state = h.ok ? "registered" : "missing";
+  state.textContent = h.ok
+    ? t("settings.memory.handshakeOk")
+    : t("settings.memory.handshakeFail");
+
+  row.append(name, detail, state);
   return row;
 }
 
@@ -88,9 +127,14 @@ export const memorySection: SettingsSection = {
     const m = config.memory;
     const list = document.createElement("div");
     list.className = "memory-adapters";
+    const server = document.createElement("div");
+    server.className = "memory-adapters";
     const labels = new Map(m.cli_adapters.map((a) => [a.id, a.display_name]));
     const refresh = async () => {
       try {
+        memoryHandshake()
+          .then((h) => server.replaceChildren(renderHandshakeRow(h)))
+          .catch((e) => showToast(errorMessage(e)));
         const regs = await memoryAdaptersStatus();
         list.replaceChildren(
           ...regs.map((r) =>
@@ -144,6 +188,27 @@ export const memorySection: SettingsSection = {
           { min: 1024, max: 32768, step: 512 },
           save,
         ),
+        boolField(
+          t("settings.memory.bootstrapAuto"),
+          m,
+          "bootstrap_auto",
+          save,
+          t("settings.memory.bootstrapAutoDesc"),
+        ),
+        boolField(
+          t("settings.memory.autosave"),
+          m,
+          "autosave",
+          save,
+          t("settings.memory.autosaveDesc"),
+        ),
+        numField(
+          t("settings.memory.autosaveCooldown"),
+          m,
+          "autosave_cooldown_min",
+          { min: 5, max: 240, step: 5 },
+          save,
+        ),
         groupLabel(t("settings.memory.group.staleness")),
         numField(
           t("settings.memory.staleDays"),
@@ -172,10 +237,49 @@ export const memorySection: SettingsSection = {
           m,
           "resume_prompt",
           save,
-          "",
+          t("ui.memory.prompt.resume"),
+          undefined,
+          { stack: true },
         ),
-        textField(t("settings.memory.savePrompt"), m, "save_prompt", save, ""),
+        textField(
+          t("settings.memory.savePrompt"),
+          m,
+          "save_prompt",
+          save,
+          t("ui.memory.prompt.save"),
+          undefined,
+          { stack: true },
+        ),
+        textField(
+          t("settings.memory.bootstrapPrompt"),
+          m,
+          "bootstrap_prompt",
+          save,
+          t("ui.memory.prompt.bootstrap"),
+          undefined,
+          { stack: true },
+        ),
+        groupLabel(t("settings.memory.group.templates")),
+        textAreaField(
+          t("settings.memory.overviewSkeleton"),
+          m,
+          "overview_skeleton",
+          save,
+          t("ui.memory.skeleton.overview"),
+          undefined,
+          { rows: 6 },
+        ),
+        textAreaField(
+          t("settings.memory.decisionsHeader"),
+          m,
+          "decisions_header",
+          save,
+          t("ui.memory.skeleton.decisions"),
+          undefined,
+          { rows: 2 },
+        ),
         groupLabel(t("settings.memory.group.clis")),
+        server,
         list,
       ],
       t("settings.memory.desc"),

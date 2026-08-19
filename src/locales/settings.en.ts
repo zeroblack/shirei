@@ -529,17 +529,30 @@ export const settingsEn = {
   "settings.memory.group.general": "General",
   "settings.memory.group.staleness": "Freshness",
   "settings.memory.group.prompts": "Prompts",
+  "settings.memory.group.templates": "Templates",
   "settings.memory.group.clis": "CLI registration",
   "settings.memory.enabled": "Enable project memory",
   "settings.memory.enabledDesc": "Shows the memory actions and badge.",
   "settings.memory.overviewMax": "Overview size cap (bytes)",
+  "settings.memory.bootstrapAuto": "Seed new projects",
+  "settings.memory.bootstrapAutoDesc":
+    "Asks the agent to fill the memory the first time it finishes work in a project without one.",
+  "settings.memory.bootstrapPrompt": "Seed prompt",
+  "settings.memory.overviewSkeleton": "Overview template",
+  "settings.memory.decisionsHeader": "Decisions header",
+  "settings.memory.autosave": "Autosave session",
+  "settings.memory.autosaveDesc":
+    "Types the save prompt into the terminal when the agent finishes.",
+  "settings.memory.autosaveCooldown": "Autosave cooldown (minutes)",
   "settings.memory.staleDays": "Stale after (days)",
   "settings.memory.staleCommits": "Stale after (commits)",
   "settings.memory.resumeHours": "Resume note stale after (hours)",
   "settings.memory.resumePrompt": "Resume prompt",
   "settings.memory.savePrompt": "Save session prompt",
-  "settings.memory.detected": "on PATH",
   "settings.memory.notDetected": "not found",
+  "settings.memory.handshake": "Memory server",
+  "settings.memory.handshakeOk": "Answers",
+  "settings.memory.handshakeFail": "No answer",
   "settings.memory.state.registered": "Registered",
   "settings.memory.state.missing": "Not registered",
   "settings.memory.state.drifted": "Differs",
@@ -620,7 +633,8 @@ export const settingsEn = {
   "settings.updates.search":
     "updates update auto check version release upgrade download install",
   "settings.projects.search": "project folder path layout template",
-  "settings.memory.search": "memory mcp resume session cli register",
+  "settings.memory.search":
+    "memory mcp resume session cli register bootstrap seed template overview decisions",
   "settings.about.search":
     "about version license opensource dioni blog shirei meaning japanese agents ai session mit update upgrade release",
 };

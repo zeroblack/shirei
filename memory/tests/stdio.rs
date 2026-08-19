@@ -8,8 +8,19 @@ use tempfile::TempDir;
 use tokio::process::Command;
 
 async fn client(cwd: &std::path::Path) -> RunningService<RoleClient, ()> {
+    client_with_defaults(cwd, None).await
+}
+
+async fn client_with_defaults(
+    cwd: &std::path::Path,
+    defaults_path: Option<&std::path::Path>,
+) -> RunningService<RoleClient, ()> {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_shirei-memory"));
     cmd.env("SHIREI_MEMORY_CWD", cwd);
+    cmd.env_remove("SHIREI_MEMORY_DEFAULTS");
+    if let Some(p) = defaults_path {
+        cmd.env("SHIREI_MEMORY_DEFAULTS", p);
+    }
     ().serve(TokioChildProcess::new(cmd).unwrap())
         .await
         .unwrap()
@@ -78,9 +89,12 @@ async fn full_cycle_from_empty_project() {
     assert!(tmp.path().join(".shirei/memory/overview.md").is_file());
 
     let big = "x".repeat(5000);
+    let update_result =
+        text(&call(&c, "memory_update_overview", Some(json!({ "body": big }))).await);
+    assert!(update_result.contains("cap"));
     assert!(
-        text(&call(&c, "memory_update_overview", Some(json!({ "body": big }))).await)
-            .contains("cap")
+        !update_result.contains("Reminder:"),
+        "write-tool result should not carry the read-tool nudge: {update_result}"
     );
 
     call(
@@ -113,6 +127,10 @@ async fn full_cycle_from_empty_project() {
         resume.contains("mid-task") && resume.contains("Wire server"),
         "{resume}"
     );
+    assert!(resume.contains("Reminder:"), "{resume}");
+
+    let overview = text(&call(&c, "memory_overview", None).await);
+    assert!(overview.contains("Reminder:"), "{overview}");
 
     let res = c
         .read_resource(ReadResourceRequestParams::new("shirei://memory/overview"))
@@ -146,5 +164,37 @@ async fn invalid_args_surface_as_tool_error() {
     .await;
     assert_eq!(r.is_error, Some(true));
     assert!(text(&r).contains("memory/invalid-args"));
+    c.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn memory_init_uses_custom_skeleton_from_defaults_file() {
+    let tmp = TempDir::new().unwrap();
+    let defaults = TempDir::new().unwrap();
+    let defaults_path = defaults.path().join("memory-defaults.json");
+    std::fs::write(
+        &defaults_path,
+        json!({
+            "overview_skeleton": "# Custom overview\n\nCustom body\n",
+            "decisions_header": "# Custom decisions\n"
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let c = client_with_defaults(tmp.path(), Some(&defaults_path)).await;
+    call(&c, "memory_init", None).await;
+    let overview = std::fs::read_to_string(tmp.path().join(".shirei/memory/overview.md")).unwrap();
+    assert!(overview.contains("Custom body"), "{overview}");
+    c.cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn memory_init_falls_back_to_builtin_skeleton_when_defaults_file_is_absent() {
+    let tmp = TempDir::new().unwrap();
+    let missing = TempDir::new().unwrap().path().join("memory-defaults.json");
+    let c = client_with_defaults(tmp.path(), Some(&missing)).await;
+    call(&c, "memory_init", None).await;
+    let overview = std::fs::read_to_string(tmp.path().join(".shirei/memory/overview.md")).unwrap();
+    assert!(overview.contains("# Project overview"), "{overview}");
     c.cancel().await.unwrap();
 }

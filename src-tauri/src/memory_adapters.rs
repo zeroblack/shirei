@@ -356,7 +356,7 @@ fn sibling(path: &Path, suffix: &str) -> std::path::PathBuf {
     path.with_file_name(format!("{name}{suffix}"))
 }
 
-fn write_with_backup(path: &Path, text: &str) -> Result<()> {
+pub(crate) fn write_with_backup(path: &Path, text: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -453,6 +453,119 @@ pub async fn memory_adapter_unregister(
     tauri::async_runtime::spawn_blocking(move || state_of(&a, &shim, &home))
         .await
         .map_err(|e| Error::Os(e.to_string()))?
+}
+
+#[derive(Serialize)]
+pub struct Handshake {
+    pub ok: bool,
+    pub shim_path: String,
+    pub server: String,
+    pub tools: Vec<String>,
+    pub error: String,
+}
+
+const HANDSHAKE: &str = concat!(
+    r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","#,
+    r#""capabilities":{},"clientInfo":{"name":"shirei","version":"1"}}}"#,
+    "\n",
+    r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+    "\n",
+    r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
+    "\n",
+);
+
+fn kill_after(pid: u32, timeout: std::time::Duration) -> std::sync::mpsc::Sender<()> {
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        if rx.recv_timeout(timeout).is_err() {
+            unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
+        }
+    });
+    tx
+}
+
+fn tool_names(stdout: &str) -> Vec<String> {
+    stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter(|m| m.get("id").and_then(|i| i.as_u64()) == Some(2))
+        .filter_map(|m| m.pointer("/result/tools").cloned())
+        .filter_map(|t| t.as_array().cloned())
+        .flatten()
+        .filter_map(|t| t.get("name").and_then(|n| n.as_str()).map(String::from))
+        .collect()
+}
+
+fn server_name(stdout: &str) -> String {
+    stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find_map(|m| {
+            m.pointer("/result/serverInfo/name")
+                .and_then(|n| n.as_str())
+                .map(String::from)
+        })
+        .unwrap_or_default()
+}
+
+// The registry can only prove a config file was written. This spawns the shim and speaks
+// MCP to it, so a broken binary or a stale shim target is caught here instead of surfacing
+// as an agent that silently has no memory.
+pub fn handshake(shim: &Path, timeout: std::time::Duration) -> Handshake {
+    use std::io::{Read, Write};
+    let mut out = Handshake {
+        ok: false,
+        shim_path: shim.to_string_lossy().into_owned(),
+        server: String::new(),
+        tools: Vec::new(),
+        error: String::new(),
+    };
+    let spawned = std::process::Command::new(shim)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    let mut child = match spawned {
+        Ok(c) => c,
+        Err(e) => {
+            out.error = e.to_string();
+            return out;
+        }
+    };
+    let done = kill_after(child.id(), timeout);
+    if let Some(mut stdin) = child.stdin.take()
+        && let Err(e) = stdin.write_all(HANDSHAKE.as_bytes())
+    {
+        out.error = e.to_string();
+    }
+    let mut text = String::new();
+    if let Some(mut stdout) = child.stdout.take()
+        && let Err(e) = stdout.read_to_string(&mut text)
+        && out.error.is_empty()
+    {
+        out.error = e.to_string();
+    }
+    let _ = child.wait();
+    let _ = done.send(());
+    out.server = server_name(&text);
+    out.tools = tool_names(&text);
+    out.tools.sort();
+    if out.tools.is_empty() && out.error.is_empty() {
+        out.error = "the server started but listed no tools".into();
+    }
+    out.ok = !out.tools.is_empty();
+    out
+}
+
+#[tauri::command]
+pub async fn memory_handshake(manager: State<'_, ConfigManager>) -> Result<Handshake> {
+    let cfg = manager.memory();
+    let shim = expand_home(&cfg.shim_path, &home_dir());
+    tauri::async_runtime::spawn_blocking(move || {
+        handshake(&shim, std::time::Duration::from_secs(10))
+    })
+    .await
+    .map_err(|e| Error::Os(e.to_string()))
 }
 
 #[cfg(test)]
@@ -586,5 +699,49 @@ mod tests {
         assert!(!needs_write("missing"));
         assert!(needs_write("registered"));
         assert!(needs_write("drifted"));
+    }
+
+    const TOOLS_REPLY: &str = concat!(
+        r#"{"jsonrpc":"2.0","id":1,"result":{"serverInfo":{"name":"rmcp","version":"3"}}}"#,
+        "\n",
+        r#"{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"memory_overview"},"#,
+        r#"{"name":"memory_init"}]}}"#,
+        "\n",
+    );
+
+    #[test]
+    fn handshake_parses_the_tool_list_and_server_name() {
+        assert_eq!(tool_names(TOOLS_REPLY), ["memory_overview", "memory_init"]);
+        assert_eq!(server_name(TOOLS_REPLY), "rmcp");
+    }
+
+    #[test]
+    fn handshake_ignores_replies_to_other_requests() {
+        let noise = r#"{"jsonrpc":"2.0","id":7,"result":{"tools":[{"name":"other"}]}}"#;
+        assert!(tool_names(noise).is_empty());
+    }
+
+    #[test]
+    fn handshake_survives_non_json_lines_on_stdout() {
+        let dirty = format!("warning: something\n{TOOLS_REPLY}");
+        assert_eq!(tool_names(&dirty).len(), 2);
+    }
+
+    #[test]
+    fn handshake_reports_a_missing_binary_instead_of_panicking() {
+        let out = handshake(
+            Path::new("/nonexistent/shirei-memory"),
+            std::time::Duration::from_secs(2),
+        );
+        assert!(!out.ok);
+        assert!(!out.error.is_empty());
+        assert!(out.tools.is_empty());
+    }
+
+    #[test]
+    fn handshake_fails_when_the_binary_speaks_no_mcp() {
+        let out = handshake(Path::new("/bin/echo"), std::time::Duration::from_secs(5));
+        assert!(!out.ok);
+        assert_eq!(out.error, "the server started but listed no tools");
     }
 }
