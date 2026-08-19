@@ -178,8 +178,11 @@ export const GIT_ROLES: readonly GitRole[] = [
   { token: "--git-conflict", l: 0.62, c: 0.2, h: 25, minLc: 45 },
 ];
 
-// Derives the five git-status role colors against a theme's tab background,
-// APCA-validated per role in both directions (see colors.test.ts).
+// Derives the five git-status role colors against a caller-supplied surface,
+// APCA-validated per role in both directions (see colors.test.ts). Marks
+// paint on both the sidebar's --surface-1 and a selected row's --surface-2;
+// callers should anchor on whichever is harder for the role's own hue so one
+// derived color stays legible everywhere it's actually painted.
 export function deriveGitColors(bg: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const role of GIT_ROLES)

@@ -320,7 +320,13 @@ function applyChrome(
     document.documentElement.style.setProperty(k, v);
   for (const [k, v] of Object.entries(deriveStatusColors(vars["--bg"])))
     document.documentElement.style.setProperty(k, v);
-  for (const [k, v] of Object.entries(deriveGitColors(vars["--surface-1"])))
+  // Anchored on --surface-2, not --surface-1: every git role's base hue sits
+  // on the same bright side as fg on every catalog theme, so mixing further
+  // toward fg (surface-2 vs surface-1) only ever narrows the contrast gap.
+  // Surface-2 is therefore strictly the harder of the two rows a mark can
+  // paint on, and clearing it guarantees surface-1 clears too (see
+  // colors.test.ts).
+  for (const [k, v] of Object.entries(deriveGitColors(vars["--surface-2"])))
     document.documentElement.style.setProperty(k, v);
   document.documentElement.style.colorScheme = preset;
   // WebKit's native PDF viewer lives in a cross-origin iframe (asset://),

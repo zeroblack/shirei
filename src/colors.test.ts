@@ -81,9 +81,11 @@ describe("deriveStatusColors", () => {
 });
 
 describe("git role colours", () => {
-  // Mirrors `chromeFromTheme` in app.ts: the marks paint on --surface-1 in a
-  // plain row and on --surface-2 once that row is selected, so a role's
-  // colour is derived against surface-1 but has to stay legible on both.
+  // Mirrors `chromeFromTheme` in app.ts: a plain row paints on --surface-1,
+  // a selected row on --surface-2. Every role's base hue sits on the same
+  // bright side as fg on every catalog theme, so surface-2 (mixed further
+  // toward fg) is always the harder of the two — deriving against it is
+  // what app.ts actually does, and clearing it should clear surface-1 too.
   const terminals: { id: string; bg: string; fg: string }[] = [
     { id: "black", bg: "#000000", fg: "#ffffff" },
     ...THEMES.map((theme) => ({
@@ -95,86 +97,25 @@ describe("git role colours", () => {
   const surface1 = (t: { bg: string; fg: string }) => mix(t.bg, t.fg, 0.06);
   const surface2 = (t: { bg: string; fg: string }) => mix(t.bg, t.fg, 0.1);
 
-  it("clears its APCA floor on --surface-1 across every theme, in both directions", () => {
+  it("clears its APCA floor on both --surface-1 and --surface-2, in both directions", () => {
     for (const terminal of terminals) {
-      const bg1 = surface1(terminal);
-      const derived = deriveGitColors(bg1);
+      const derived = deriveGitColors(surface2(terminal));
+      const surfaces = [
+        ["--surface-1", surface1(terminal)],
+        ["--surface-2", surface2(terminal)],
+      ] as const;
       for (const role of GIT_ROLES) {
         const colour = derived[role.token];
-        expect(
-          apcaContrast(colour, bg1),
-          `${role.token} on ${terminal.id} --surface-1`,
-        ).toBeGreaterThanOrEqual(role.minLc);
+        for (const [label, bg] of surfaces) {
+          expect(
+            apcaContrast(colour, bg),
+            `${role.token} on ${terminal.id} ${label}`,
+          ).toBeGreaterThanOrEqual(role.minLc);
+        }
         expect(
           Math.abs(apcaContrast(terminal.bg, colour)),
           `${terminal.id} --bg knocked out of ${role.token}`,
         ).toBeGreaterThanOrEqual(45);
-      }
-    }
-  });
-
-  // Deriving against --surface-1 (spec §3) doesn't guarantee the same colour
-  // clears its floor once a row is selected and repaints on the slightly
-  // stronger --surface-2 — mixing further toward fg moves that background
-  // closer to the mark's own lightness, which *lowers* contrast on every
-  // theme measured here. This is a known, measured gap: the pairs below are
-  // pinned exactly so a real fix (or a regression) shows up as a test
-  // failure instead of silently drifting. Raising the anchor or the floor is
-  // a design call, not something to paper over here.
-  const KNOWN_SURFACE_2_GAPS = new Set([
-    "black:--git-conflict",
-    "pure-black:--git-conflict",
-    "tokyo-night:--git-renamed",
-    "tokyo-night:--git-deleted",
-    "tokyo-night:--git-conflict",
-    "catppuccin-mocha:--git-deleted",
-    "catppuccin-mocha:--git-conflict",
-    "catppuccin-latte:--git-modified",
-    "catppuccin-latte:--git-new",
-    "catppuccin-latte:--git-renamed",
-    "catppuccin-latte:--git-deleted",
-    "dracula:--git-modified",
-    "dracula:--git-new",
-    "dracula:--git-renamed",
-    "dracula:--git-deleted",
-    "dracula:--git-conflict",
-    "nord:--git-modified",
-    "nord:--git-new",
-    "nord:--git-renamed",
-    "nord:--git-deleted",
-    "nord:--git-conflict",
-    "gruvbox:--git-modified",
-    "gruvbox:--git-new",
-    "gruvbox:--git-renamed",
-    "gruvbox:--git-deleted",
-    "gruvbox:--git-conflict",
-    "one-dark:--git-modified",
-    "one-dark:--git-new",
-    "one-dark:--git-renamed",
-    "one-dark:--git-deleted",
-    "one-dark:--git-conflict",
-    "rose-pine:--git-renamed",
-    "rose-pine:--git-deleted",
-    "rose-pine:--git-conflict",
-    "kanagawa:--git-deleted",
-    "kanagawa:--git-conflict",
-    "japan-night:--git-renamed",
-    "japan-night:--git-deleted",
-    "japan-night:--git-conflict",
-  ]);
-
-  it("clears its APCA floor on --surface-2 too, outside the documented gaps", () => {
-    for (const terminal of terminals) {
-      const derived = deriveGitColors(surface1(terminal));
-      const bg2 = surface2(terminal);
-      for (const role of GIT_ROLES) {
-        const key = `${terminal.id}:${role.token}`;
-        const lc = apcaContrast(derived[role.token], bg2);
-        if (KNOWN_SURFACE_2_GAPS.has(key)) {
-          expect(lc, key).toBeLessThan(role.minLc);
-        } else {
-          expect(lc, key).toBeGreaterThanOrEqual(role.minLc);
-        }
       }
     }
   });
