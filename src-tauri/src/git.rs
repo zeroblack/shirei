@@ -2,8 +2,10 @@ use std::path::{Path, PathBuf};
 
 use git2::{Commit, Oid, Repository, Sort, Tree};
 use serde::Serialize;
+use tauri::State;
 
-use crate::error::Result;
+use crate::config::ConfigManager;
+use crate::error::{Error, Result};
 
 const HISTORY_LIMIT: usize = 200;
 
@@ -205,4 +207,240 @@ pub fn git_blame(path: String) -> Result<Vec<BlameLine>> {
         }
     }
     Ok(out)
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitFileStatus {
+    pub path: String,
+    pub kind: &'static str,
+    pub staged: bool,
+    pub unstaged: bool,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitStatusReport {
+    pub files: Vec<GitFileStatus>,
+    pub truncated: bool,
+}
+
+fn kind_of(s: git2::Status) -> &'static str {
+    if s.is_conflicted() {
+        return "conflicted";
+    }
+    if s.is_index_new() || s.is_wt_new() {
+        return if s.is_wt_new() && !s.is_index_new() {
+            "untracked"
+        } else {
+            "added"
+        };
+    }
+    if s.is_index_deleted() || s.is_wt_deleted() {
+        return "deleted";
+    }
+    if s.is_index_renamed() || s.is_wt_renamed() {
+        return "renamed";
+    }
+    "modified"
+}
+
+/// Working-tree status for every changed file under `root`'s repo, capped at
+/// `max` entries. Empty (not an error) when `root` is outside a repo, so the
+/// tree can call this unconditionally without special-casing non-repo roots.
+pub fn statuses_at(root: &Path, max: usize) -> Result<GitStatusReport> {
+    let Ok(repo) = Repository::discover(root) else {
+        return Ok(GitStatusReport {
+            files: Vec::new(),
+            truncated: false,
+        });
+    };
+    let Some(workdir) = repo.workdir().map(Path::to_path_buf) else {
+        return Ok(GitStatusReport {
+            files: Vec::new(),
+            truncated: false,
+        });
+    };
+    let mut opts = git2::StatusOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(false)
+        .include_ignored(false)
+        .renames_head_to_index(true)
+        .renames_index_to_workdir(true);
+    let statuses = repo.statuses(Some(&mut opts))?;
+    let truncated = statuses.len() > max;
+    let files = statuses
+        .iter()
+        .take(max)
+        .filter_map(|e| {
+            let s = e.status();
+            let rel = e.path()?;
+            Some(GitFileStatus {
+                path: workdir
+                    .join(rel)
+                    .to_string_lossy()
+                    .trim_end_matches('/')
+                    .to_string(),
+                kind: kind_of(s),
+                staged: s.is_index_new()
+                    || s.is_index_modified()
+                    || s.is_index_deleted()
+                    || s.is_index_renamed()
+                    || s.is_index_typechange(),
+                unstaged: s.is_wt_new()
+                    || s.is_wt_modified()
+                    || s.is_wt_deleted()
+                    || s.is_wt_renamed()
+                    || s.is_wt_typechange(),
+            })
+        })
+        .collect();
+    Ok(GitStatusReport { files, truncated })
+}
+
+#[tauri::command]
+pub async fn git_statuses(
+    manager: State<'_, ConfigManager>,
+    root: String,
+) -> Result<GitStatusReport> {
+    let max = manager.git().status.status_max_files as usize;
+    tauri::async_runtime::spawn_blocking(move || statuses_at(Path::new(&root), max))
+        .await
+        .map_err(|e| Error::Os(e.to_string()))?
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn repo() -> (TempDir, git2::Repository) {
+        let tmp = TempDir::new().unwrap();
+        let repo = git2::Repository::init(tmp.path()).unwrap();
+        (tmp, repo)
+    }
+
+    fn commit_all(repo: &git2::Repository) {
+        let mut idx = repo.index().unwrap();
+        idx.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
+            .unwrap();
+        idx.write().unwrap();
+        let tree = repo.find_tree(idx.write_tree().unwrap()).unwrap();
+        let sig = git2::Signature::now("t", "t@t").unwrap();
+        let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+        let parents: Vec<&git2::Commit> = parent.iter().collect();
+        repo.commit(Some("HEAD"), &sig, &sig, "c", &tree, &parents)
+            .unwrap();
+    }
+
+    fn kind_of(report: &GitStatusReport, name: &str) -> Option<(String, bool, bool)> {
+        report
+            .files
+            .iter()
+            .find(|f| f.path.ends_with(name))
+            .map(|f| (f.kind.to_string(), f.staged, f.unstaged))
+    }
+
+    #[test]
+    fn reports_untracked_modified_and_staged() {
+        let (tmp, repo) = repo();
+        fs::write(tmp.path().join("tracked.txt"), "one\n").unwrap();
+        commit_all(&repo);
+        fs::write(tmp.path().join("tracked.txt"), "two\n").unwrap();
+        fs::write(tmp.path().join("fresh.txt"), "new\n").unwrap();
+        let report = statuses_at(tmp.path(), 2000).unwrap();
+        assert_eq!(
+            kind_of(&report, "tracked.txt"),
+            Some(("modified".into(), false, true))
+        );
+        assert_eq!(
+            kind_of(&report, "fresh.txt"),
+            Some(("untracked".into(), false, true))
+        );
+        assert!(!report.truncated);
+    }
+
+    #[test]
+    fn a_staged_new_file_is_added_and_staged() {
+        let (tmp, repo) = repo();
+        fs::write(tmp.path().join("seed.txt"), "seed\n").unwrap();
+        commit_all(&repo);
+        fs::write(tmp.path().join("added.txt"), "a\n").unwrap();
+        let mut idx = repo.index().unwrap();
+        idx.add_path(std::path::Path::new("added.txt")).unwrap();
+        idx.write().unwrap();
+        assert_eq!(
+            kind_of(&statuses_at(tmp.path(), 2000).unwrap(), "added.txt"),
+            Some(("added".into(), true, false))
+        );
+    }
+
+    #[test]
+    fn a_file_staged_then_edited_again_is_both() {
+        let (tmp, repo) = repo();
+        fs::write(tmp.path().join("both.txt"), "one\n").unwrap();
+        commit_all(&repo);
+        fs::write(tmp.path().join("both.txt"), "two\n").unwrap();
+        let mut idx = repo.index().unwrap();
+        idx.add_path(std::path::Path::new("both.txt")).unwrap();
+        idx.write().unwrap();
+        fs::write(tmp.path().join("both.txt"), "three\n").unwrap();
+        assert_eq!(
+            kind_of(&statuses_at(tmp.path(), 2000).unwrap(), "both.txt"),
+            Some(("modified".into(), true, true))
+        );
+    }
+
+    #[test]
+    fn a_deleted_file_is_reported() {
+        let (tmp, repo) = repo();
+        fs::write(tmp.path().join("gone.txt"), "x\n").unwrap();
+        commit_all(&repo);
+        fs::remove_file(tmp.path().join("gone.txt")).unwrap();
+        assert_eq!(
+            kind_of(&statuses_at(tmp.path(), 2000).unwrap(), "gone.txt"),
+            Some(("deleted".into(), false, true))
+        );
+    }
+
+    #[test]
+    fn an_untracked_directory_is_one_entry_not_its_contents() {
+        let (tmp, repo) = repo();
+        fs::write(tmp.path().join("seed.txt"), "seed\n").unwrap();
+        commit_all(&repo);
+        fs::create_dir(tmp.path().join("newdir")).unwrap();
+        for n in ["a.txt", "b.txt", "c.txt"] {
+            fs::write(tmp.path().join("newdir").join(n), "x\n").unwrap();
+        }
+        let report = statuses_at(tmp.path(), 2000).unwrap();
+        assert_eq!(
+            report
+                .files
+                .iter()
+                .filter(|f| f.path.contains("newdir"))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn the_cap_truncates_and_flags() {
+        let (tmp, repo) = repo();
+        fs::write(tmp.path().join("seed.txt"), "seed\n").unwrap();
+        commit_all(&repo);
+        for n in 0..5 {
+            fs::write(tmp.path().join(format!("f{n}.txt")), "x\n").unwrap();
+        }
+        let report = statuses_at(tmp.path(), 3).unwrap();
+        assert!(report.truncated);
+        assert!(report.files.len() <= 3);
+    }
+
+    #[test]
+    fn outside_a_repo_it_is_empty_not_an_error() {
+        let tmp = TempDir::new().unwrap();
+        let report = statuses_at(tmp.path(), 2000).unwrap();
+        assert!(report.files.is_empty() && !report.truncated);
+    }
 }

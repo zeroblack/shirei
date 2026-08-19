@@ -533,11 +533,32 @@ pub struct GitHistoryConfig {
     pub default_view: GitHistoryView,
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct GitStatusConfig {
+    pub status_in_tree: bool,
+    pub show_deleted: bool,
+    pub status_max_files: u16,
+    pub refresh_debounce_ms: u16,
+}
+
+impl Default for GitStatusConfig {
+    fn default() -> Self {
+        GitStatusConfig {
+            status_in_tree: true,
+            show_deleted: true,
+            status_max_files: 2000,
+            refresh_debounce_ms: 200,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
 #[serde(default)]
 pub struct GitConfig {
     pub blame: GitBlameConfig,
     pub history: GitHistoryConfig,
+    pub status: GitStatusConfig,
 }
 
 fn default_tabs() -> Vec<String> {
@@ -1780,6 +1801,10 @@ impl ConfigManager {
 
     pub fn memory(&self) -> MemoryConfig {
         self.lock().memory.clone()
+    }
+
+    pub fn git(&self) -> GitConfig {
+        self.lock().git.clone()
     }
 }
 

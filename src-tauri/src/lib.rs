@@ -424,6 +424,7 @@ pub fn run() {
             git::git_file_at,
             git::git_blame,
             git::git_current_branch,
+            git::git_statuses,
             config::config_get,
             config::config_set,
             todos::todo_list,

@@ -140,6 +140,7 @@ export interface Project {
   path: string;
   color: string;
   tree: PaneNode;
+  todo_collapsed?: boolean;
 }
 
 export interface MotionConfig {
