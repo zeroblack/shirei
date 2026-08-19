@@ -3,6 +3,7 @@ import { createFile, gitFileHead, readDir, revealInFinder } from "./commands";
 import type { GitStatusReport } from "./config";
 import {
   deletedIn,
+  type FolderSummary,
   fileMark,
   folderMark,
   folderSummaries,
@@ -51,9 +52,26 @@ function ghostEntry(path: string): DirEntry {
   return { name: path.slice(path.lastIndexOf("/") + 1), path, is_dir: false };
 }
 
-function sortDirEntries(a: DirEntry, b: DirEntry): number {
+// Mirrors the backend's own order (fs.rs: dirs first, then
+// name.to_lowercase() in code-point order) so a deleted file merging into a
+// listing never reorders it — a locale-aware collation (Intl/localeCompare)
+// diverges from that ordinal comparison on accented names.
+function compareEntries(a: DirEntry, b: DirEntry): number {
   if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
-  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  const an = a.name.toLowerCase();
+  const bn = b.name.toLowerCase();
+  return an < bn ? -1 : an > bn ? 1 : 0;
+}
+
+function insertGhosts(entries: DirEntry[], ghosts: DirEntry[]): DirEntry[] {
+  if (ghosts.length === 0) return entries;
+  const merged = entries.slice();
+  for (const ghost of ghosts.slice().sort(compareEntries)) {
+    let i = merged.length;
+    while (i > 0 && compareEntries(merged[i - 1], ghost) > 0) i--;
+    merged.splice(i, 0, ghost);
+  }
+  return merged;
 }
 
 export class FileTree {
@@ -75,6 +93,8 @@ export class FileTree {
   private statusTruncated = false;
   private statusRoot = "";
   private hasStatuses = false;
+  private statusByPath: Map<string, GitFileStatus> = new Map();
+  private statusFolders: Map<string, FolderSummary> = new Map();
 
   constructor(root: HTMLElement, cb: FileTreeCallbacks) {
     this.root = root;
@@ -115,17 +135,22 @@ export class FileTree {
     this.statusTruncated = report.truncated;
     this.statusRoot = root;
     this.hasStatuses = true;
-    const byPath = statusMap(report.files);
-    const folders = folderSummaries(report.files, root);
-    for (const row of this.rows) {
-      const own = report.truncated ? undefined : byPath.get(row.entry.path);
-      const next = row.entry.is_dir
-        ? own
-          ? fileMark(own)
-          : folderMark(folders.get(row.entry.path), row.expanded)
-        : fileMark(own);
-      this.applyMark(row, next);
-    }
+    this.statusByPath = statusMap(report.files);
+    this.statusFolders = folderSummaries(report.files, root);
+    for (const row of this.rows) this.applyMark(row, this.markFor(row));
+  }
+
+  // A folder with its own entry in statusByPath is an untracked directory
+  // (recurse_untracked_dirs(false) reports it as one entry rather than its
+  // contents), so it renders that entry's chip instead of the roll-up count.
+  private markFor(row: Row): MarkView {
+    const own = this.statusTruncated
+      ? undefined
+      : this.statusByPath.get(row.entry.path);
+    if (!row.entry.is_dir) return fileMark(own);
+    return own
+      ? fileMark(own)
+      : folderMark(this.statusFolders.get(row.entry.path), row.expanded);
   }
 
   selectedPath(): string | null {
@@ -139,9 +164,7 @@ export class FileTree {
     }
     const ghostPaths = deletedIn(this.statusFiles, path);
     if (ghostPaths.length === 0) return { ...listing, ghosts: NO_GHOSTS };
-    const entries = [...listing.entries, ...ghostPaths.map(ghostEntry)].sort(
-      sortDirEntries,
-    );
+    const entries = insertGhosts(listing.entries, ghostPaths.map(ghostEntry));
     return {
       entries,
       truncated: listing.truncated,
@@ -157,6 +180,8 @@ export class FileTree {
     this.statusFiles = [];
     this.statusTruncated = false;
     this.statusRoot = "";
+    this.statusByPath = new Map();
+    this.statusFolders = new Map();
     this.renderHeader(path);
     this.list.replaceChildren();
     this.selected = 0;
@@ -197,11 +222,11 @@ export class FileTree {
         idx >= 0
           ? idx
           : Math.min(Math.max(this.selected, 0), Math.max(rows.length - 1, 0));
+      this.reapplyStatuses();
       this.highlightedEl?.classList.remove("selected");
       this.highlightedEl = null;
       this.highlight();
       this.list.scrollTop = scrollTop;
-      this.reapplyStatuses();
     } finally {
       this.refreshing = false;
     }
@@ -381,6 +406,11 @@ export class FileTree {
       this.highlight();
       this.openMenu(e.clientX, e.clientY, row.entry.path);
     });
+    // Marks the row while it is still detached from the document, so its
+    // first paint already carries the final data-kind/opacity: applying
+    // them only after insertion lets the browser commit an unmarked frame
+    // first, and the later mark then reads as an unwanted fade-in.
+    if (this.hasStatuses) this.applyMark(row, this.markFor(row));
     return row;
   }
 
@@ -489,8 +519,8 @@ export class FileTree {
     }
     row.el.after(frag);
     this.rows.splice(index + 1, 0, ...children);
-    this.highlight();
     this.reapplyStatuses();
+    this.highlight();
   }
 
   private collapse(row: Row): void {
@@ -512,8 +542,8 @@ export class FileTree {
       this.selected = start - 1;
     else if (this.selected >= end) this.selected -= end - start;
     if (this.selected < 0) this.selected = 0;
-    this.highlight();
     this.reapplyStatuses();
+    this.highlight();
   }
 
   private reapplyStatuses(): void {

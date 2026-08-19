@@ -1078,10 +1078,6 @@ body {
     color-mix(in oklab, var(--git-conflict) 10%, transparent);
 }
 
-.tree-row[data-git="ignored"] .tree-name {
-  color: var(--git-ignored);
-}
-
 .tree-row[data-ghost="true"] .tree-name {
   text-decoration: line-through;
   color: var(--text-subtle);

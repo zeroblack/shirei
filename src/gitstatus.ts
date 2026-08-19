@@ -136,6 +136,11 @@ export function folderMark(
     kind: "count",
     stage: null,
     conflicted: false,
-    label: t("ui.git.status.changesBelow", { n: summary.total }),
+    label: t(
+      summary.total === 1
+        ? "ui.git.status.changeBelow"
+        : "ui.git.status.changesBelow",
+      { n: summary.total },
+    ),
   };
 }

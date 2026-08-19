@@ -174,6 +174,12 @@ describe("folderMark", () => {
     expect(folderMark({ total: 12, conflicts: 0 }, false).text).toBe("9+");
   });
 
+  it("uses the singular label for exactly one change below", () => {
+    expect(folderMark({ total: 1, conflicts: 0 }, false).label).toBe(
+      "1 change below",
+    );
+  });
+
   it("renders a conflict dot whether the folder is collapsed or expanded, and it wins over the count", () => {
     const summary = { total: 5, conflicts: 1 };
     expect(folderMark(summary, false)).toEqual({

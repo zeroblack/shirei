@@ -140,6 +140,7 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.git.status.partiallyStaged": "parcialmente en stage",
   "ui.git.status.unstaged": "sin stage",
   "ui.git.status.conflictBelow": "conflicto más abajo",
+  "ui.git.status.changeBelow": "1 cambio más abajo",
   "ui.git.status.changesBelow": "{n} cambios más abajo",
 
   "ui.time.now": "recién",

@@ -137,6 +137,7 @@ export const uiEn = {
   "ui.git.status.partiallyStaged": "partially staged",
   "ui.git.status.unstaged": "unstaged",
   "ui.git.status.conflictBelow": "conflict below",
+  "ui.git.status.changeBelow": "1 change below",
   "ui.git.status.changesBelow": "{n} changes below",
 
   "ui.time.now": "just now",
