@@ -3309,24 +3309,22 @@ export class App {
     }
     const ks = eventToKeystroke(e);
     if (!ks) return;
-    // Select-all and copy in a file editor run on the document state, not the
-    // rendered viewport, so a 1000-line file copies in full instead of just the
-    // ~60 visible lines. Intercepted ahead of the keymap so it wins over the
-    // terminal's own copy binding when a file is layered over a pane. A focused
-    // text field (the editor's own search box, rename, quick open) keeps its
-    // native select/copy — those must act on the field, not the document.
+    // Select-all in a file editor runs on the document state, not the rendered
+    // viewport, so a 1000-line file selects in full. Intercepted ahead of the
+    // keymap so it wins over the terminal's own binding when a file is layered
+    // over a pane. Copy is deliberately NOT handled here: it belongs to the
+    // editor's own clipboard-event handler, which fills the pasteboard
+    // synchronously from the state. A focused text field (the editor's search
+    // box, rename, quick open) keeps its native select — that must act on the
+    // field, not the document.
     const inField =
       e.target instanceof HTMLInputElement ||
       e.target instanceof HTMLTextAreaElement;
     if (!inField && ks.meta && !ks.ctrl && !ks.alt && !ks.shift) {
-      const editor =
-        ks.key === "a" || ks.key === "c"
-          ? this.activeFileEditor(active)
-          : undefined;
+      const editor = ks.key === "a" ? this.activeFileEditor(active) : undefined;
       if (editor) {
         e.preventDefault();
-        if (ks.key === "a") editor.selectAll();
-        else void editor.copySelection();
+        editor.selectAll();
         return;
       }
     }

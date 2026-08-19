@@ -33,7 +33,6 @@ import {
 } from "@codemirror/view";
 import { vim } from "@replit/codemirror-vim";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { contentBounds } from "./browser-core";
 import {
   gitBlame,
@@ -233,6 +232,30 @@ function diffControl(
   return b;
 }
 
+// CodeMirror renders only the viewport, so the DOM selection a native copy
+// serializes stops at the last rendered line. The clipboard event is filled
+// synchronously from the document state instead: an async clipboard write
+// races the native one and the loser silently wins the pasteboard.
+function selectionText(state: EditorState): string | null {
+  const parts = state.selection.ranges
+    .filter((r) => !r.empty)
+    .map((r) => state.sliceDoc(r.from, r.to));
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
+const documentCopy = EditorView.domEventHandlers({
+  copy(event, view) {
+    const target = event.target;
+    if (!(target instanceof Node) || !view.contentDOM.contains(target))
+      return false;
+    const text = selectionText(view.state);
+    if (!text || !event.clipboardData) return false;
+    event.clipboardData.setData("text/plain", text);
+    event.preventDefault();
+    return true;
+  },
+});
+
 export class EditorSession {
   readonly id: string;
   readonly path: string;
@@ -383,6 +406,7 @@ export class EditorSession {
             this.fontFamily,
           ),
         ),
+        documentCopy,
         EditorView.updateListener.of((u) => {
           if (u.docChanged) {
             this.dirty = true;
@@ -640,20 +664,6 @@ export class EditorSession {
     if (!view) return;
     view.focus();
     view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
-  }
-
-  async copySelection(): Promise<void> {
-    const view = this.view;
-    if (!view) return;
-    const { state } = view;
-    const parts = state.selection.ranges
-      .filter((r) => !r.empty)
-      .map((r) => state.sliceDoc(r.from, r.to));
-    const text =
-      parts.length > 0
-        ? parts.join("\n")
-        : state.doc.lineAt(state.selection.main.head).text;
-    await writeText(text);
   }
 
   setVim(on: boolean): void {
