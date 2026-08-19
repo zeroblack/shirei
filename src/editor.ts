@@ -585,19 +585,20 @@ export class EditorSession {
   }
 
   async save(): Promise<SaveResult> {
-    // A ghost/HEAD view is never dirty, but Cmd+S reaches every editor
-    // unconditionally — without this guard it would happily recreate a
-    // deleted file on disk from its own read-only buffer.
-    if (this.readOnlyContent !== null) return { ok: true };
     return this.write(this.baseMtime);
   }
 
   async saveForce(): Promise<SaveResult> {
-    if (this.readOnlyContent !== null) return { ok: true };
     return this.write(null);
   }
 
   private async write(known: number | null): Promise<SaveResult> {
+    // A ghost/HEAD view is never dirty, but Cmd+S reaches every editor
+    // unconditionally — without this guard it would happily recreate a
+    // deleted file on disk from its own read-only buffer. Autosave routes
+    // through here too, so the guard covers every write path, not just the
+    // manual-save ones.
+    if (this.readOnlyContent !== null) return { ok: true };
     if (!this.view) return { ok: false };
     const data = this.view.state.doc.toString();
     try {
