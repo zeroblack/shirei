@@ -11,9 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Git status right inside the file tree: a letter at the row's edge (modified, added,
   untracked, deleted, renamed) without ever recoloring the filename, so the tree stays
   readable while telling you exactly what changed. The chip behind the letter fills in
-  proportion to how much of the file is staged, empty for unstaged, half for partially
-  staged, solid once it's all staged, so you can read your staging progress at a glance
-  instead of switching to the terminal to check.
+  proportion to how much of the file is staged, empty for unstaged, a light tint for
+  partially staged, solid once it's all staged, so you can read your staging progress
+  at a glance instead of switching to the terminal to check.
 - Conflicted files get their own unmistakable treatment: a dedicated icon, a tinted row,
   and the only red in the tree, reserved for conflicts so it always means act now. Folders
   show a red dot at every level above a conflict, collapsed or not, so you can trace one
