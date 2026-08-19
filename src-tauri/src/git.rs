@@ -271,7 +271,6 @@ pub fn statuses_at(root: &Path, max: usize) -> Result<GitStatusReport> {
     let truncated = statuses.len() > max;
     let files = statuses
         .iter()
-        .take(max)
         .filter_map(|e| {
             let s = e.status();
             let rel = e.path()?;
@@ -294,6 +293,7 @@ pub fn statuses_at(root: &Path, max: usize) -> Result<GitStatusReport> {
                     || s.is_wt_typechange(),
             })
         })
+        .take(max)
         .collect();
     Ok(GitStatusReport { files, truncated })
 }
