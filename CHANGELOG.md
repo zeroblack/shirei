@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Git status right inside the file tree: a letter at the row's edge (modified, added,
+  untracked, deleted, renamed) without ever recoloring the filename, so the tree stays
+  readable while telling you exactly what changed. The chip behind the letter fills in
+  proportion to how much of the file is staged, empty for unstaged, half for partially
+  staged, solid once it's all staged, so you can read your staging progress at a glance
+  instead of switching to the terminal to check.
+- Conflicted files get their own unmistakable treatment: a dedicated icon, a tinted row,
+  and the only red in the tree, reserved for conflicts so it always means act now. Folders
+  show a red dot at every level above a conflict, collapsed or not, so you can trace one
+  down without opening a single directory.
+- Deleted files now show up as struck-through rows instead of silently disappearing from
+  the tree; opening one shows the last committed version, read-only, so you never lose
+  track of what git still has on record. Both the status letters and the deleted rows are
+  optional and can be turned off in Settings.
+- Status marks stay live: they refresh as files change on disk, right after `git add` from
+  the terminal, when the window regains focus, and when you switch projects, so the tree
+  never goes stale.
+- The TODO panel now collapses to just its title bar with `⌘⌃J`, handing the whole side
+  column back to the file tree while keeping the open-item count visible. `⌘J` still jumps
+  to the panel and expands it if it was collapsed. Shirei remembers the collapsed state per
+  project.
+
 ## [0.16.9] - 2026-08-19
 
 ### Added
