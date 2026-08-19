@@ -49,7 +49,7 @@ export function folderSummaries(
   for (const file of files) {
     const conflict = file.kind === "conflicted" ? 1 : 0;
     let dir = parentOf(file.path);
-    while (dir.length >= root.length && dir.startsWith(root)) {
+    while (dir === root || dir.startsWith(`${root}/`)) {
       const prev = out.get(dir) ?? { total: 0, conflicts: 0 };
       out.set(dir, {
         total: prev.total + 1,

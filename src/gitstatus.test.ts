@@ -57,6 +57,15 @@ describe("folderSummaries", () => {
   it("stops at the root and never walks above it", () => {
     expect(folderSummaries(files, "/r").has("/")).toBe(false);
   });
+
+  it("does not roll up a directory that merely shares a string prefix", () => {
+    const sums = folderSummaries(
+      [f("/rx/a.ts", "modified", false, true)],
+      "/r",
+    );
+    expect(sums.has("/rx")).toBe(false);
+    expect(sums.has("/r")).toBe(false);
+  });
 });
 
 describe("countLabel", () => {
