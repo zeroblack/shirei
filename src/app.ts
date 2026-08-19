@@ -6,7 +6,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { BrowserSession } from "./browser";
 import { resolveColorScheme, shouldShowBrowser } from "./browser-core";
 import { isClaudeCommand, withClaudeResume } from "./claude-cmd";
-import { alpha, deriveStatusColors, mix } from "./colors";
+import { alpha, deriveGitColors, deriveStatusColors, mix } from "./colors";
 import {
   browserBack,
   browserForward,
@@ -313,6 +313,8 @@ function applyChrome(
   for (const [k, v] of Object.entries(vars))
     document.documentElement.style.setProperty(k, v);
   for (const [k, v] of Object.entries(deriveStatusColors(vars["--bg"])))
+    document.documentElement.style.setProperty(k, v);
+  for (const [k, v] of Object.entries(deriveGitColors(vars["--bg"])))
     document.documentElement.style.setProperty(k, v);
   document.documentElement.style.colorScheme = preset;
   // WebKit's native PDF viewer lives in a cross-origin iframe (asset://),

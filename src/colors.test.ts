@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { apcaContrast, deriveStatusColors, ensureContrast } from "./colors";
+import {
+  apcaContrast,
+  deriveGitColors,
+  deriveStatusColors,
+  ensureContrast,
+  GIT_ROLES,
+  hexToRgb,
+} from "./colors";
 import { THEMES } from "./settings/themes";
 
 describe("apcaContrast", () => {
@@ -69,5 +76,33 @@ describe("deriveStatusColors", () => {
   it("leaves an already-legible role untouched", () => {
     const roles = deriveStatusColors("#000000");
     expect(roles["--status-waiting"]).toBe("#edb333");
+  });
+});
+
+describe("git role colours", () => {
+  const backgrounds = ["#000000", ...THEMES.map((theme) => theme.terminal.bg)];
+
+  it("clears its APCA floor on every theme, in both directions", () => {
+    for (const bg of backgrounds) {
+      const derived = deriveGitColors(bg);
+      for (const role of GIT_ROLES) {
+        const colour = derived[role.token];
+        expect(
+          Math.abs(apcaContrast(colour, bg)),
+          `${role.token} on ${bg}`,
+        ).toBeGreaterThanOrEqual(role.minLc);
+        expect(
+          Math.abs(apcaContrast(bg, colour)),
+          `${bg} knocked out of ${role.token}`,
+        ).toBeGreaterThanOrEqual(45);
+      }
+    }
+  });
+
+  it("keeps conflict a real red rather than washing it to pink", () => {
+    const onBlack = deriveGitColors("#000000")["--git-conflict"];
+    const [r, g, b] = hexToRgb(onBlack);
+    expect(r).toBeGreaterThan(g + 60);
+    expect(r).toBeGreaterThan(b + 60);
   });
 });
