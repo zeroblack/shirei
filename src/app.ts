@@ -320,7 +320,7 @@ function applyChrome(
     document.documentElement.style.setProperty(k, v);
   for (const [k, v] of Object.entries(deriveStatusColors(vars["--bg"])))
     document.documentElement.style.setProperty(k, v);
-  for (const [k, v] of Object.entries(deriveGitColors(vars["--bg"])))
+  for (const [k, v] of Object.entries(deriveGitColors(vars["--surface-1"])))
     document.documentElement.style.setProperty(k, v);
   document.documentElement.style.colorScheme = preset;
   // WebKit's native PDF viewer lives in a cross-origin iframe (asset://),
@@ -3579,6 +3579,7 @@ export class App {
     const decision = gitRefreshDecision({
       statusInTree: this.config.git.status.status_in_tree,
       root: this.treeRoot,
+      panelVisible: this.panelVisible,
       inFlight: this.gitStatusInFlight,
     });
     if (decision === "skip") return;

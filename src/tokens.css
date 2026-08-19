@@ -77,7 +77,6 @@
   --git-renamed: #6aa8e8;
   --git-deleted: #9a8f8c;
   --git-conflict: #ff5b58;
-  --git-ignored: color-mix(in oklab, var(--text-subtle) 45%, transparent);
   --git-chip-soft: color-mix(in oklab, currentColor 22%, transparent);
   --git-mark-w: 14px;
   --attn: oklch(0.82 0.14 84);

@@ -1,4 +1,4 @@
-function parseHex(hex: string): [number, number, number] {
+export function parseHex(hex: string): [number, number, number] {
   let h = hex.replace("#", "").trim();
   if (h.length === 3) {
     h = h
@@ -31,10 +31,6 @@ export function mix(a: string, b: string, t: number): string {
 export function alpha(hex: string, a: number): string {
   const [r, g, b] = parseHex(hex);
   return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
-
-export function hexToRgb(hex: string): [number, number, number] {
-  return parseHex(hex);
 }
 
 function screenLuminance(hex: string): number {
