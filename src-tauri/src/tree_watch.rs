@@ -73,7 +73,8 @@ pub fn tree_watch(
     };
 
     let exclude = config.files().exclude_dirs;
-    let control_files: HashSet<PathBuf> = git_control_files(Path::new(&path)).into_iter().collect();
+    let control_file_list = git_control_files(Path::new(&path));
+    let control_files: HashSet<PathBuf> = control_file_list.iter().cloned().collect();
     let (tx, rx) = std::sync::mpsc::channel::<WatchSignal>();
     let tx_events = tx.clone();
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
@@ -97,8 +98,8 @@ pub fn tree_watch(
     // The repo's real `.git` dir can sit outside the tree root (linked
     // worktrees), so the recursive watch above may never see it; a direct,
     // non-recursive watch on each control file covers that case too.
-    for control_file in git_control_files(Path::new(&path)) {
-        let _ = watcher.watch(&control_file, RecursiveMode::NonRecursive);
+    for control_file in &control_file_list {
+        let _ = watcher.watch(control_file, RecursiveMode::NonRecursive);
     }
     *slot = Some(watcher);
 
