@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { GitFileStatus } from "./gitstatus";
 import type { Locale } from "./i18n";
 import type { Keystroke } from "./keys";
 import type { PaneNode } from "./panetree";
@@ -134,6 +135,20 @@ export interface LayoutTemplate {
   name: string;
   tree: PaneNode;
 }
+
+export interface GitStatusConfig {
+  status_in_tree: boolean;
+  show_deleted: boolean;
+  status_max_files: number;
+  refresh_debounce_ms: number;
+}
+
+export interface GitConfig {
+  blame: { enabled: boolean; delay_ms: number };
+  history: { default_view: "diff" | "working" | "full" };
+  status: GitStatusConfig;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -375,10 +390,7 @@ export interface Config {
     code_width: string;
     wrap_code: boolean;
   };
-  git: {
-    blame: { enabled: boolean; delay_ms: number };
-    history: { default_view: "diff" | "working" | "full" };
-  };
+  git: GitConfig;
   logging: LoggingConfig;
   theme: {
     preset: "dark" | "light";
@@ -504,3 +516,10 @@ export const openConfigFile = () => invoke<void>("open_config_file");
 export const pickProjectDir = () => invoke<string | null>("pick_project_dir");
 export const pathIsGitRepo = (path: string) =>
   invoke<boolean>("path_is_git_repo", { path });
+
+export interface GitStatusReport {
+  files: GitFileStatus[];
+  truncated: boolean;
+}
+export const gitStatuses = (root: string) =>
+  invoke<GitStatusReport>("git_statuses", { root });
