@@ -140,6 +140,19 @@ export class FileTree {
     for (const row of this.rows) this.applyMark(row, this.markFor(row));
   }
 
+  /** Repaints every row back to unmarked and forgets the last report,
+   *  for when `status_in_tree` is turned off: without this the most
+   *  recent fetch would keep painting stale marks indefinitely. */
+  clearStatuses(): void {
+    this.statusFiles = [];
+    this.statusTruncated = false;
+    this.statusRoot = "";
+    this.hasStatuses = false;
+    this.statusByPath = new Map();
+    this.statusFolders = new Map();
+    for (const row of this.rows) this.applyMark(row, this.markFor(row));
+  }
+
   // A folder with its own entry in statusByPath is an untracked directory
   // (recurse_untracked_dirs(false) reports it as one entry rather than its
   // contents), so it renders that entry's chip instead of the roll-up count.

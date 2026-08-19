@@ -48,7 +48,7 @@ import { FocusCell, type FocusCellShortcuts } from "./focus/cell";
 import type { Phase } from "./focus/machine";
 import { fontStack, isFontLoaded, registerFont } from "./fonts";
 import { GitHistory } from "./githistory";
-import { shouldRunGitRefresh } from "./gitstatus";
+import { gitRefreshDecision } from "./gitstatus";
 import { setLocale, t } from "./i18n";
 import { isImage, mediaKind, PANEL_RIGHT, SEARCH, SIDEBAR } from "./icons";
 import { ImageSession } from "./image";
@@ -389,6 +389,7 @@ export class App {
   private treeRoot: string | null = null;
   private watchedRoot: string | null = null;
   private gitStatusInFlight = false;
+  private gitStatusPending = false;
   private gitStatusTimer: number | null = null;
   private snapshotTimer: ReturnType<typeof setInterval> | null = null;
   private ageTimer: ReturnType<typeof setInterval> | null = null;
@@ -1189,9 +1190,15 @@ export class App {
     this.updateContextHint();
     webglPool.setCap(c.render.webgl_pool_cap);
     this.applyFocusCellsConfig(c);
-    this.tree.setShowDeleted(c.git.status.show_deleted);
-    if (!previous.git.status.status_in_tree && c.git.status.status_in_tree) {
-      this.refreshGitStatuses();
+    if (previous.git.status.show_deleted !== c.git.status.show_deleted) {
+      this.tree.setShowDeleted(c.git.status.show_deleted);
+      // Ghost rows are computed while listing a directory, not read live off
+      // this flag, so toggling it needs a re-list to actually show/hide them.
+      void this.tree.refresh();
+    }
+    if (previous.git.status.status_in_tree !== c.git.status.status_in_tree) {
+      if (c.git.status.status_in_tree) this.refreshGitStatuses();
+      else this.tree.clearStatuses();
     }
     if (previous.memory.enabled !== c.memory.enabled) {
       void this.refreshMemoryBadge();
@@ -1686,9 +1693,11 @@ export class App {
     opts: { newTab?: boolean; silent?: boolean } = {},
   ): Promise<void> {
     const { newTab = false, silent = false } = opts;
-    // Dedupe: one live view per path, revealed wherever it lives (tab or slot).
+    // Dedupe: one live view per path, revealed wherever it lives (tab or
+    // slot). A ghost tab is a separate, read-only peek at HEAD content, never
+    // the live file, so it never satisfies this lookup.
     const existing = this.tabs.find(
-      (t) => t.kind === "editor" && t.path === path,
+      (t) => t.kind === "editor" && t.path === path && !t.ghost,
     );
     if (existing) {
       this.activate(existing.id);
@@ -1907,7 +1916,7 @@ export class App {
 
   private paneRecents(): { rel: string; abs: string }[] {
     return this.tabs
-      .filter((tab): tab is EditorTab => tab.kind === "editor")
+      .filter((tab): tab is EditorTab => tab.kind === "editor" && !tab.ghost)
       .slice(-5)
       .reverse()
       .map((tab) => ({ rel: basename(tab.path), abs: tab.path }));
@@ -3495,13 +3504,17 @@ export class App {
   }
 
   private async runGitStatusRefresh(): Promise<void> {
-    if (
-      !shouldRunGitRefresh({
-        statusInTree: this.config.git.status.status_in_tree,
-        root: this.treeRoot,
-        inFlight: this.gitStatusInFlight,
-      })
-    ) {
+    const decision = gitRefreshDecision({
+      statusInTree: this.config.git.status.status_in_tree,
+      root: this.treeRoot,
+      inFlight: this.gitStatusInFlight,
+    });
+    if (decision === "skip") return;
+    if (decision === "defer") {
+      // A fetch is already running: dropping this trigger outright would
+      // leave the tree stale until an unrelated event happens to fire, so
+      // remember it and re-arm the debounce once the in-flight one settles.
+      this.gitStatusPending = true;
       return;
     }
     const root = this.treeRoot as string;
@@ -3514,6 +3527,10 @@ export class App {
       // to surface.
     } finally {
       this.gitStatusInFlight = false;
+      if (this.gitStatusPending) {
+        this.gitStatusPending = false;
+        this.refreshGitStatuses();
+      }
     }
   }
 

@@ -41,15 +41,21 @@ export function stageOf(s: GitFileStatus): Stage {
 export const statusMap = (files: GitFileStatus[]): Map<string, GitFileStatus> =>
   new Map(files.map((f) => [f.path, f]));
 
-/** The single-flight guard a refresh trigger checks before fetching: no
- *  point asking for a root-less tree, a disabled feature, or a fetch
- *  that is already running. */
-export function shouldRunGitRefresh(opts: {
+export type GitRefreshDecision = "run" | "skip" | "defer";
+
+/** The single-flight guard every refresh trigger checks before fetching.
+ *  "skip" means there is nothing worth fetching (disabled, or no tree root
+ *  open yet). "defer" means a fetch is already in flight for a root that
+ *  is still worth watching, so the caller should coalesce this trigger into
+ *  one more run right after the current one finishes, rather than drop it
+ *  outright and risk painting stale marks until an unrelated event fires. */
+export function gitRefreshDecision(opts: {
   statusInTree: boolean;
   root: string | null;
   inFlight: boolean;
-}): boolean {
-  return opts.statusInTree && opts.root !== null && !opts.inFlight;
+}): GitRefreshDecision {
+  if (!opts.statusInTree || opts.root === null) return "skip";
+  return opts.inFlight ? "defer" : "run";
 }
 
 const parentOf = (path: string): string => path.slice(0, path.lastIndexOf("/"));

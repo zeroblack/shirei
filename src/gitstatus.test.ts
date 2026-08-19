@@ -6,8 +6,8 @@ import {
   folderMark,
   folderSummaries,
   type GitFileStatus,
+  gitRefreshDecision,
   letterOf,
-  shouldRunGitRefresh,
   stageOf,
   statusMap,
 } from "./gitstatus";
@@ -213,22 +213,34 @@ describe("folderMark", () => {
   });
 });
 
-describe("shouldRunGitRefresh", () => {
+describe("gitRefreshDecision", () => {
   const base = { statusInTree: true, root: "/repo", inFlight: false };
 
   it("runs when the feature is on, a root is known, and nothing is in flight", () => {
-    expect(shouldRunGitRefresh(base)).toBe(true);
+    expect(gitRefreshDecision(base)).toBe("run");
   });
 
   it("skips when the feature is disabled in config", () => {
-    expect(shouldRunGitRefresh({ ...base, statusInTree: false })).toBe(false);
+    expect(gitRefreshDecision({ ...base, statusInTree: false })).toBe("skip");
   });
 
   it("skips when no root is open yet", () => {
-    expect(shouldRunGitRefresh({ ...base, root: null })).toBe(false);
+    expect(gitRefreshDecision({ ...base, root: null })).toBe("skip");
   });
 
-  it("skips a second call while one is already in flight", () => {
-    expect(shouldRunGitRefresh({ ...base, inFlight: true })).toBe(false);
+  it("defers, rather than drops, a trigger while a fetch is already in flight", () => {
+    expect(gitRefreshDecision({ ...base, inFlight: true })).toBe("defer");
+  });
+
+  it("skips instead of deferring when disabled even mid-flight", () => {
+    expect(
+      gitRefreshDecision({ ...base, statusInTree: false, inFlight: true }),
+    ).toBe("skip");
+  });
+
+  it("skips instead of deferring when root-less even mid-flight", () => {
+    expect(gitRefreshDecision({ ...base, root: null, inFlight: true })).toBe(
+      "skip",
+    );
   });
 });
