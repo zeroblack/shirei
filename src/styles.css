@@ -5291,6 +5291,42 @@ body {
   letter-spacing: 0.2px;
   white-space: nowrap;
   overflow: hidden;
+  cursor: pointer;
+}
+
+.todo-header:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.todo-chevron {
+  display: inline-flex;
+  flex: none;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.todo-panel:not(.collapsed) .todo-chevron {
+  transform: rotate(180deg);
+}
+
+.todo-panel.collapsed {
+  flex: 0 0 auto;
+}
+
+.todo-panel.collapsed .todo-header {
+  border-top: var(--hairline) solid var(--border);
+  border-bottom: none;
+}
+
+.todo-count.overdue::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--todo-overdue);
+  vertical-align: middle;
 }
 
 .todo-focus-hint {
@@ -5415,6 +5451,11 @@ body {
   color: var(--fg-dim);
   font: 12.5px / 1 var(--font-ui);
   cursor: default;
+}
+
+.todo-panel.collapsed .todo-list,
+.todo-panel.collapsed .todo-add {
+  display: none;
 }
 
 .todo-add:hover {

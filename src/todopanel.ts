@@ -14,6 +14,18 @@ import {
 export interface TodoPanelOptions {
   onRequestModal: () => void;
   onRequestDetail?: (todo: Todo) => void;
+  onToggleCollapsed: () => void;
+}
+
+export type TodoFocusDecision = "expand-and-focus" | "focus" | "noop";
+
+export function decideTodoFocusAction(
+  collapsed: boolean,
+  focused: boolean,
+): TodoFocusDecision {
+  if (collapsed) return "expand-and-focus";
+  if (!focused) return "focus";
+  return "noop";
 }
 
 // Unicode glyphs per spec §7.3
@@ -56,6 +68,7 @@ export class TodoPanel {
   private readonly root: HTMLElement;
   private readonly opts: TodoPanelOptions;
   private readonly header: HTMLElement;
+  private readonly chevron: HTMLElement;
   private readonly focusHint: HTMLElement;
   private readonly countEl: HTMLElement;
   private readonly list: HTMLElement;
@@ -66,6 +79,7 @@ export class TodoPanel {
   private selected = 0;
   private projectId: string | null = null;
   private focused = false;
+  private collapsed = false;
 
   private pendingD = false;
   private ddTimer: ReturnType<typeof setTimeout> | null = null;
@@ -78,13 +92,27 @@ export class TodoPanel {
 
     this.header = document.createElement("div");
     this.header.className = "todo-header";
+    this.header.setAttribute("role", "button");
+    this.header.setAttribute("aria-expanded", "true");
+    this.header.tabIndex = 0;
+    this.chevron = document.createElement("span");
+    this.chevron.className = "todo-chevron";
+    this.chevron.textContent = "›";
+    this.chevron.setAttribute("aria-hidden", "true");
     const headerLabel = document.createElement("span");
     headerLabel.textContent = t("ui.todo.header");
     this.focusHint = document.createElement("kbd");
     this.focusHint.className = "todo-focus-hint";
     this.countEl = document.createElement("span");
     this.countEl.className = "todo-count";
-    this.header.append(headerLabel, this.focusHint, this.countEl);
+    this.header.append(this.chevron, headerLabel, this.focusHint, this.countEl);
+    this.header.addEventListener("click", () => this.opts.onToggleCollapsed());
+    this.header.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        this.opts.onToggleCollapsed();
+      }
+    });
 
     this.list = document.createElement("div");
     this.list.className = "todo-list";
@@ -130,6 +158,12 @@ export class TodoPanel {
     this.focusHint.style.display = stroke ? "" : "none";
   }
 
+  setCollapsed(collapsed: boolean): void {
+    this.collapsed = collapsed;
+    this.root.classList.toggle("collapsed", collapsed);
+    this.header.setAttribute("aria-expanded", String(!collapsed));
+  }
+
   focus(): void {
     this.focused = true;
     // Move DOM focus off the terminal: xterm consumes plain keys and stops their
@@ -145,6 +179,8 @@ export class TodoPanel {
   }
 
   handleKey(e: KeyboardEvent): boolean {
+    if (this.collapsed) return false;
+
     // While a quick-add or inline-edit field is focused, every key is text:
     // the shortcuts only apply in navigation mode, not mid-typing.
     const target = e.target;
@@ -318,6 +354,10 @@ export class TodoPanel {
     const done = this.items.filter((t) => t.done).length;
     const total = this.items.length;
     this.countEl.textContent = total > 0 ? `${done}/${total}` : "";
+    const hasOverdue = this.items.some(
+      (item) => !item.done && item.dueDate && isOverdue(item.dueDate),
+    );
+    this.countEl.classList.toggle("overdue", hasOverdue);
   }
 
   private highlightSelected(): void {

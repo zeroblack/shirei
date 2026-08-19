@@ -130,7 +130,11 @@ import { TabBar } from "./tabbar";
 import { TerminalSession } from "./terminal";
 import { showToast } from "./toast";
 import { openTodoModal } from "./todomodal";
-import { TodoPanel } from "./todopanel";
+import {
+  decideTodoFocusAction,
+  type TodoFocusDecision,
+  TodoPanel,
+} from "./todopanel";
 import type { Todo } from "./todos";
 import type { EditorTab, TabState } from "./types";
 import { UpdateIndicator } from "./updateindicator";
@@ -384,6 +388,8 @@ export class App {
   // focused. Persist is suppressed until the restore settles on the real one.
   private restoring = false;
   private todoFocused = false;
+  private todoCollapsed = false;
+  private todoProjectId: string | null = null;
   private panelVisible = false;
   private lastRoot: string | null = null;
   private treeRoot: string | null = null;
@@ -475,7 +481,11 @@ export class App {
     this.todoPanel = new TodoPanel(this.todoPanelEl, {
       onRequestModal: () => this.openTodoCapture(),
       onRequestDetail: (todo) => this.openTodoEdit(todo),
+      onToggleCollapsed: () => this.setTodoCollapsed(!this.todoCollapsed),
     });
+    this.todoDividerEl.addEventListener("dblclick", () =>
+      this.setTodoCollapsed(true),
+    );
     this.todoPanelEl.addEventListener("focusout", (e) => {
       if (this.todoPanelEl.contains(e.relatedTarget as Node | null)) return;
       if (this.todoFocused) this.blurTodoPanel();
@@ -2959,9 +2969,17 @@ export class App {
   private setActiveProject(projectId: string | null): void {
     const hasProject = projectId !== null;
     this.todoPanelEl.classList.toggle("hidden", !hasProject);
-    this.todoDividerEl.classList.toggle("hidden", !hasProject);
     void this.todoPanel.setProject(projectId);
     this.emitProjectFocusMetrics(projectId);
+    this.todoProjectId = projectId;
+    this.applyTodoCollapsed(this.resolveTodoCollapsed(projectId));
+  }
+
+  private resolveTodoCollapsed(projectId: string | null): boolean {
+    const project = projectId
+      ? this.projects.find((p) => p.id === projectId)
+      : undefined;
+    return project?.todo_collapsed ?? this.config.layout.todo_collapsed;
   }
 
   togglePanel(): void {
@@ -3080,6 +3098,60 @@ export class App {
     const clampedRatio = Math.max(0.1, Math.min(0.9, ratio));
     this.treeRegionEl.style.flex = `${1 - clampedRatio} 1 0`;
     this.todoPanelEl.style.flex = `${clampedRatio} 1 0`;
+  }
+
+  private applyTodoCollapsed(collapsed: boolean): void {
+    this.todoCollapsed = collapsed;
+    this.todoPanel.setCollapsed(collapsed);
+    if (collapsed) {
+      this.todoPanelEl.style.flex = "";
+      this.treeRegionEl.style.flex = "1 1 0";
+    } else {
+      this.applyTodoRatio(this.config.layout.todo_region_ratio);
+    }
+    const hasProject = !this.todoPanelEl.classList.contains("hidden");
+    this.todoDividerEl.classList.toggle("hidden", !hasProject || collapsed);
+  }
+
+  private setTodoCollapsed(collapsed: boolean): void {
+    if (collapsed === this.todoCollapsed) return;
+    if (collapsed && this.todoFocused) this.blurTodoPanel();
+    this.applyTodoCollapsed(collapsed);
+    this.persistTodoCollapsed(collapsed);
+  }
+
+  private persistTodoCollapsed(collapsed: boolean): void {
+    if (this.todoProjectId) {
+      const idx = this.config.projects.findIndex(
+        (p) => p.id === this.todoProjectId,
+      );
+      if (idx === -1) return;
+      this.config.projects[idx] = {
+        ...this.config.projects[idx],
+        todo_collapsed: collapsed,
+      };
+      this.projects = [...this.config.projects];
+    } else {
+      this.config = {
+        ...this.config,
+        layout: { ...this.config.layout, todo_collapsed: collapsed },
+      };
+    }
+    void configSet(this.config);
+  }
+
+  private runTodoFocusDecision(decision: TodoFocusDecision): void {
+    switch (decision) {
+      case "expand-and-focus":
+        this.setTodoCollapsed(false);
+        this.focusTodoPanel();
+        break;
+      case "focus":
+        this.focusTodoPanel();
+        break;
+      case "noop":
+        break;
+    }
   }
 
   private attachTodoDividerResize(): void {
@@ -3653,8 +3725,9 @@ export class App {
         const action = this.keymap.resolve(ks, { pane: false });
         if (action === "todo.focus") {
           e.preventDefault();
-          this.blurTodoPanel();
-          this.focusActive();
+          this.runTodoFocusDecision(
+            decideTodoFocusAction(this.todoCollapsed, this.todoFocused),
+          );
           return;
         }
         if (action === "todo.capture") {
@@ -3899,8 +3972,12 @@ export class App {
         else this.focusTree();
         break;
       case "todo.focus":
-        if (this.todoFocused) this.setPanelVisible(false);
-        else this.focusTodoPanel();
+        this.runTodoFocusDecision(
+          decideTodoFocusAction(this.todoCollapsed, this.todoFocused),
+        );
+        break;
+      case "todo.collapse":
+        this.setTodoCollapsed(!this.todoCollapsed);
         break;
       case "todo.capture":
         this.openTodoCapture();

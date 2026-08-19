@@ -435,6 +435,12 @@ export const ACTIONS: ActionDef[] = [
     defaults: [{ key: "a", meta: true, shift: true }],
   },
   {
+    id: "todo.collapse",
+    category: "navigation",
+    scope: "global",
+    defaults: [{ key: "j", meta: true, ctrl: true }],
+  },
+  {
     id: "browser.open",
     category: "panes",
     scope: "global",
