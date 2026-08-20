@@ -315,20 +315,46 @@ fn repo_statuses(repo: &Repository, max: usize) -> Result<(Vec<GitFileStatus>, b
 /// Working-tree status for every changed file across every repository
 /// resolved from `root` and `dirs`, capped at `max` entries total. Empty
 /// (not an error) when nothing resolves to a repo, so the tree can call this
-/// unconditionally without special-casing non-repo roots.
+/// unconditionally without special-casing non-repo roots. A repo whose own
+/// status walk fails (a corrupted index, an unreadable linked worktree) is
+/// skipped rather than failing the whole call — one unhealthy repo must
+/// never blank the marks for every healthy repo still in view.
 pub fn statuses_at(root: &Path, dirs: &[String], max: usize) -> Result<GitStatusReport> {
-    let mut files = Vec::new();
-    let mut truncated = false;
-    for repo_root in resolve_repo_roots(root, dirs) {
-        let Ok(repo) = Repository::open(&repo_root) else {
+    let roots = resolve_repo_roots(root, dirs);
+    let mut per_repo = Vec::new();
+    for repo_root in &roots {
+        let Ok(repo) = Repository::open(repo_root) else {
             continue;
         };
-        let (repo_files, repo_truncated) = repo_statuses(&repo, max)?;
+        let Ok((repo_files, repo_truncated)) = repo_statuses(&repo, max) else {
+            continue;
+        };
+        per_repo.push((repo_root.clone(), repo_files, repo_truncated));
+    }
+    let mut files = Vec::new();
+    let mut truncated = false;
+    for (repo_root, repo_files, repo_truncated) in per_repo {
         truncated |= repo_truncated;
-        files.extend(repo_files);
+        // A repo nested inside another resolved repo's workdir (submodule or
+        // stray checkout) gets its own, accurate per-file entries below; the
+        // outer repo's single directory-level entry for that same path would
+        // otherwise double-count it at every ancestor in folderSummaries.
+        for file in repo_files {
+            let shadowed = roots.iter().any(|other| {
+                other != &repo_root
+                    && other.starts_with(&repo_root)
+                    && Path::new(&file.path).starts_with(other)
+            });
+            if !shadowed {
+                files.push(file);
+            }
+        }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
     truncated |= files.len() > max;
+    // Sorted alphabetically by absolute path: when several repos each
+    // exceed the cap on their own, a later-sorting repo's files can be
+    // squeezed out of the merge entirely by an earlier-sorting one's.
     files.truncate(max);
     Ok(GitStatusReport { files, truncated })
 }
@@ -554,5 +580,35 @@ mod status_tests {
         let report = statuses_at(tmp.path(), &to_dirs(&[tmp.path(), &repo_a, &repo_b]), 4).unwrap();
         assert!(report.truncated);
         assert!(report.files.len() <= 4);
+    }
+
+    #[test]
+    fn a_repo_with_a_broken_index_is_skipped_not_fatal() {
+        let tmp = TempDir::new().unwrap();
+        let repo_a = tmp.path().join("repo-a");
+        let repo_b = tmp.path().join("repo-b");
+        init_repo_at(&repo_a, "a.txt");
+        init_repo_at(&repo_b, "b.txt");
+        fs::write(repo_a.join(".git").join("index"), b"not an index").unwrap();
+        let report =
+            statuses_at(tmp.path(), &to_dirs(&[tmp.path(), &repo_a, &repo_b]), 2000).unwrap();
+        assert!(kind_of(&report, "b.txt").is_some());
+        assert!(kind_of(&report, "a.txt").is_none());
+    }
+
+    #[test]
+    fn a_repo_nested_inside_another_is_reported_once_by_the_inner_repo() {
+        let tmp = TempDir::new().unwrap();
+        let outer = tmp.path().join("outer");
+        fs::create_dir_all(&outer).unwrap();
+        let outer_repo = git2::Repository::init(&outer).unwrap();
+        fs::write(outer.join("seed.txt"), "seed\n").unwrap();
+        commit_all(&outer_repo);
+        let inner = outer.join("vendor");
+        init_repo_at(&inner, "dirty.txt");
+        let report = statuses_at(&outer, &to_dirs(&[&outer, &inner]), 2000).unwrap();
+        assert_eq!(report.files.len(), 1);
+        assert!(kind_of(&report, "vendor/dirty.txt").is_some());
+        assert!(!report.files.iter().any(|f| f.path.ends_with("vendor")));
     }
 }
