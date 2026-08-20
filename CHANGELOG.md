@@ -7,66 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Git status right inside the file tree: a letter at the row's edge (modified, added,
-  untracked, deleted, renamed) without ever recoloring the filename, so the tree stays
-  readable while telling you exactly what changed. The chip behind the letter fills in
-  proportion to how much of the file is staged, empty for unstaged, a light tint for
-  partially staged, solid once it's all staged, so you can read your staging progress
-  at a glance instead of switching to the terminal to check.
-- Conflicted files get their own unmistakable treatment: a dedicated icon, a tinted row,
-  and the only red in the tree, reserved for conflicts so it always means act now. Folders
-  show a red dot at every level above a conflict, collapsed or not, so you can trace one
-  down without opening a single directory.
-- Deleted files now show up as struck-through rows instead of silently disappearing from
-  the tree; opening one shows the last committed version, read-only, so you never lose
-  track of what git still has on record. Both the status letters and the deleted rows are
-  optional and can be turned off in Settings.
-- Status marks stay live: they refresh as files change on disk, right after `git add` from
-  the terminal, when the window regains focus, and when you switch projects, so the tree
-  never goes stale.
-- The TODO panel now collapses to just its title bar with `⌘⌃J`, handing the whole side
-  column back to the file tree while keeping the open-item count visible. `⌘J` still jumps
-  to the panel and expands it if it was collapsed. Shirei remembers the collapsed state per
-  project.
-
-## [0.16.9] - 2026-08-19
+## [0.17.0] - 2026-08-20
 
 ### Added
-- Project memory: a per-project `.shirei/memory/` (overview, decisions, resume note, session
-  summaries) served to any AI CLI through the bundled `shirei-memory` MCP server. Keyboard
-  actions to open it, resume from it and save the current session; Settings > Memory with
-  one-click, previewed registration for Claude Code, Codex, Gemini CLI, Antigravity, OpenCode,
-  Cursor and Amp; tab badge that flags stale memory.
-- Activating memory on a project now also reaches the CLIs. Registering the MCP server is
-  user-scoped and only makes the tools reachable; CLIs that defer MCP tools never look them
-  up unless the project's instructions file says the memory exists. Opening project memory
-  writes that note into `AGENTS.md`, `CLAUDE.md` or `GEMINI.md` — whichever the registered,
-  installed CLIs read — after showing which files it would touch. The block sits between
-  markers, so it updates in place and leaves the rest of the file untouched.
-- A project whose memory is still empty gets seeded on its own: when an agent finishes work
-  there, Shirei asks it once to fill the overview, so the first session is not spent
-  dictating what to write.
-- The prompts and the overview template are editable in Settings and follow the app language,
-  so an empty field means the built-in default and anything typed replaces it.
-- Autosave, off by default: when an agent finishes a stretch of work, Shirei asks it to save
-  the session, for the times it forgets on its own.
-- Settings > Memory reports whether the memory server actually answers, with its name and how
-  many tools it listed. A written config file only proves the text landed; this catches a
-  stale shim or a broken binary at registration time instead of leaving an agent silently
-  without memory.
+- Project memory. Every project gets a `.shirei/memory/` that any AI CLI reads and writes
+  through the bundled `shirei-memory` MCP server: an overview, a decisions log, a resume note
+  and session summaries. Register a CLI once in Settings > Memory (Claude Code, Codex, Gemini
+  CLI, Antigravity, OpenCode, Cursor, Amp) and from then on a session in that project starts
+  with what the previous one left, whichever CLI wrote it. `⌘⇧Y` opens the memory, `⌘⇧U`
+  resumes from it, `⌘⇧J` saves the session. Shirei ships no AI and never handles an API key:
+  the agent writes the content, Shirei stores it, serves it and keeps it in view.
+- A project with an empty memory is seeded on its own the first time an agent finishes work
+  there, and the prompts and templates behind it are editable in Settings, in the app's
+  language.
+- Git status in the file tree. A letter at the row's edge for each change, without recoloring
+  the filename, and a chip that fills as the file moves into the index, so staging reads at a
+  glance. Conflicts carry their own icon and tint, and red is reserved for them alone.
+  Collapsed folders show a count, and a marker sits at every level above a conflict. Deleted
+  files remain as struck-through rows that open their last committed version, read-only. It
+  works whether the repository is the tree root or sits below it in a workspace.
+- The TODO panel collapses to its title bar with `⌘⌃J`, keeping the open-item count and
+  handing the column to the file tree. Remembered per project.
 
 ### Fixed
-- Codex is registered with `default_tools_approval_mode = "auto"`, so memory calls stop
-  going through its approval gate. Registered without it, a memory call surfaces as
-  `user cancelled MCP tool call`, which points nowhere near approval as the cause. Existing
-  registrations show as drifted and Repair updates them.
-- Selecting a file with `⌘A` and copying with `⌘C` now copies the whole document. Only the
-  lines rendered on screen made it to the clipboard, because the editor draws just the
-  viewport and the copy was serialising the screen instead of the file.
-- Closing a browser pane no longer starts the paused video in it. The teardown emptied the
-  page's media elements, which its player read as the video having ended, so it began the
-  next one while the pane was closing.
+- Selecting a file with `⌘A` and copying it now copies the whole document instead of only the
+  lines drawn on screen.
+- Closing a browser pane no longer starts the paused video inside it.
+
 
 ## [0.16.8] - 2026-08-07
 
@@ -412,8 +379,8 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.16.9...HEAD
-[0.16.9]: https://github.com/zeroblack/shirei/compare/v0.16.8...v0.16.9
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/zeroblack/shirei/compare/v0.16.8...v0.17.0
 [0.16.2]: https://github.com/zeroblack/shirei/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/zeroblack/shirei/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/zeroblack/shirei/compare/v0.15.0...v0.16.0
