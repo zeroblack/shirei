@@ -255,6 +255,42 @@ export const ACTIONS: ActionDef[] = [
     defaults: [{ key: "b", meta: true, shift: true }],
   },
   {
+    id: "memory.open",
+    category: "memory",
+    scope: "global",
+    defaults: [{ key: "y", meta: true, shift: true }],
+  },
+  {
+    id: "memory.resume",
+    category: "memory",
+    scope: "pane",
+    defaults: [{ key: "u", meta: true, shift: true }],
+  },
+  {
+    id: "memory.save_session",
+    category: "memory",
+    scope: "pane",
+    defaults: [{ key: "j", meta: true, shift: true }],
+  },
+  {
+    id: "memory.open_decisions",
+    category: "memory",
+    scope: "global",
+    defaults: [],
+  },
+  {
+    id: "memory.open_resume",
+    category: "memory",
+    scope: "global",
+    defaults: [],
+  },
+  {
+    id: "memory.open_sessions",
+    category: "memory",
+    scope: "global",
+    defaults: [],
+  },
+  {
     id: "pane.split-h",
     category: "panes",
     scope: "pane",
@@ -397,6 +433,12 @@ export const ACTIONS: ActionDef[] = [
     category: "navigation",
     scope: "global",
     defaults: [{ key: "a", meta: true, shift: true }],
+  },
+  {
+    id: "todo.collapse",
+    category: "navigation",
+    scope: "global",
+    defaults: [{ key: "j", meta: true, ctrl: true }],
   },
   {
     id: "browser.open",

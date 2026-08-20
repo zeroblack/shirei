@@ -72,6 +72,13 @@
   --status-waiting: oklch(0.8 0.15 82);
   --status-done: oklch(0.78 0.14 155);
   --status-error: oklch(0.64 0.2 25);
+  --git-modified: #e0a83a;
+  --git-new: #46c17a;
+  --git-renamed: #6aa8e8;
+  --git-deleted: #9a8f8c;
+  --git-conflict: #ff5b58;
+  --git-chip-soft: color-mix(in oklab, currentColor 22%, transparent);
+  --git-mark-w: 14px;
   --attn: oklch(0.82 0.14 84);
   --tentative: oklch(0.65 0.06 245);
 

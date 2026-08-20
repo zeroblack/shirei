@@ -39,6 +39,8 @@ pub enum Error {
     Git(String),
     #[error("browser pane error: {0}")]
     Browser(String),
+    #[error("memory: {0}")]
+    Memory(String),
 }
 
 impl Error {
@@ -64,6 +66,7 @@ impl Error {
             Error::Db(_) => "db",
             Error::Git(_) => "git",
             Error::Browser(_) => "browser",
+            Error::Memory(_) => "memory",
         }
     }
 }
@@ -124,6 +127,7 @@ mod tests {
             Error::Db(String::new()).code(),
             Error::Git(String::new()).code(),
             Error::Browser(String::new()).code(),
+            Error::Memory(String::new()).code(),
         ];
         let unique: std::collections::HashSet<_> = codes.iter().collect();
         assert_eq!(unique.len(), codes.len());

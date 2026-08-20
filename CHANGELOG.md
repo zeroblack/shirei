@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-20
+
+### Added
+- Project memory. Every project gets a `.shirei/memory/` that any AI CLI reads and writes
+  through the bundled `shirei-memory` MCP server: an overview, a decisions log, a resume note
+  and session summaries. Register a CLI once in Settings > Memory (Claude Code, Codex, Gemini
+  CLI, Antigravity, OpenCode, Cursor, Amp) and from then on a session in that project starts
+  with what the previous one left, whichever CLI wrote it. `⌘⇧Y` opens the memory, `⌘⇧U`
+  resumes from it, `⌘⇧J` saves the session. Shirei ships no AI and never handles an API key:
+  the agent writes the content, Shirei stores it, serves it and keeps it in view.
+- A project with an empty memory is seeded on its own the first time an agent finishes work
+  there, and the prompts and templates behind it are editable in Settings, in the app's
+  language.
+- Git status in the file tree. A letter at the row's edge for each change, without recoloring
+  the filename, and a chip that fills as the file moves into the index, so staging reads at a
+  glance. Conflicts carry their own icon and tint, and red is reserved for them alone.
+  Collapsed folders show a count, and a marker sits at every level above a conflict. Deleted
+  files remain as struck-through rows that open their last committed version, read-only. It
+  works whether the repository is the tree root or sits below it in a workspace.
+- The TODO panel collapses to its title bar with `⌘⌃J`, keeping the open-item count and
+  handing the column to the file tree. Remembered per project.
+
+### Fixed
+- Selecting a file with `⌘A` and copying it now copies the whole document instead of only the
+  lines drawn on screen.
+- Closing a browser pane no longer starts the paused video inside it.
+
+
 ## [0.16.8] - 2026-08-07
 
 ### Added
@@ -351,7 +379,8 @@ First public release.
 - Signed and notarized macOS build distributed via GitHub Releases.
 - Internationalization with English as the default language and Spanish available.
 
-[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.16.2...HEAD
+[Unreleased]: https://github.com/zeroblack/shirei/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/zeroblack/shirei/compare/v0.16.8...v0.17.0
 [0.16.2]: https://github.com/zeroblack/shirei/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/zeroblack/shirei/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/zeroblack/shirei/compare/v0.15.0...v0.16.0

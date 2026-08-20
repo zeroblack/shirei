@@ -203,12 +203,15 @@ pub fn browser_release_focus(app: AppHandle, window: Window) -> Result<()> {
 // wkwebview/mod.rs), so the object is deliberately leaked: closing alone
 // detaches it from the window but never unloads its page, leaving any playing
 // audio/video running indefinitely. Navigating to about:blank alone races the
-// close and often loses, so first pause and detach every media element in the
+// close and often loses, so first pause and mute every media element in the
 // page (webview messages run in order, and the eval runs even on the leaked
-// object), then unload with about:blank, then close. Closing a child webview
-// also doesn't reliably resign first responder, so focus is handed back to the
-// owning window explicitly.
-const STOP_MEDIA_JS: &str = "try{document.querySelectorAll('video,audio').forEach(function(m){m.pause();m.muted=true;m.removeAttribute('src');try{m.load()}catch(e){}})}catch(e){}";
+// object), then unload with about:blank, then close. The eval only pauses and
+// mutes: emptying the element (removeAttribute + load) fires emptied/error at
+// the page's own player, which reads that as "this one is over" and autoplays
+// the next one in a fresh, unmuted element before the close lands. Closing a
+// child webview also doesn't reliably resign first responder, so focus is
+// handed back to the owning window explicitly.
+const STOP_MEDIA_JS: &str = "try{document.querySelectorAll('video,audio').forEach(function(m){m.muted=true;m.pause()})}catch(e){}";
 
 #[tauri::command]
 pub fn browser_close(app: AppHandle, window: Window, label: String) -> Result<()> {

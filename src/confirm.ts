@@ -4,6 +4,7 @@ import { createOverlay } from "./overlay";
 interface ConfirmOpts {
   title: string;
   detail?: string;
+  content?: HTMLElement;
   confirmLabel: string;
   danger?: boolean;
 }
@@ -34,6 +35,7 @@ interface DialogButton<R> {
 interface DialogOpts<R> {
   title: string;
   detail?: string;
+  content?: HTMLElement;
   buttons: DialogButton<R>[];
   cancelValue: R;
   defaultIndex?: number;
@@ -74,6 +76,7 @@ function runDialog<R>(opts: DialogOpts<R>): Promise<R> {
       onDismiss: () => done(opts.cancelValue),
     });
     appendText(box, opts.title, opts.detail);
+    if (opts.content) box.append(opts.content);
 
     const group = ++dialogSeq;
     const buttons = opts.buttons.map((choice, i) => {
@@ -139,6 +142,7 @@ export function confirmDialog(opts: ConfirmOpts): Promise<boolean> {
   return runDialog<boolean>({
     title: opts.title,
     detail: opts.detail,
+    content: opts.content,
     buttons: [
       { label: t("ui.dialog.cancel"), value: false },
       { label: opts.confirmLabel, value: true, danger: opts.danger ?? true },

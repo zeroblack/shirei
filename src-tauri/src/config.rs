@@ -266,6 +266,192 @@ impl Default for EditorTheme {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]
+pub struct MemoryCliAdapter {
+    pub id: String,
+    pub display_name: String,
+    pub binary: String,
+    pub scope: String,
+    pub config_path: String,
+    pub format: String,
+    pub insertion: String,
+    pub snippet: serde_json::Value,
+    // Filename, relative to the project root, of the instructions file this CLI reads.
+    // Registering the server is not enough for CLIs that defer MCP tools instead of
+    // listing them: without a line in this file their model never looks the tools up.
+    pub project_doc: String,
+}
+
+impl Default for MemoryCliAdapter {
+    fn default() -> Self {
+        MemoryCliAdapter {
+            id: String::new(),
+            display_name: String::new(),
+            binary: String::new(),
+            scope: "user".into(),
+            config_path: String::new(),
+            format: "json".into(),
+            insertion: String::new(),
+            snippet: serde_json::Value::Null,
+            project_doc: String::new(),
+        }
+    }
+}
+
+impl MemoryCliAdapter {
+    fn reading(mut self, project_doc: &str) -> Self {
+        self.project_doc = project_doc.into();
+        self
+    }
+}
+
+fn adapter(
+    id: &str,
+    name: &str,
+    binary: &str,
+    path: &str,
+    format: &str,
+    insertion: &str,
+    snippet: serde_json::Value,
+) -> MemoryCliAdapter {
+    MemoryCliAdapter {
+        id: id.into(),
+        display_name: name.into(),
+        binary: binary.into(),
+        scope: "user".into(),
+        config_path: path.into(),
+        format: format.into(),
+        insertion: insertion.into(),
+        snippet,
+        project_doc: String::new(),
+    }
+}
+
+pub fn default_cli_adapters() -> Vec<MemoryCliAdapter> {
+    let cmd = serde_json::json!({ "command": "{shim}" });
+    vec![
+        adapter(
+            "claude",
+            "Claude Code",
+            "claude",
+            "~/.claude.json",
+            "json",
+            "/mcpServers/shirei-memory",
+            serde_json::json!({ "type": "stdio", "command": "{shim}", "args": [] }),
+        )
+        .reading("CLAUDE.md"),
+        adapter(
+            "codex",
+            "Codex",
+            "codex",
+            "~/.codex/config.toml",
+            "toml",
+            "mcp_servers.shirei-memory",
+            // Codex routes MCP calls through its approval gate, and a denied call surfaces
+            // as "user cancelled MCP tool call" with no hint that approval was the cause.
+            serde_json::json!({ "command": "{shim}", "default_tools_approval_mode": "auto" }),
+        )
+        .reading("AGENTS.md"),
+        adapter(
+            "gemini",
+            "Gemini CLI",
+            "gemini",
+            "~/.gemini/settings.json",
+            "json",
+            "/mcpServers/shirei-memory",
+            cmd.clone(),
+        )
+        .reading("GEMINI.md"),
+        adapter(
+            "antigravity",
+            "Antigravity",
+            "agy",
+            "~/.gemini/config/mcp_config.json",
+            "json",
+            "/mcpServers/shirei-memory",
+            cmd.clone(),
+        )
+        .reading("AGENTS.md"),
+        adapter(
+            "opencode",
+            "OpenCode",
+            "opencode",
+            "~/.config/opencode/opencode.json",
+            "json",
+            "/mcp/shirei-memory",
+            serde_json::json!({ "type": "local", "command": ["{shim}"] }),
+        )
+        .reading("AGENTS.md"),
+        adapter(
+            "cursor",
+            "Cursor",
+            "cursor-agent",
+            "~/.cursor/mcp.json",
+            "json",
+            "/mcpServers/shirei-memory",
+            cmd.clone(),
+        )
+        .reading("AGENTS.md"),
+        adapter(
+            "amp",
+            "Amp",
+            "amp",
+            "~/.config/amp/settings.json",
+            "json",
+            "/amp.mcpServers/shirei-memory",
+            cmd,
+        )
+        .reading("AGENTS.md"),
+    ]
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct MemoryConfig {
+    pub enabled: bool,
+    pub dir_name: String,
+    pub overview_max_bytes: usize,
+    pub stale_after_days: u64,
+    pub stale_after_commits: usize,
+    pub resume_stale_hours: u64,
+    pub resume_prompt: String,
+    pub save_prompt: String,
+    pub bootstrap_prompt: String,
+    pub bootstrap_auto: bool,
+    pub overview_skeleton: String,
+    pub decisions_header: String,
+    pub project_doc_block: String,
+    pub cli_adapters: Vec<MemoryCliAdapter>,
+    pub shim_path: String,
+    pub autosave: bool,
+    pub autosave_cooldown_min: u64,
+}
+
+impl Default for MemoryConfig {
+    fn default() -> Self {
+        MemoryConfig {
+            enabled: true,
+            dir_name: shirei_memory_core::DEFAULT_DIR_NAME.into(),
+            overview_max_bytes: 4096,
+            stale_after_days: 14,
+            stale_after_commits: 20,
+            resume_stale_hours: 72,
+            resume_prompt: String::new(),
+            save_prompt: String::new(),
+            bootstrap_prompt: String::new(),
+            bootstrap_auto: true,
+            overview_skeleton: String::new(),
+            decisions_header: String::new(),
+            project_doc_block: String::new(),
+            cli_adapters: default_cli_adapters(),
+            shim_path: "~/.shirei/bin/shirei-memory".into(),
+            autosave: false,
+            autosave_cooldown_min: 30,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
 pub struct EditorConfig {
     pub vim: bool,
     pub autosave: bool,
@@ -347,11 +533,32 @@ pub struct GitHistoryConfig {
     pub default_view: GitHistoryView,
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct GitStatusConfig {
+    pub status_in_tree: bool,
+    pub show_deleted: bool,
+    pub status_max_files: u16,
+    pub refresh_debounce_ms: u16,
+}
+
+impl Default for GitStatusConfig {
+    fn default() -> Self {
+        GitStatusConfig {
+            status_in_tree: true,
+            show_deleted: true,
+            status_max_files: 2000,
+            refresh_debounce_ms: 200,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
 #[serde(default)]
 pub struct GitConfig {
     pub blame: GitBlameConfig,
     pub history: GitHistoryConfig,
+    pub status: GitStatusConfig,
 }
 
 fn default_tabs() -> Vec<String> {
@@ -1406,6 +1613,8 @@ pub struct Config {
     pub session: SessionConfig,
     pub editor: EditorConfig,
     #[serde(default)]
+    pub memory: MemoryConfig,
+    #[serde(default)]
     pub git: GitConfig,
     pub logging: LoggingConfig,
     pub limits: LimitsConfig,
@@ -1455,6 +1664,7 @@ impl Default for Config {
             render: RenderConfig::default(),
             session: SessionConfig::default(),
             editor: EditorConfig::default(),
+            memory: MemoryConfig::default(),
             git: GitConfig::default(),
             logging: LoggingConfig::default(),
             limits: LimitsConfig::default(),
@@ -1588,6 +1798,14 @@ impl ConfigManager {
     pub fn performance(&self) -> PerformanceConfig {
         self.lock().performance.clone()
     }
+
+    pub fn memory(&self) -> MemoryConfig {
+        self.lock().memory.clone()
+    }
+
+    pub fn git(&self) -> GitConfig {
+        self.lock().git.clone()
+    }
 }
 
 #[tauri::command]
@@ -1611,6 +1829,29 @@ pub fn config_set(app: AppHandle, manager: State<'_, ConfigManager>, config: Con
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn memory_defaults_round_trip_and_seed_adapters() {
+        let c = Config::default();
+        assert_eq!(c.memory.dir_name, ".shirei/memory");
+        assert!(
+            c.memory
+                .cli_adapters
+                .iter()
+                .any(|a| a.id == "claude" && a.format == "json")
+        );
+        assert!(
+            c.memory
+                .cli_adapters
+                .iter()
+                .any(|a| a.id == "codex" && a.format == "toml")
+        );
+        let json = serde_json::to_string(&c).unwrap();
+        let back: Config = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.memory, c.memory);
+        let legacy: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(legacy.memory, MemoryConfig::default());
+    }
 
     #[test]
     fn session_defaults_are_sane() {

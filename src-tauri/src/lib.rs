@@ -9,6 +9,9 @@ mod fonts;
 mod fs;
 mod git;
 mod logs;
+mod memory;
+mod memory_adapters;
+mod memory_project;
 mod metrics;
 mod mux_client;
 mod notify;
@@ -183,6 +186,7 @@ pub fn run() {
                 std::env::consts::OS
             );
             app.state::<config::ConfigManager>().load(app.handle());
+            memory::refresh_shim_if_present(&app.state::<config::ConfigManager>());
             if let Ok(dir) = app.path().app_config_dir() {
                 let _ = std::fs::create_dir_all(&dir);
                 if let Err(e) = app.state::<todos::TodoStore>().open(&dir.join("todos.db")) {
@@ -420,6 +424,7 @@ pub fn run() {
             git::git_file_at,
             git::git_blame,
             git::git_current_branch,
+            git::git_statuses,
             config::config_get,
             config::config_set,
             todos::todo_list,
@@ -472,6 +477,17 @@ pub fn run() {
             preview::preview_hide,
             preview::preview_reload,
             preview::preview_close,
+            memory::memory_status,
+            memory::memory_init,
+            memory::memory_write_defaults,
+            memory_adapters::memory_adapters_status,
+            memory_adapters::memory_adapter_preview,
+            memory_adapters::memory_adapter_register,
+            memory_adapters::memory_adapter_unregister,
+            memory_adapters::memory_handshake,
+            memory_project::memory_project_preview,
+            memory_project::memory_project_activate,
+            memory_project::memory_project_deactivate,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Focused(true) = event

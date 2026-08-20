@@ -42,6 +42,20 @@ export const gitSection: SettingsSection = {
           save,
           t("settings.git.historyViewDesc"),
         ),
+        boolField(
+          t("settings.git.statusInTree"),
+          g.status,
+          "status_in_tree",
+          save,
+          t("settings.git.statusInTreeDesc"),
+        ),
+        boolField(
+          t("settings.git.showDeleted"),
+          g.status,
+          "show_deleted",
+          save,
+          t("settings.git.showDeletedDesc"),
+        ),
       ],
       t("settings.git.desc"),
     );

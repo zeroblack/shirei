@@ -542,6 +542,10 @@ export class TerminalSession {
     void this.pasteFromClipboard();
   }
 
+  sendLine(text: string): void {
+    this.writeInput(text);
+  }
+
   show(visible: boolean): void {
     this.container.classList.toggle("active", visible);
   }

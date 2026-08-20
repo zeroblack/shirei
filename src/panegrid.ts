@@ -320,6 +320,10 @@ export class PaneGrid {
     this.panes.get(this.activeLeafId)?.terminal.paste();
   }
 
+  sendLineActive(text: string): void {
+    this.panes.get(this.activeLeafId)?.terminal.sendLine(text);
+  }
+
   private highlightActive(): void {
     const multi = this.panes.size > 1;
     for (const [id, { el }] of this.panes) {

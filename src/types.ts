@@ -6,6 +6,7 @@ export interface TerminalTab {
   projectId?: string;
   lastUsedAt: number;
   pinned: boolean;
+  memory?: "ok" | "stale";
 }
 
 export interface EditorTab {
@@ -17,6 +18,11 @@ export interface EditorTab {
   lastUsedAt: number;
   pinned: boolean;
   openerId?: string;
+  memory?: "ok" | "stale";
+  /** A read-only peek at a deleted file's HEAD content, opened from a tree
+   *  ghost row. Never restored across a restart: the content lives only in
+   *  memory, so it is excluded from persist(). */
+  ghost?: boolean;
 }
 
 export type TabState = TerminalTab | EditorTab;

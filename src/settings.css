@@ -33,7 +33,8 @@ input[type="radio"] {
 select,
 input[type="number"],
 input[type="text"],
-input[type="search"] {
+input[type="search"],
+.settings-textarea {
   border-radius: 6px;
   background: var(--surface-2);
   border: 1px solid var(--line-2);
@@ -45,9 +46,19 @@ select:focus,
 input[type="number"]:focus,
 input[type="text"]:focus,
 input[type="search"]:focus,
-input[type="color"]:focus {
+input[type="color"]:focus,
+.settings-textarea:focus {
   outline: 2px solid var(--fg);
   outline-offset: 2px;
+}
+
+.settings-textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 9px;
+  resize: vertical;
+  line-height: 1.5;
 }
 
 .settings-content button:focus-visible {
@@ -1544,4 +1555,85 @@ kbd.kc {
 .preset-add {
   display: flex;
   gap: 8px;
+}
+
+.memory-adapters {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 38vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+.memory-adapter,
+.memory-handshake {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+.memory-adapter-name {
+  font: var(--type-label);
+  color: var(--fg);
+  white-space: nowrap;
+}
+.memory-adapter-path {
+  flex: 1;
+  min-width: 0;
+  font: var(--type-kbd);
+  color: var(--fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.memory-adapter-detected,
+.memory-adapter-state {
+  flex-shrink: 0;
+  font: var(--type-kbd);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--fg-3);
+  padding: 2px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+}
+.memory-adapter-state[data-state="registered"] {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
+}
+.memory-adapter-state[data-state="drifted"] {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+}
+.memory-adapter[data-detected="false"] .memory-adapter-name,
+.memory-adapter[data-detected="false"] .memory-adapter-path {
+  opacity: 0.55;
+}
+.memory-handshake[data-ok="false"] {
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+.memory-handshake[data-ok="false"] .memory-adapter-state {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+.memory-preview {
+  margin-top: var(--space-3);
+}
+.memory-preview pre {
+  max-height: 40vh;
+  margin: 0;
+  padding: var(--space-3);
+  overflow: auto;
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--mono-sm);
+  line-height: 1.5;
+  white-space: pre;
 }

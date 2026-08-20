@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { GitFileStatus } from "./gitstatus";
 import type { Locale } from "./i18n";
 import type { Keystroke } from "./keys";
 import type { PaneNode } from "./panetree";
@@ -134,12 +135,27 @@ export interface LayoutTemplate {
   name: string;
   tree: PaneNode;
 }
+
+export interface GitStatusConfig {
+  status_in_tree: boolean;
+  show_deleted: boolean;
+  status_max_files: number;
+  refresh_debounce_ms: number;
+}
+
+export interface GitConfig {
+  blame: { enabled: boolean; delay_ms: number };
+  history: { default_view: "diff" | "working" | "full" };
+  status: GitStatusConfig;
+}
+
 export interface Project {
   id: string;
   name: string;
   path: string;
   color: string;
   tree: PaneNode;
+  todo_collapsed?: boolean;
 }
 
 export interface MotionConfig {
@@ -300,12 +316,60 @@ export interface CliRegistryEntry {
   custom: boolean;
 }
 
+export interface MemoryCliAdapter {
+  id: string;
+  display_name: string;
+  binary: string;
+  scope: "user" | "project";
+  config_path: string;
+  format: "json" | "toml";
+  insertion: string;
+  snippet: unknown;
+  project_doc: string;
+}
+
+export interface MemoryConfig {
+  enabled: boolean;
+  dir_name: string;
+  overview_max_bytes: number;
+  stale_after_days: number;
+  stale_after_commits: number;
+  resume_stale_hours: number;
+  resume_prompt: string;
+  save_prompt: string;
+  bootstrap_prompt: string;
+  bootstrap_auto: boolean;
+  overview_skeleton: string;
+  decisions_header: string;
+  project_doc_block: string;
+  cli_adapters: MemoryCliAdapter[];
+  shim_path: string;
+  autosave: boolean;
+  autosave_cooldown_min: number;
+}
+
+export interface MemorySkeleton {
+  overview: string;
+  decisions: string;
+}
+
+export interface MemoryStatus {
+  exists: boolean;
+  overview_updated: string | null;
+  overview_filled: boolean;
+  stale: boolean;
+  stale_reason: string | null;
+  sessions_count: number;
+  resume_age_hours: number | null;
+}
+
 export interface Config {
   locale: Locale;
   font: { family: string; size: number };
   fonts: FontsConfig;
   render: RenderConfig;
   session: SessionConfig;
+  memory: MemoryConfig;
   editor: {
     vim: boolean;
     autosave: boolean;
@@ -326,10 +390,7 @@ export interface Config {
     code_width: string;
     wrap_code: boolean;
   };
-  git: {
-    blame: { enabled: boolean; delay_ms: number };
-    history: { default_view: "diff" | "working" | "full" };
-  };
+  git: GitConfig;
   logging: LoggingConfig;
   theme: {
     preset: "dark" | "light";
@@ -398,8 +459,67 @@ export const configSet = (config: Config) =>
   invoke<void>("config_set", { config });
 export const onConfigChanged = (cb: (c: Config) => void) =>
   listen<Config>("config-changed", (e) => cb(e.payload));
+export const memoryStatus = (path: string) =>
+  invoke<MemoryStatus>("memory_status", { path });
+export const memoryInit = (path: string, skeleton?: MemorySkeleton) =>
+  invoke<string>("memory_init", { path, skeleton });
+export const memoryWriteDefaults = (overview: string, decisions: string) =>
+  invoke<string>("memory_write_defaults", { overview, decisions });
+
+export interface MemoryRegistration {
+  id: string;
+  detected: boolean;
+  state: "registered" | "missing" | "drifted";
+  config_path: string;
+  shim_path: string;
+}
+export interface MemoryPreview {
+  config_path: string;
+  before: string;
+  after: string;
+  diff: string;
+}
+export const memoryAdaptersStatus = () =>
+  invoke<MemoryRegistration[]>("memory_adapters_status");
+export const memoryAdapterPreview = (id: string) =>
+  invoke<MemoryPreview>("memory_adapter_preview", { id });
+export const memoryAdapterRegister = (id: string) =>
+  invoke<MemoryRegistration>("memory_adapter_register", { id });
+export const memoryAdapterUnregister = (id: string) =>
+  invoke<MemoryRegistration>("memory_adapter_unregister", { id });
+
+export interface MemoryHandshake {
+  ok: boolean;
+  shim_path: string;
+  server: string;
+  tools: string[];
+  error: string;
+}
+export interface MemoryProjectDoc {
+  doc_path: string;
+  adapters: string[];
+  state: "current" | "missing" | "outdated";
+  before: string;
+  after: string;
+  diff: string;
+}
+export const memoryHandshake = () =>
+  invoke<MemoryHandshake>("memory_handshake");
+export const memoryProjectPreview = (path: string, block: string) =>
+  invoke<MemoryProjectDoc[]>("memory_project_preview", { path, block });
+export const memoryProjectActivate = (path: string, block: string) =>
+  invoke<string[]>("memory_project_activate", { path, block });
+export const memoryProjectDeactivate = (path: string) =>
+  invoke<string[]>("memory_project_deactivate", { path });
 
 export const openConfigFile = () => invoke<void>("open_config_file");
 export const pickProjectDir = () => invoke<string | null>("pick_project_dir");
 export const pathIsGitRepo = (path: string) =>
   invoke<boolean>("path_is_git_repo", { path });
+
+export interface GitStatusReport {
+  files: GitFileStatus[];
+  truncated: boolean;
+}
+export const gitStatuses = (root: string, dirs: string[]) =>
+  invoke<GitStatusReport>("git_statuses", { root, dirs });

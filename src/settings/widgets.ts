@@ -80,6 +80,19 @@ export function textInput(
   return el;
 }
 
+export function textArea(
+  value: string,
+  onChange: (v: string) => void,
+  rows: number,
+): HTMLTextAreaElement {
+  const el = document.createElement("textarea");
+  el.className = "settings-textarea";
+  el.rows = rows;
+  el.value = value;
+  el.addEventListener("change", () => onChange(el.value));
+  return el;
+}
+
 export function checkbox(
   value: boolean,
   onChange: (v: boolean) => void,
@@ -322,13 +335,35 @@ export function textField<K extends string>(
   save: Save,
   placeholder?: string,
   desc?: string,
+  opts: { stack?: boolean } = {},
 ): HTMLElement {
   const input = textInput(obj[key], (v) => {
     obj[key] = v;
     save();
   });
   if (placeholder) input.placeholder = placeholder;
-  return field(label, input, { desc });
+  return field(label, input, { desc, stack: opts.stack });
+}
+
+export function textAreaField<K extends string>(
+  label: string,
+  obj: Record<K, string>,
+  key: K,
+  save: Save,
+  placeholder?: string,
+  desc?: string,
+  opts: { stack?: boolean; rows?: number } = {},
+): HTMLElement {
+  const input = textArea(
+    obj[key],
+    (v) => {
+      obj[key] = v;
+      save();
+    },
+    opts.rows ?? 4,
+  );
+  if (placeholder) input.placeholder = placeholder;
+  return field(label, input, { desc, stack: opts.stack ?? true });
 }
 
 export function selectField<K extends string, V extends string>(

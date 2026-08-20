@@ -35,11 +35,21 @@ jobs:
           workspaces: |
             src-tauri
             mux
-      # tauri-build validates the externalBin sidecar at compile time, so the
-      # daemon must be staged before clippy can check the Tauri crate.
-      - run: node scripts/build-mux.mjs
+            memory
+            memory-core
+      - run: cargo fmt --manifest-path memory-core/Cargo.toml --check
+      - run: cargo clippy --manifest-path memory-core/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path memory-core/Cargo.toml
+      - run: cargo fmt --manifest-path memory/Cargo.toml --check
+      - run: cargo clippy --manifest-path memory/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path memory/Cargo.toml
+      # tauri-build validates the externalBin sidecars at compile time, so
+      # they must be staged before clippy can check the Tauri crate.
+      - run: node scripts/build-sidecar.mjs mux shirei-mux
+      - run: node scripts/build-sidecar.mjs memory shirei-memory
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
 
   commitlint:
     # Only on PRs — pushes to main arrive via squash-merge (title already linted),

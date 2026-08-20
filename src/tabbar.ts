@@ -18,6 +18,7 @@ export interface TabBarCallbacks {
   onKill: (id: string) => void;
   onPin: (id: string) => void;
   onNew: () => void;
+  onMemoryOpen?: () => void;
 }
 
 const DRAG_THRESHOLD_PX = 4;
@@ -288,6 +289,31 @@ export class TabBar {
       pin.className = "tab-pin";
       pin.textContent = "★";
       el.appendChild(pin);
+    }
+
+    if (tab.memory) {
+      const badge = document.createElement("span");
+      badge.className = "tab-memory";
+      badge.dataset.state = tab.memory;
+      badge.textContent = "M";
+      badge.title =
+        tab.memory === "stale"
+          ? t("ui.memory.badgeStale")
+          : t("ui.memory.badge");
+      badge.setAttribute("role", "button");
+      badge.tabIndex = 0;
+      const openMemory = (e: Event) => {
+        e.stopPropagation();
+        this.cb.onMemoryOpen?.();
+      };
+      badge.onclick = openMemory;
+      badge.onkeydown = (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openMemory(e);
+        }
+      };
+      el.appendChild(badge);
     }
 
     if (tab.kind === "terminal") {

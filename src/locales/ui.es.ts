@@ -130,6 +130,19 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
 
   "ui.git.blame.notRepo": "Blame necesita un repositorio Git.",
 
+  "ui.git.status.modified": "modificado",
+  "ui.git.status.added": "agregado",
+  "ui.git.status.untracked": "sin seguimiento",
+  "ui.git.status.deleted": "eliminado",
+  "ui.git.status.renamed": "renombrado",
+  "ui.git.status.conflicted": "en conflicto",
+  "ui.git.status.staged": "en stage",
+  "ui.git.status.partiallyStaged": "parcialmente en stage",
+  "ui.git.status.unstaged": "sin stage",
+  "ui.git.status.conflictBelow": "conflicto más abajo",
+  "ui.git.status.changeBelow": "1 cambio más abajo",
+  "ui.git.status.changesBelow": "{n} cambios más abajo",
+
   "ui.time.now": "recién",
   "ui.time.minute": "hace {n} min",
   "ui.time.minutes": "hace {n} min",
@@ -197,6 +210,9 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.filetree.newFile": "Nuevo archivo",
   "ui.filetree.newFilePrompt": "Nombre del archivo nuevo",
   "ui.filetree.createFailed": "No se pudo crear el archivo (quizás ya existe).",
+  "ui.filetree.headTabTitle": "{name} (HEAD)",
+  "ui.filetree.ghostUnavailable":
+    "No se pudo leer la versión HEAD de ese archivo.",
   "ui.prompt.hintConfirm": "confirmar",
   "ui.prompt.hintCancel": "cancelar",
 
@@ -364,4 +380,28 @@ export const uiEs: Record<keyof typeof uiEn, string> = {
   "ui.update.failedTitle": "Falló la actualización",
   "ui.update.close": "Cerrar",
   "ui.update.noNotes": "Sin notas de la versión.",
+  "ui.memory.initConfirm":
+    "Este proyecto aún no tiene memoria. ¿Crear .shirei/memory aquí?",
+  "ui.memory.initConfirmLabel": "Crear",
+  "ui.memory.noCwd":
+    "No hay un directorio de sesión activo para asociar la memoria.",
+  "ui.memory.disabled": "La memoria del proyecto está desactivada en Ajustes.",
+  "ui.memory.badge": "Memoria del proyecto",
+  "ui.memory.badgeStale": "La memoria del proyecto está vencida",
+  "ui.memory.prompt.resume":
+    "Lee la memoria del proyecto (memory_overview y luego memory_resume) y continúa desde donde quedó.",
+  "ui.memory.prompt.save":
+    "Resume esta sesión en la memoria del proyecto con memory_save_session, luego actualiza memory_set_resume con el estado actual y el siguiente paso.",
+  "ui.memory.prompt.bootstrap":
+    "Este proyecto aún no tiene memoria. Llama a memory_init, luego lee el repositorio y completa el overview con memory_update_overview. Registra la elección de stack con memory_record_decision, y define el siguiente paso con memory_set_resume.",
+  "ui.memory.skeleton.overview":
+    "# Resumen del proyecto\n\n## Propósito\n\n## Stack\n\n## Ejecutar y probar\n\n## Convenciones\n\n## Detalles a tener en cuenta\n",
+  "ui.memory.skeleton.decisions": "# Decisiones\n",
+  "ui.memory.projectDoc.confirm":
+    "Para que las CLI encuentren la memoria hay que dejar una nota en sus archivos de instrucciones. ¿Escribirla?",
+  "ui.memory.projectDoc.confirmLabel": "Escribir",
+  "ui.memory.projectDoc.done":
+    "Memoria activada en {count} archivo(s) de instrucciones.",
+  "ui.memory.projectDoc.block":
+    "## Memoria del proyecto\n\nEste proyecto tiene memoria persistente en el servidor MCP `shirei-memory`. Según la CLI, sus tools pueden estar diferidas: si no las ves listadas, búscalas en el registro de tools antes de darlas por ausentes.\n\n- `memory_overview` al arrancar cualquier tarea, antes de tocar código.\n- `memory_resume` cuando retomas trabajo previo.\n- `memory_record_decision` apenas tomas una decisión no obvia, descartas una alternativa o chocas con una restricción.\n- `memory_set_resume` cada vez que pausas a mitad de una tarea.\n- `memory_save_session` antes de cerrar la sesión o al terminar la tarea.\n- `memory_update_overview` cuando cambian el stack, los comandos o las convenciones.\n",
 };

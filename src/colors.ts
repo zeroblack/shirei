@@ -1,4 +1,4 @@
-function parseHex(hex: string): [number, number, number] {
+export function parseHex(hex: string): [number, number, number] {
   let h = hex.replace("#", "").trim();
   if (h.length === 3) {
     h = h
@@ -156,5 +156,36 @@ export function deriveRoleColor(
 export function deriveStatusColors(bg: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const role of STATUS_ROLES) out[role.token] = deriveRoleColor(role, bg);
+  return out;
+}
+
+export interface GitRole {
+  token: string;
+  l: number;
+  c: number;
+  h: number;
+  minLc: number;
+}
+
+// Conflict takes a lower floor than the rest on purpose: forced to 60 the
+// lightness walk washes it to pink and it stops reading as an alarm. Its
+// legibility comes from the knockout letter on the solid chip.
+export const GIT_ROLES: readonly GitRole[] = [
+  { token: "--git-modified", l: 0.8, c: 0.13, h: 85, minLc: 60 },
+  { token: "--git-new", l: 0.78, c: 0.14, h: 150, minLc: 60 },
+  { token: "--git-renamed", l: 0.76, c: 0.1, h: 255, minLc: 60 },
+  { token: "--git-deleted", l: 0.62, c: 0.02, h: 25, minLc: 60 },
+  { token: "--git-conflict", l: 0.62, c: 0.2, h: 25, minLc: 45 },
+];
+
+// Derives the five git-status role colors against a caller-supplied surface,
+// APCA-validated per role in both directions (see colors.test.ts). Marks
+// paint on both the sidebar's --surface-1 and a selected row's --surface-2;
+// callers should anchor on whichever is harder for the role's own hue so one
+// derived color stays legible everywhere it's actually painted.
+export function deriveGitColors(bg: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const role of GIT_ROLES)
+    out[role.token] = deriveRoleColor(role, bg, role.minLc);
   return out;
 }

@@ -1,6 +1,6 @@
 [package]
 name = "shirei"
-version = "0.16.8"
+version = "0.17.0"
 description = "CLI-first terminal cockpit with renameable, color-coded tabs"
 authors = ["Dionisio Fernández"]
 edition = "2024"
@@ -19,7 +19,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 portable-pty = "0.9.0"
 thiserror = "2.0.18"
 anyhow = "1.0.102"
@@ -42,6 +42,9 @@ rusqlite = { version = "0.40.1", features = ["bundled"] }
 git2 = { version = "0.20", default-features = false }
 tauri-plugin-notification = "2.3.3"
 regex = "1.13.0"
+shirei-memory-core = { path = "../memory-core" }
+toml_edit = "0.22"
+time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
 
 [dev-dependencies]
 zip = { version = "8", default-features = false, features = ["deflate"] }

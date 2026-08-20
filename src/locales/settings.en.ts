@@ -12,6 +12,7 @@ export const settingsEn = {
   "settings.group.system": "System",
 
   "settings.home.label": "Home",
+  "settings.memory.label": "Project memory",
   "settings.shortcuts.label": "Shortcuts",
   "settings.editor.label": "Editor",
   "settings.editor.title": "Editor",
@@ -21,7 +22,8 @@ export const settingsEn = {
   "settings.git.label": "Git",
   "settings.git.title": "Git",
   "settings.git.desc": "Diff, history, and blame inside the editor.",
-  "settings.git.search": "git blame history diff commit author annotate gutter",
+  "settings.git.search":
+    "git blame history diff commit author annotate gutter status tree deleted ghost",
   "settings.git.blameEnabled": "Inline blame on open",
   "settings.git.blameEnabledDesc":
     "Show per-line authorship when a file opens. Toggle anytime with the editor button or its shortcut.",
@@ -34,6 +36,12 @@ export const settingsEn = {
   "settings.git.historyViewDiff": "Diff (commit change)",
   "settings.git.historyViewWorking": "Working tree",
   "settings.git.historyViewFull": "File",
+  "settings.git.statusInTree": "Show git status in the file tree",
+  "settings.git.statusInTreeDesc":
+    "Mark modified, staged, untracked, and conflicted files inline as you browse.",
+  "settings.git.showDeleted": "Show deleted files as ghost rows",
+  "settings.git.showDeletedDesc":
+    "List files removed from disk but still tracked by git, dimmed, so you can reopen their last committed version.",
   "settings.editor.group.saving": "Saving",
   "settings.editor.group.markdown": "Markdown",
   "settings.editor.group.editing": "Editing",
@@ -522,6 +530,46 @@ export const settingsEn = {
     "Add a folder and open it whenever you want with its layout and color, from the command palette.",
   "settings.projects.newProject": "＋ New project",
 
+  "settings.memory.title": "Project memory",
+  "settings.memory.desc":
+    "Per-project notes any AI CLI reads and writes over MCP.",
+  "settings.memory.group.general": "General",
+  "settings.memory.group.staleness": "Freshness",
+  "settings.memory.group.prompts": "Prompts",
+  "settings.memory.group.templates": "Templates",
+  "settings.memory.group.clis": "CLI registration",
+  "settings.memory.enabled": "Enable project memory",
+  "settings.memory.enabledDesc": "Shows the memory actions and badge.",
+  "settings.memory.overviewMax": "Overview size cap (bytes)",
+  "settings.memory.bootstrapAuto": "Seed new projects",
+  "settings.memory.bootstrapAutoDesc":
+    "Asks the agent to fill the memory the first time it finishes work in a project without one.",
+  "settings.memory.bootstrapPrompt": "Seed prompt",
+  "settings.memory.overviewSkeleton": "Overview template",
+  "settings.memory.decisionsHeader": "Decisions header",
+  "settings.memory.autosave": "Autosave session",
+  "settings.memory.autosaveDesc":
+    "Types the save prompt into the terminal when the agent finishes.",
+  "settings.memory.autosaveCooldown": "Autosave cooldown (minutes)",
+  "settings.memory.staleDays": "Stale after (days)",
+  "settings.memory.staleCommits": "Stale after (commits)",
+  "settings.memory.resumeHours": "Resume note stale after (hours)",
+  "settings.memory.resumePrompt": "Resume prompt",
+  "settings.memory.savePrompt": "Save session prompt",
+  "settings.memory.notDetected": "not found",
+  "settings.memory.handshake": "Memory server",
+  "settings.memory.handshakeOk": "Answers",
+  "settings.memory.handshakeFail": "No answer",
+  "settings.memory.state.registered": "Registered",
+  "settings.memory.state.missing": "Not registered",
+  "settings.memory.state.drifted": "Differs",
+  "settings.memory.register": "Register",
+  "settings.memory.repair": "Repair",
+  "settings.memory.unregister": "Unregister",
+  "settings.memory.previewTitle": "This will edit",
+  "settings.memory.apply": "Apply",
+  "settings.memory.shimInstalled": "Launcher installed at",
+
   "settings.home.title": "指令 Shirei",
   "settings.home.tagline": "The session leads. You command.",
   "settings.home.env.theme": "Theme",
@@ -592,6 +640,8 @@ export const settingsEn = {
   "settings.updates.search":
     "updates update auto check version release upgrade download install",
   "settings.projects.search": "project folder path layout template",
+  "settings.memory.search":
+    "memory mcp resume session cli register bootstrap seed template overview decisions",
   "settings.about.search":
     "about version license opensource dioni blog shirei meaning japanese agents ai session mit update upgrade release",
 };

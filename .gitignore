@@ -15,8 +15,11 @@ dist-ssr
 # Build artifacts
 src-tauri/target/
 mux/target/
+memory-core/target/
+memory/target/
 src-tauri/binaries/
 *.dmg
+memory-core/Cargo.lock
 
 # Environment
 .env
@@ -24,7 +27,7 @@ src-tauri/binaries/
 !.env.release.example
 *.p8
 
-# Documentación de diseño (local, fuera del repo)
+# Design documentation (local, outside the repo)
 docs/
 
 # Local agent / tooling state and git worktrees

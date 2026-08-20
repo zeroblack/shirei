@@ -6,7 +6,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { BrowserSession } from "./browser";
 import { resolveColorScheme, shouldShowBrowser } from "./browser-core";
 import { isClaudeCommand, withClaudeResume } from "./claude-cmd";
-import { alpha, deriveStatusColors, mix } from "./colors";
+import { alpha, deriveGitColors, deriveStatusColors, mix } from "./colors";
 import {
   browserBack,
   browserForward,
@@ -28,6 +28,14 @@ import {
   type ConfirmPolicy,
   configSet,
   DEFAULT_FONT_SIZE,
+  gitStatuses,
+  type MemoryProjectDoc,
+  type MemoryStatus,
+  memoryInit,
+  memoryProjectActivate,
+  memoryProjectPreview,
+  memoryStatus,
+  memoryWriteDefaults,
   type Project,
   type TerminalColors,
 } from "./config";
@@ -40,12 +48,20 @@ import { FocusCell, type FocusCellShortcuts } from "./focus/cell";
 import type { Phase } from "./focus/machine";
 import { fontStack, isFontLoaded, registerFont } from "./fonts";
 import { GitHistory } from "./githistory";
+import { gitRefreshDecision } from "./gitstatus";
 import { setLocale, t } from "./i18n";
 import { isImage, mediaKind, PANEL_RIGHT, SEARCH, SIDEBAR } from "./icons";
 import { ImageSession } from "./image";
 import { Keymap } from "./keymap";
 import { eventToKeystroke, formatKeystroke, resolveBindings } from "./keys";
 import { MediaSession } from "./media";
+import {
+  memoryBadgeState,
+  promptLine,
+  resolveTemplate,
+  shouldAutosave,
+  shouldBootstrapMemory,
+} from "./memory-actions";
 import {
   type DormancyInput,
   type DormancyState,
@@ -89,6 +105,7 @@ import type { Screencast } from "./screencast";
 import type { CssRect } from "./screencast-core";
 import { resolveSearchRoot, type ScopeRoots } from "./searchscope";
 import {
+  type Confidence,
   cycleWaitingId,
   getSessionState,
   initSessionState,
@@ -113,7 +130,11 @@ import { TabBar } from "./tabbar";
 import { TerminalSession } from "./terminal";
 import { showToast } from "./toast";
 import { openTodoModal } from "./todomodal";
-import { TodoPanel } from "./todopanel";
+import {
+  decideTodoFocusAction,
+  type TodoFocusDecision,
+  TodoPanel,
+} from "./todopanel";
 import type { Todo } from "./todos";
 import type { EditorTab, TabState } from "./types";
 import { UpdateIndicator } from "./updateindicator";
@@ -299,6 +320,14 @@ function applyChrome(
     document.documentElement.style.setProperty(k, v);
   for (const [k, v] of Object.entries(deriveStatusColors(vars["--bg"])))
     document.documentElement.style.setProperty(k, v);
+  // Anchored on --surface-2, not --surface-1: every git role's base hue sits
+  // on the same bright side as fg on every catalog theme, so mixing further
+  // toward fg (surface-2 vs surface-1) only ever narrows the contrast gap.
+  // Surface-2 is therefore strictly the harder of the two rows a mark can
+  // paint on, and clearing it guarantees surface-1 clears too (see
+  // colors.test.ts).
+  for (const [k, v] of Object.entries(deriveGitColors(vars["--surface-2"])))
+    document.documentElement.style.setProperty(k, v);
   document.documentElement.style.colorScheme = preset;
   // WebKit's native PDF viewer lives in a cross-origin iframe (asset://),
   // out of reach of CSS color-scheme; it follows the window appearance.
@@ -365,10 +394,15 @@ export class App {
   // focused. Persist is suppressed until the restore settles on the real one.
   private restoring = false;
   private todoFocused = false;
+  private todoCollapsed = false;
+  private todoProjectId: string | null = null;
   private panelVisible = false;
   private lastRoot: string | null = null;
   private treeRoot: string | null = null;
   private watchedRoot: string | null = null;
+  private gitStatusInFlight = false;
+  private gitStatusPending = false;
+  private gitStatusTimer: number | null = null;
   private snapshotTimer: ReturnType<typeof setInterval> | null = null;
   private ageTimer: ReturnType<typeof setInterval> | null = null;
   private lastSessionJson: string | null = null;
@@ -401,6 +435,10 @@ export class App {
   private readonly metricsSessionId = crypto.randomUUID();
   private readonly tabDormancy = new Map<string, DormancyState>();
   private readonly agentMetricsState = new Map<string, SessionState>();
+  private readonly autosaveState = new Map<string, SessionState>();
+  private readonly autosaveLastFiredAt = new Map<string, number>();
+  private readonly bootstrapState = new Map<string, SessionState>();
+  private readonly bootstrappedProjects = new Set<string>();
   private readonly seenProjectIds = new Set<string>();
   private activeProjectId: string | null = null;
   private metricsTimer: ReturnType<typeof setInterval> | null = null;
@@ -439,15 +477,21 @@ export class App {
         void recordOpen(path).catch(() => {});
         void this.openFile(path, { newTab });
       },
+      onOpenGhost: (path, content) => void this.openGhostFile(path, content),
       onEscape: () => this.sessions.get(this.activeId ?? "")?.focus(),
     });
+    this.tree.setShowDeleted(config.git.status.show_deleted);
     this.todoDividerEl = document.querySelector<HTMLElement>(
       "#todo-divider",
     ) as HTMLElement;
     this.todoPanel = new TodoPanel(this.todoPanelEl, {
       onRequestModal: () => this.openTodoCapture(),
       onRequestDetail: (todo) => this.openTodoEdit(todo),
+      onToggleCollapsed: () => this.setTodoCollapsed(!this.todoCollapsed),
     });
+    this.todoDividerEl.addEventListener("dblclick", () =>
+      this.setTodoCollapsed(true),
+    );
     this.todoPanelEl.addEventListener("focusout", (e) => {
       if (this.todoPanelEl.contains(e.relatedTarget as Node | null)) return;
       if (this.todoFocused) this.blurTodoPanel();
@@ -508,6 +552,7 @@ export class App {
         onKill: (id) => this.killActiveFor(id),
         onPin: (id) => this.togglePin(id),
         onNew: () => void this.newTab(),
+        onMemoryOpen: () => void this.openProjectMemory("overview.md"),
       },
       config.theme.tabs,
     );
@@ -532,6 +577,10 @@ export class App {
     window.addEventListener("focus", () => {
       this.cmdAvailable.clear();
       this.current()?.recoverRenderers(false);
+      // A file edited in place or `git add` from the terminal never touches
+      // the tree's structural watch, so returning focus to the window is the
+      // trigger that catches both.
+      this.refreshGitStatuses();
     });
     window.addEventListener("pointerdown", () => this.noteActivity(), {
       capture: true,
@@ -927,6 +976,7 @@ export class App {
 
   async init(): Promise<void> {
     this.logMetric("session_start");
+    void this.syncMemoryDefaults();
     this.tree.setHome(await homeDir());
     const saved = loadSession();
     if (saved.length === 0) {
@@ -973,6 +1023,7 @@ export class App {
 
   async bindMenu(): Promise<void> {
     await listen("tree-changed", () => this.onTreeChanged());
+    await listen("git-changed", () => this.refreshGitStatuses());
     await listen("menu-new-tab", () => void this.newTab());
     await listen("menu-close-tab", () => void this.closeActive());
     await listen("menu-palette", () => void this.openQuickOpen());
@@ -1031,6 +1082,8 @@ export class App {
       );
       this.notifications.sync(this.notificationRows());
       this.emitAgentMetrics();
+      this.maybeAutosaveMemory();
+      this.maybeBootstrapMemory();
     });
   }
 
@@ -1153,6 +1206,26 @@ export class App {
     this.updateContextHint();
     webglPool.setCap(c.render.webgl_pool_cap);
     this.applyFocusCellsConfig(c);
+    if (previous.git.status.show_deleted !== c.git.status.show_deleted) {
+      this.tree.setShowDeleted(c.git.status.show_deleted);
+      // Ghost rows are computed while listing a directory, not read live off
+      // this flag, so toggling it needs a re-list to actually show/hide them.
+      void this.tree.refresh();
+    }
+    if (previous.git.status.status_in_tree !== c.git.status.status_in_tree) {
+      if (c.git.status.status_in_tree) this.refreshGitStatuses();
+      else this.tree.clearStatuses();
+    }
+    if (previous.memory.enabled !== c.memory.enabled) {
+      void this.refreshMemoryBadge();
+    }
+    if (
+      previous.memory.overview_skeleton !== c.memory.overview_skeleton ||
+      previous.memory.decisions_header !== c.memory.decisions_header ||
+      previous.locale !== c.locale
+    ) {
+      void this.syncMemoryDefaults();
+    }
     if (
       previous.session.snapshot_interval_secs !==
         c.session.snapshot_interval_secs ||
@@ -1636,9 +1709,11 @@ export class App {
     opts: { newTab?: boolean; silent?: boolean } = {},
   ): Promise<void> {
     const { newTab = false, silent = false } = opts;
-    // Dedupe: one live view per path, revealed wherever it lives (tab or slot).
+    // Dedupe: one live view per path, revealed wherever it lives (tab or
+    // slot). A ghost tab is a separate, read-only peek at HEAD content, never
+    // the live file, so it never satisfies this lookup.
     const existing = this.tabs.find(
-      (t) => t.kind === "editor" && t.path === path,
+      (t) => t.kind === "editor" && t.path === path && !t.ghost,
     );
     if (existing) {
       this.activate(existing.id);
@@ -1743,6 +1818,82 @@ export class App {
     this.setActiveProject(null);
   }
 
+  private openGhostFile(path: string, content: string | null): Promise<void> {
+    return this.enqueue(() => this.doOpenGhostFile(path, content));
+  }
+
+  // No genuinely read-only viewer exists in the app yet, so a ghost row opens
+  // as an ordinary editor tab, wired with the HEAD content instead of a disk
+  // read and locked to read-only inside EditorSession; the title marks it
+  // as the committed snapshot so it never reads as the live (deleted) file.
+  private async doOpenGhostFile(
+    path: string,
+    content: string | null,
+  ): Promise<void> {
+    if (content == null) {
+      this.notify(t("ui.filetree.ghostUnavailable"));
+      return;
+    }
+    const existing = this.tabs.find(
+      (tab) => tab.kind === "editor" && tab.path === path && tab.ghost,
+    );
+    if (existing) {
+      this.activate(existing.id);
+      return;
+    }
+    const id = nextId();
+    const name = basename(path);
+    const tab: EditorTab = {
+      id,
+      kind: "editor",
+      title: t("ui.filetree.headTabTitle", { name }),
+      path,
+      dirty: false,
+      lastUsedAt: Date.now(),
+      pinned: false,
+      ghost: true,
+    };
+    this.tabs.push(tab);
+
+    const container = document.createElement("div");
+    container.className = "terminal-host editor-host";
+    this.host.appendChild(container);
+
+    const ES = await loadEditor();
+    const session = new ES(id, path, container, {
+      fontFamily: fontStack(this.config.font.family, this.config.fonts),
+      fontSize: this.config.font.size,
+      palette: this.config.theme.terminal,
+      preset: this.config.theme.preset,
+      editor: this.config.editor,
+      git: this.config.git,
+      readOnlyContent: content,
+    });
+    session.onHistory = () => void this.openHistory(session);
+    this.sessions.set(id, session);
+    this.logMetric("tab_created", {
+      tabId: id,
+      projectId: null,
+      payload: JSON.stringify({ paneKind: "editor", has_project: false }),
+    });
+    this.trackNewTabDormancy(id);
+
+    this.activeId = id;
+    this.showActive();
+    try {
+      await session.open();
+    } catch (e) {
+      console.error("open ghost file failed:", path, e);
+      this.notify(t("ui.app.cannotShowFile"));
+      await this.doCloseTab(id);
+      return;
+    }
+    this.renderTabs();
+    session.focus();
+    this.persist();
+    this.setActiveProject(null);
+  }
+
   private async makeFileContent(
     grid: PaneGrid,
     paneId: string,
@@ -1781,7 +1932,7 @@ export class App {
 
   private paneRecents(): { rel: string; abs: string }[] {
     return this.tabs
-      .filter((tab): tab is EditorTab => tab.kind === "editor")
+      .filter((tab): tab is EditorTab => tab.kind === "editor" && !tab.ghost)
       .slice(-5)
       .reverse()
       .map((tab) => ({ rel: basename(tab.path), abs: tab.path }));
@@ -2487,6 +2638,7 @@ export class App {
     this.activeId = id;
     this.showActive();
     this.renderTabs();
+    void this.refreshMemoryBadge();
     this.focusActive();
     this.persist();
     if (this.panelVisible) void this.openWorkspaceTree();
@@ -2532,6 +2684,8 @@ export class App {
     const projectId = tab?.kind === "terminal" ? (tab.projectId ?? null) : null;
     this.logMetric("tab_closed", { tabId: id, projectId });
     this.untrackTabMetrics(id);
+    this.autosaveState.delete(id);
+    this.autosaveLastFiredAt.delete(id);
 
     this.sessions.delete(id);
     this.tabs = this.tabs.filter((t) => t.id !== id);
@@ -2671,9 +2825,56 @@ export class App {
           },
         ]
       : [];
+    const memoryCommands = this.config.memory.enabled
+      ? [
+          {
+            id: "memory.open",
+            name: t("cmd.memory.open"),
+            run: () => void this.openProjectMemory("overview.md"),
+          },
+          {
+            id: "memory.resume",
+            name: t("cmd.memory.resume"),
+            run: () =>
+              this.sendMemoryPrompt(
+                resolveTemplate(
+                  this.config.memory.resume_prompt,
+                  t("ui.memory.prompt.resume"),
+                ),
+              ),
+          },
+          {
+            id: "memory.save_session",
+            name: t("cmd.memory.save_session"),
+            run: () =>
+              this.sendMemoryPrompt(
+                resolveTemplate(
+                  this.config.memory.save_prompt,
+                  t("ui.memory.prompt.save"),
+                ),
+              ),
+          },
+          {
+            id: "memory.open_decisions",
+            name: t("cmd.memory.open_decisions"),
+            run: () => void this.openProjectMemory("decisions.md"),
+          },
+          {
+            id: "memory.open_resume",
+            name: t("cmd.memory.open_resume"),
+            run: () => void this.openProjectMemory("resume.md"),
+          },
+          {
+            id: "memory.open_sessions",
+            name: t("cmd.memory.open_sessions"),
+            run: () => void this.openProjectMemory("sessions"),
+          },
+        ]
+      : [];
     return [
       ...editorCommands,
       ...previewCommands,
+      ...memoryCommands,
       {
         id: "record.panel",
         name: t("ui.cmd.recordPanel"),
@@ -2774,9 +2975,17 @@ export class App {
   private setActiveProject(projectId: string | null): void {
     const hasProject = projectId !== null;
     this.todoPanelEl.classList.toggle("hidden", !hasProject);
-    this.todoDividerEl.classList.toggle("hidden", !hasProject);
     void this.todoPanel.setProject(projectId);
     this.emitProjectFocusMetrics(projectId);
+    this.todoProjectId = projectId;
+    this.applyTodoCollapsed(this.resolveTodoCollapsed(projectId));
+  }
+
+  private resolveTodoCollapsed(projectId: string | null): boolean {
+    const project = projectId
+      ? this.projects.find((p) => p.id === projectId)
+      : undefined;
+    return project?.todo_collapsed ?? this.config.layout.todo_collapsed;
   }
 
   togglePanel(): void {
@@ -2897,6 +3106,60 @@ export class App {
     this.todoPanelEl.style.flex = `${clampedRatio} 1 0`;
   }
 
+  private applyTodoCollapsed(collapsed: boolean): void {
+    this.todoCollapsed = collapsed;
+    this.todoPanel.setCollapsed(collapsed);
+    if (collapsed) {
+      this.todoPanelEl.style.flex = "";
+      this.treeRegionEl.style.flex = "1 1 0";
+    } else {
+      this.applyTodoRatio(this.config.layout.todo_region_ratio);
+    }
+    const hasProject = !this.todoPanelEl.classList.contains("hidden");
+    this.todoDividerEl.classList.toggle("hidden", !hasProject || collapsed);
+  }
+
+  private setTodoCollapsed(collapsed: boolean): void {
+    if (collapsed === this.todoCollapsed) return;
+    if (collapsed && this.todoFocused) this.blurTodoPanel();
+    this.applyTodoCollapsed(collapsed);
+    this.persistTodoCollapsed(collapsed);
+  }
+
+  private persistTodoCollapsed(collapsed: boolean): void {
+    if (this.todoProjectId) {
+      const idx = this.config.projects.findIndex(
+        (p) => p.id === this.todoProjectId,
+      );
+      if (idx === -1) return;
+      this.config.projects[idx] = {
+        ...this.config.projects[idx],
+        todo_collapsed: collapsed,
+      };
+      this.projects = [...this.config.projects];
+    } else {
+      this.config = {
+        ...this.config,
+        layout: { ...this.config.layout, todo_collapsed: collapsed },
+      };
+    }
+    void configSet(this.config);
+  }
+
+  private runTodoFocusDecision(decision: TodoFocusDecision): void {
+    switch (decision) {
+      case "expand-and-focus":
+        this.setTodoCollapsed(false);
+        this.focusTodoPanel();
+        break;
+      case "focus":
+        this.focusTodoPanel();
+        break;
+      case "noop":
+        break;
+    }
+  }
+
   private attachTodoDividerResize(): void {
     const panel = this.panelEl;
 
@@ -2946,6 +3209,7 @@ export class App {
     }
     const filePath = this.activeFilePath();
     if (filePath) await this.tree.revealPath(filePath);
+    this.refreshGitStatuses();
   }
 
   private stopTreeWatch(): void {
@@ -3049,16 +3313,304 @@ export class App {
     return (await this.activeLiveCwd()) ?? this.activeLeafCwd();
   }
 
+  private async openProjectMemory(
+    file: "overview.md" | "decisions.md" | "resume.md" | "sessions",
+  ): Promise<void> {
+    if (!this.config.memory.enabled) {
+      showToast(t("ui.memory.disabled"));
+      return;
+    }
+    const cwd = await this.activeCwd();
+    if (!cwd) {
+      showToast(t("ui.memory.noCwd"));
+      return;
+    }
+    let status: MemoryStatus;
+    try {
+      status = await memoryStatus(cwd);
+    } catch (e) {
+      this.notify(errorMessage(e));
+      return;
+    }
+    if (
+      !status.exists &&
+      !(await confirmDialog({
+        title: t("ui.memory.initConfirm"),
+        confirmLabel: t("ui.memory.initConfirmLabel"),
+        danger: false,
+      }))
+    ) {
+      return;
+    }
+    let overview: string;
+    try {
+      overview = await memoryInit(cwd, {
+        overview: resolveTemplate(
+          this.config.memory.overview_skeleton,
+          t("ui.memory.skeleton.overview"),
+        ),
+        decisions: resolveTemplate(
+          this.config.memory.decisions_header,
+          t("ui.memory.skeleton.decisions"),
+        ),
+      });
+    } catch (e) {
+      this.notify(errorMessage(e));
+      return;
+    }
+    await this.activateProjectDocs(cwd);
+    const dir = overview.slice(0, -"overview.md".length);
+    if (file === "sessions") {
+      await this.revealDir(`${dir}sessions`);
+    } else {
+      await this.openFile(`${dir}${file}`, { newTab: false });
+    }
+    await this.refreshMemoryBadge();
+  }
+
+  // Registering the MCP server is user-scoped and only makes the tools reachable. CLIs that
+  // defer MCP tools need a line in the project's instructions file before their model looks
+  // them up, so activating memory here also lands that block in every registered CLI's file.
+  private async activateProjectDocs(cwd: string): Promise<void> {
+    const block = resolveTemplate(
+      this.config.memory.project_doc_block,
+      t("ui.memory.projectDoc.block"),
+    );
+    let docs: MemoryProjectDoc[];
+    try {
+      docs = await memoryProjectPreview(cwd, block);
+    } catch (e) {
+      this.notify(errorMessage(e));
+      return;
+    }
+    const pending = docs.filter((d) => d.state !== "current");
+    if (pending.length === 0) return;
+    const confirmed = await confirmDialog({
+      title: t("ui.memory.projectDoc.confirm"),
+      detail: pending
+        .map((d) => `${d.doc_path}  ·  ${d.adapters.join(", ")}`)
+        .join("\n"),
+      confirmLabel: t("ui.memory.projectDoc.confirmLabel"),
+      danger: false,
+    });
+    if (!confirmed) return;
+    try {
+      const written = await memoryProjectActivate(cwd, block);
+      if (written.length > 0) {
+        showToast(t("ui.memory.projectDoc.done", { count: written.length }));
+      }
+    } catch (e) {
+      this.notify(errorMessage(e));
+    }
+  }
+
+  private sendMemoryPrompt(prompt: string): void {
+    if (!this.config.memory.enabled) {
+      showToast(t("ui.memory.disabled"));
+      return;
+    }
+    this.activeGrid()?.sendLineActive(promptLine(prompt));
+  }
+
+  // The safety net for when the agent forgets to save on its own: types the
+  // save prompt into the terminal on a high-confidence "done", scoped to the
+  // active tab only. A "waiting" agent is asking the user something, so it is
+  // deliberately excluded even though tabSessionStates() would surface it —
+  // typing the save prompt there would answer the agent's own prompt with
+  // prose instead of a real answer.
+  private maybeAutosaveMemory(): void {
+    if (!this.config.memory.enabled || !this.config.memory.autosave) return;
+    const tab = this.tab(this.activeId);
+    if (!tab) return;
+    const entry = this.tabSessionStates().get(tab.id);
+    const prev = this.autosaveState.get(tab.id);
+    if (entry) this.autosaveState.set(tab.id, entry.state);
+    else this.autosaveState.delete(tab.id);
+    if (!entry) return;
+
+    const cooldownMin = this.config.memory.autosave_cooldown_min;
+    const lastFiredAt = this.autosaveLastFiredAt.get(tab.id);
+    if (
+      !shouldAutosave(
+        prev,
+        entry.state,
+        entry.confidence,
+        lastFiredAt,
+        cooldownMin,
+        Date.now(),
+      )
+    ) {
+      return;
+    }
+
+    void this.fireAutosave(tab.id);
+  }
+
+  private async fireAutosave(tabId: string): Promise<void> {
+    try {
+      const cwd = await this.activeCwd();
+      if (!cwd) return;
+      const status = await memoryStatus(cwd);
+      if (!status.exists || this.activeId !== tabId) return;
+      this.autosaveLastFiredAt.set(tabId, Date.now());
+      this.activeGrid()?.sendLineActive(
+        promptLine(
+          resolveTemplate(
+            this.config.memory.save_prompt,
+            t("ui.memory.prompt.save"),
+          ),
+        ),
+      );
+    } catch {
+      // Fires on a background poll, not a user action: swallow IPC errors.
+    }
+  }
+
+  // Seeds project memory the first time an agent finishes work in a project
+  // that has none, scoped to the active tab and fired once per project root
+  // for the app's lifetime so a declining agent is not nagged on every idle.
+  private maybeBootstrapMemory(): void {
+    if (!this.config.memory.enabled || !this.config.memory.bootstrap_auto) {
+      return;
+    }
+    const tab = this.tab(this.activeId);
+    if (!tab) return;
+    const entry = this.tabSessionStates().get(tab.id);
+    const prev = this.bootstrapState.get(tab.id);
+    if (entry) this.bootstrapState.set(tab.id, entry.state);
+    else this.bootstrapState.delete(tab.id);
+    if (!entry) return;
+    if (entry.state.kind !== "done" || entry.confidence !== "high") return;
+    if (prev?.kind === "done") return;
+
+    void this.fireBootstrap(tab.id, prev, entry.state, entry.confidence);
+  }
+
+  private async fireBootstrap(
+    tabId: string,
+    prev: SessionState | undefined,
+    next: SessionState,
+    confidence: Confidence,
+  ): Promise<void> {
+    try {
+      const cwd = await this.activeCwd();
+      if (!cwd) return;
+      const alreadySeeded = this.bootstrappedProjects.has(cwd);
+      const status = alreadySeeded ? null : await memoryStatus(cwd);
+      if (
+        !shouldBootstrapMemory(
+          this.activeId === tabId,
+          status,
+          prev,
+          next,
+          confidence,
+          alreadySeeded,
+        )
+      ) {
+        return;
+      }
+      this.bootstrappedProjects.add(cwd);
+      this.activeGrid()?.sendLineActive(
+        promptLine(
+          resolveTemplate(
+            this.config.memory.bootstrap_prompt,
+            t("ui.memory.prompt.bootstrap"),
+          ),
+        ),
+      );
+    } catch {
+      // Fires on a background poll, not a user action: swallow IPC errors.
+    }
+  }
+
+  private async syncMemoryDefaults(): Promise<void> {
+    try {
+      await memoryWriteDefaults(
+        resolveTemplate(
+          this.config.memory.overview_skeleton,
+          t("ui.memory.skeleton.overview"),
+        ),
+        resolveTemplate(
+          this.config.memory.decisions_header,
+          t("ui.memory.skeleton.decisions"),
+        ),
+      );
+    } catch (e) {
+      console.error("failed to sync memory defaults", e);
+    }
+  }
+
+  private async refreshMemoryBadge(): Promise<void> {
+    const tab = this.tab(this.activeId);
+    if (!tab) return;
+    const cwd = this.config.memory.enabled ? await this.activeCwd() : undefined;
+    const status = cwd ? await memoryStatus(cwd).catch(() => null) : null;
+    const next = memoryBadgeState(
+      status,
+      this.config.memory.resume_stale_hours,
+    );
+    if (tab.memory === next) return;
+    tab.memory = next;
+    this.renderTabs();
+  }
+
   private treeChangeTimer: number | null = null;
 
   private onTreeChanged(): void {
-    if (!this.panelVisible) return;
     if (this.treeChangeTimer !== null)
       window.clearTimeout(this.treeChangeTimer);
     this.treeChangeTimer = window.setTimeout(() => {
       this.treeChangeTimer = null;
+      void this.refreshMemoryBadge();
       if (this.panelVisible) void this.tree.refresh();
+      this.refreshGitStatuses();
     }, 120);
+  }
+
+  /** Single-flight, debounced entry point for every git-status refresh
+   *  trigger: the tree watcher, the dedicated `git-changed` event, window
+   *  focus, and project/root switches. */
+  private refreshGitStatuses(): void {
+    if (this.gitStatusTimer !== null) window.clearTimeout(this.gitStatusTimer);
+    this.gitStatusTimer = window.setTimeout(
+      () => {
+        this.gitStatusTimer = null;
+        void this.runGitStatusRefresh();
+      },
+      Math.max(0, this.config.git.status.refresh_debounce_ms),
+    );
+  }
+
+  private async runGitStatusRefresh(): Promise<void> {
+    const decision = gitRefreshDecision({
+      statusInTree: this.config.git.status.status_in_tree,
+      root: this.treeRoot,
+      panelVisible: this.panelVisible,
+      inFlight: this.gitStatusInFlight,
+    });
+    if (decision === "skip") return;
+    if (decision === "defer") {
+      // A fetch is already running: dropping this trigger outright would
+      // leave the tree stale until an unrelated event happens to fire, so
+      // remember it and re-arm the debounce once the in-flight one settles.
+      this.gitStatusPending = true;
+      return;
+    }
+    const root = this.treeRoot as string;
+    this.gitStatusInFlight = true;
+    try {
+      const report = await gitStatuses(root, this.tree.visibleDirs());
+      this.tree.setStatuses(report, root);
+    } catch {
+      // A directory that is not a git repo is the common case, not an error
+      // to surface.
+    } finally {
+      this.gitStatusInFlight = false;
+      if (this.gitStatusPending) {
+        this.gitStatusPending = false;
+        this.refreshGitStatuses();
+      }
+    }
   }
 
   private refreshTreeIfVisible(): void {
@@ -3180,8 +3732,9 @@ export class App {
         const action = this.keymap.resolve(ks, { pane: false });
         if (action === "todo.focus") {
           e.preventDefault();
-          this.blurTodoPanel();
-          this.focusActive();
+          this.runTodoFocusDecision(
+            decideTodoFocusAction(this.todoCollapsed, this.todoFocused),
+          );
           return;
         }
         if (action === "todo.capture") {
@@ -3198,24 +3751,22 @@ export class App {
     }
     const ks = eventToKeystroke(e);
     if (!ks) return;
-    // Select-all and copy in a file editor run on the document state, not the
-    // rendered viewport, so a 1000-line file copies in full instead of just the
-    // ~60 visible lines. Intercepted ahead of the keymap so it wins over the
-    // terminal's own copy binding when a file is layered over a pane. A focused
-    // text field (the editor's own search box, rename, quick open) keeps its
-    // native select/copy — those must act on the field, not the document.
+    // Select-all in a file editor runs on the document state, not the rendered
+    // viewport, so a 1000-line file selects in full. Intercepted ahead of the
+    // keymap so it wins over the terminal's own binding when a file is layered
+    // over a pane. Copy is deliberately NOT handled here: it belongs to the
+    // editor's own clipboard-event handler, which fills the pasteboard
+    // synchronously from the state. A focused text field (the editor's search
+    // box, rename, quick open) keeps its native select — that must act on the
+    // field, not the document.
     const inField =
       e.target instanceof HTMLInputElement ||
       e.target instanceof HTMLTextAreaElement;
     if (!inField && ks.meta && !ks.ctrl && !ks.alt && !ks.shift) {
-      const editor =
-        ks.key === "a" || ks.key === "c"
-          ? this.activeFileEditor(active)
-          : undefined;
+      const editor = ks.key === "a" ? this.activeFileEditor(active) : undefined;
       if (editor) {
         e.preventDefault();
-        if (ks.key === "a") editor.selectAll();
-        else void editor.copySelection();
+        editor.selectAll();
         return;
       }
     }
@@ -3335,6 +3886,34 @@ export class App {
       case "git.blame-toggle":
         if (this.isEditor(active)) active.toggleBlame();
         break;
+      case "memory.open":
+        void this.openProjectMemory("overview.md");
+        break;
+      case "memory.open_decisions":
+        void this.openProjectMemory("decisions.md");
+        break;
+      case "memory.open_resume":
+        void this.openProjectMemory("resume.md");
+        break;
+      case "memory.open_sessions":
+        void this.openProjectMemory("sessions");
+        break;
+      case "memory.resume":
+        this.sendMemoryPrompt(
+          resolveTemplate(
+            this.config.memory.resume_prompt,
+            t("ui.memory.prompt.resume"),
+          ),
+        );
+        break;
+      case "memory.save_session":
+        this.sendMemoryPrompt(
+          resolveTemplate(
+            this.config.memory.save_prompt,
+            t("ui.memory.prompt.save"),
+          ),
+        );
+        break;
       case "editor.vim-toggle":
         this.toggleVim();
         break;
@@ -3400,8 +3979,12 @@ export class App {
         else this.focusTree();
         break;
       case "todo.focus":
-        if (this.todoFocused) this.setPanelVisible(false);
-        else this.focusTodoPanel();
+        this.runTodoFocusDecision(
+          decideTodoFocusAction(this.todoCollapsed, this.todoFocused),
+        );
+        break;
+      case "todo.collapse":
+        this.setTodoCollapsed(!this.todoCollapsed);
         break;
       case "todo.capture":
         this.openTodoCapture();
@@ -3945,32 +4528,37 @@ export class App {
 
   private persist(): void {
     if (this.restoring) return;
-    const session: SavedTab[] = this.tabs.map((t) => {
-      const active = t.id === this.activeId;
-      if (t.kind === "terminal") {
-        const grid = this.sessions.get(t.id);
+    // A ghost view's content lives only in this session's memory; persisting
+    // its path would restore it as a normal (and broken) open of a file that
+    // no longer exists on disk.
+    const session: SavedTab[] = this.tabs
+      .filter((t) => t.kind !== "editor" || !t.ghost)
+      .map((t) => {
+        const active = t.id === this.activeId;
+        if (t.kind === "terminal") {
+          const grid = this.sessions.get(t.id);
+          return {
+            kind: "terminal" as const,
+            tree:
+              grid instanceof PaneGrid
+                ? grid.serialize()
+                : ({ kind: "leaf", id: t.id } as PaneNode),
+            projectId: t.projectId,
+            title: t.title,
+            color: t.color,
+            lastUsedAt: t.lastUsedAt,
+            pinned: t.pinned,
+            active,
+          };
+        }
         return {
-          kind: "terminal" as const,
-          tree:
-            grid instanceof PaneGrid
-              ? grid.serialize()
-              : ({ kind: "leaf", id: t.id } as PaneNode),
-          projectId: t.projectId,
-          title: t.title,
-          color: t.color,
+          kind: "editor" as const,
+          path: t.path,
           lastUsedAt: t.lastUsedAt,
           pinned: t.pinned,
           active,
         };
-      }
-      return {
-        kind: "editor" as const,
-        path: t.path,
-        lastUsedAt: t.lastUsedAt,
-        pinned: t.pinned,
-        active,
-      };
-    });
+      });
     const dock = this.pinCells.map((cell) => {
       if (cell?.session instanceof BrowserSession) {
         return { kind: "browser" as const, url: cell.session.path };

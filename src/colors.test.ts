@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { apcaContrast, deriveStatusColors, ensureContrast } from "./colors";
+import {
+  apcaContrast,
+  deriveGitColors,
+  deriveStatusColors,
+  ensureContrast,
+  GIT_ROLES,
+  mix,
+  parseHex,
+} from "./colors";
 import { THEMES } from "./settings/themes";
 
 describe("apcaContrast", () => {
@@ -69,5 +77,53 @@ describe("deriveStatusColors", () => {
   it("leaves an already-legible role untouched", () => {
     const roles = deriveStatusColors("#000000");
     expect(roles["--status-waiting"]).toBe("#edb333");
+  });
+});
+
+describe("git role colours", () => {
+  // Mirrors `chromeFromTheme` in app.ts: a plain row paints on --surface-1,
+  // a selected row on --surface-2. Every role's base hue sits on the same
+  // bright side as fg on every catalog theme, so surface-2 (mixed further
+  // toward fg) is always the harder of the two — deriving against it is
+  // what app.ts actually does, and clearing it should clear surface-1 too.
+  const terminals: { id: string; bg: string; fg: string }[] = [
+    { id: "black", bg: "#000000", fg: "#ffffff" },
+    ...THEMES.map((theme) => ({
+      id: theme.id,
+      bg: theme.terminal.bg,
+      fg: theme.terminal.fg,
+    })),
+  ];
+  const surface1 = (t: { bg: string; fg: string }) => mix(t.bg, t.fg, 0.06);
+  const surface2 = (t: { bg: string; fg: string }) => mix(t.bg, t.fg, 0.1);
+
+  it("clears its APCA floor on both --surface-1 and --surface-2, in both directions", () => {
+    for (const terminal of terminals) {
+      const derived = deriveGitColors(surface2(terminal));
+      const surfaces = [
+        ["--surface-1", surface1(terminal)],
+        ["--surface-2", surface2(terminal)],
+      ] as const;
+      for (const role of GIT_ROLES) {
+        const colour = derived[role.token];
+        for (const [label, bg] of surfaces) {
+          expect(
+            apcaContrast(colour, bg),
+            `${role.token} on ${terminal.id} ${label}`,
+          ).toBeGreaterThanOrEqual(role.minLc);
+        }
+        expect(
+          Math.abs(apcaContrast(terminal.bg, colour)),
+          `${terminal.id} --bg knocked out of ${role.token}`,
+        ).toBeGreaterThanOrEqual(45);
+      }
+    }
+  });
+
+  it("keeps conflict a real red rather than washing it to pink", () => {
+    const onBlack = deriveGitColors("#000000")["--git-conflict"];
+    const [r, g, b] = parseHex(onBlack);
+    expect(r).toBeGreaterThan(g + 60);
+    expect(r).toBeGreaterThan(b + 60);
   });
 });
