@@ -27,7 +27,7 @@ memory-core/Cargo.lock
 !.env.release.example
 *.p8
 
-# Documentación de diseño (local, fuera del repo)
+# Design documentation (local, outside the repo)
 docs/
 
 # Local agent / tooling state and git worktrees
