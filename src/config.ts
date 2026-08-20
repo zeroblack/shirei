@@ -521,5 +521,5 @@ export interface GitStatusReport {
   files: GitFileStatus[];
   truncated: boolean;
 }
-export const gitStatuses = (root: string) =>
-  invoke<GitStatusReport>("git_statuses", { root });
+export const gitStatuses = (root: string, dirs: string[]) =>
+  invoke<GitStatusReport>("git_statuses", { root, dirs });

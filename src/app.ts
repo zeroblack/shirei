@@ -3599,7 +3599,7 @@ export class App {
     const root = this.treeRoot as string;
     this.gitStatusInFlight = true;
     try {
-      const report = await gitStatuses(root);
+      const report = await gitStatuses(root, this.tree.visibleDirs());
       this.tree.setStatuses(report, root);
     } catch {
       // A directory that is not a git repo is the common case, not an error

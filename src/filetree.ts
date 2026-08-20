@@ -149,6 +149,16 @@ export class FileTree {
     return this.rows[this.selected]?.entry.path ?? null;
   }
 
+  /** Every directory currently in view — the root plus every `is_dir` row,
+   *  expanded or collapsed — so the backend can resolve a repo for each,
+   *  independently of whether the tree root itself sits inside one. */
+  visibleDirs(): string[] {
+    const dirs = this.rows
+      .filter((r) => r.entry.is_dir)
+      .map((r) => r.entry.path);
+    return this.rootPath ? [this.rootPath, ...dirs] : dirs;
+  }
+
   private async listWithGhosts(path: string): Promise<GhostListing> {
     const listing = await readDir(path);
     if (!this.showDeleted || !this.hasStatuses) {

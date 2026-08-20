@@ -78,6 +78,19 @@ describe("folderSummaries", () => {
     expect(sums.has("/rx")).toBe(false);
     expect(sums.has("/r")).toBe(false);
   });
+
+  it("rolls up sibling repos below a workspace root into the same count", () => {
+    const sums = folderSummaries(
+      [
+        f("/r/repo-a/a.ts", "modified", false, true),
+        f("/r/repo-b/b.ts", "untracked", false, true),
+      ],
+      "/r",
+    );
+    expect(sums.get("/r/repo-a")).toEqual({ total: 1, conflicts: 0 });
+    expect(sums.get("/r/repo-b")).toEqual({ total: 1, conflicts: 0 });
+    expect(sums.get("/r")).toEqual({ total: 2, conflicts: 0 });
+  });
 });
 
 describe("countLabel", () => {

@@ -245,21 +245,35 @@ fn kind_of(s: git2::Status) -> &'static str {
     "modified"
 }
 
-/// Working-tree status for every changed file under `root`'s repo, capped at
-/// `max` entries. Empty (not an error) when `root` is outside a repo, so the
-/// tree can call this unconditionally without special-casing non-repo roots.
-pub fn statuses_at(root: &Path, max: usize) -> Result<GitStatusReport> {
-    let Ok(repo) = Repository::discover(root) else {
-        return Ok(GitStatusReport {
-            files: Vec::new(),
-            truncated: false,
-        });
-    };
+// `Repository::discover` only walks upward from its starting point, so a
+// workspace root that sits *above* its repositories (the common layout:
+// `workspace/app/.git`) never finds one that way. We complement it by
+// probing every directory the tree has in view for a `.git` entry of its
+// own — a plain dir for a normal clone, a file for a linked worktree.
+fn resolve_repo_roots(root: &Path, dirs: &[String]) -> Vec<PathBuf> {
+    let mut roots = std::collections::BTreeSet::new();
+    if let Ok(repo) = Repository::discover(root)
+        && let Some(workdir) = repo.workdir().and_then(|w| w.canonicalize().ok())
+    {
+        roots.insert(workdir);
+    }
+    for dir in dirs {
+        let path = Path::new(dir);
+        if path.join(".git").exists()
+            && let Ok(canon) = path.canonicalize()
+        {
+            roots.insert(canon);
+        }
+    }
+    roots.into_iter().collect()
+}
+
+/// Working-tree status for one already-open repo, capped at `max` entries.
+/// The bool flags whether this repo alone exceeded the cap, before any
+/// cross-repo merge.
+fn repo_statuses(repo: &Repository, max: usize) -> Result<(Vec<GitFileStatus>, bool)> {
     let Some(workdir) = repo.workdir().map(Path::to_path_buf) else {
-        return Ok(GitStatusReport {
-            files: Vec::new(),
-            truncated: false,
-        });
+        return Ok((Vec::new(), false));
     };
     let mut opts = git2::StatusOptions::new();
     opts.include_untracked(true)
@@ -295,6 +309,27 @@ pub fn statuses_at(root: &Path, max: usize) -> Result<GitStatusReport> {
         })
         .take(max)
         .collect();
+    Ok((files, truncated))
+}
+
+/// Working-tree status for every changed file across every repository
+/// resolved from `root` and `dirs`, capped at `max` entries total. Empty
+/// (not an error) when nothing resolves to a repo, so the tree can call this
+/// unconditionally without special-casing non-repo roots.
+pub fn statuses_at(root: &Path, dirs: &[String], max: usize) -> Result<GitStatusReport> {
+    let mut files = Vec::new();
+    let mut truncated = false;
+    for repo_root in resolve_repo_roots(root, dirs) {
+        let Ok(repo) = Repository::open(&repo_root) else {
+            continue;
+        };
+        let (repo_files, repo_truncated) = repo_statuses(&repo, max)?;
+        truncated |= repo_truncated;
+        files.extend(repo_files);
+    }
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    truncated |= files.len() > max;
+    files.truncate(max);
     Ok(GitStatusReport { files, truncated })
 }
 
@@ -302,9 +337,10 @@ pub fn statuses_at(root: &Path, max: usize) -> Result<GitStatusReport> {
 pub async fn git_statuses(
     manager: State<'_, ConfigManager>,
     root: String,
+    dirs: Vec<String>,
 ) -> Result<GitStatusReport> {
     let max = manager.git().status.status_max_files as usize;
-    tauri::async_runtime::spawn_blocking(move || statuses_at(Path::new(&root), max))
+    tauri::async_runtime::spawn_blocking(move || statuses_at(Path::new(&root), &dirs, max))
         .await
         .map_err(|e| Error::Os(e.to_string()))?
 }
@@ -349,7 +385,7 @@ mod status_tests {
         commit_all(&repo);
         fs::write(tmp.path().join("tracked.txt"), "two\n").unwrap();
         fs::write(tmp.path().join("fresh.txt"), "new\n").unwrap();
-        let report = statuses_at(tmp.path(), 2000).unwrap();
+        let report = statuses_at(tmp.path(), &[], 2000).unwrap();
         assert_eq!(
             kind_of(&report, "tracked.txt"),
             Some(("modified".into(), false, true))
@@ -371,7 +407,7 @@ mod status_tests {
         idx.add_path(std::path::Path::new("added.txt")).unwrap();
         idx.write().unwrap();
         assert_eq!(
-            kind_of(&statuses_at(tmp.path(), 2000).unwrap(), "added.txt"),
+            kind_of(&statuses_at(tmp.path(), &[], 2000).unwrap(), "added.txt"),
             Some(("added".into(), true, false))
         );
     }
@@ -387,7 +423,7 @@ mod status_tests {
         idx.write().unwrap();
         fs::write(tmp.path().join("both.txt"), "three\n").unwrap();
         assert_eq!(
-            kind_of(&statuses_at(tmp.path(), 2000).unwrap(), "both.txt"),
+            kind_of(&statuses_at(tmp.path(), &[], 2000).unwrap(), "both.txt"),
             Some(("modified".into(), true, true))
         );
     }
@@ -399,7 +435,7 @@ mod status_tests {
         commit_all(&repo);
         fs::remove_file(tmp.path().join("gone.txt")).unwrap();
         assert_eq!(
-            kind_of(&statuses_at(tmp.path(), 2000).unwrap(), "gone.txt"),
+            kind_of(&statuses_at(tmp.path(), &[], 2000).unwrap(), "gone.txt"),
             Some(("deleted".into(), false, true))
         );
     }
@@ -413,7 +449,7 @@ mod status_tests {
         for n in ["a.txt", "b.txt", "c.txt"] {
             fs::write(tmp.path().join("newdir").join(n), "x\n").unwrap();
         }
-        let report = statuses_at(tmp.path(), 2000).unwrap();
+        let report = statuses_at(tmp.path(), &[], 2000).unwrap();
         assert_eq!(
             report
                 .files
@@ -432,7 +468,7 @@ mod status_tests {
         for n in 0..5 {
             fs::write(tmp.path().join(format!("f{n}.txt")), "x\n").unwrap();
         }
-        let report = statuses_at(tmp.path(), 3).unwrap();
+        let report = statuses_at(tmp.path(), &[], 3).unwrap();
         assert!(report.truncated);
         assert!(report.files.len() <= 3);
     }
@@ -440,7 +476,83 @@ mod status_tests {
     #[test]
     fn outside_a_repo_it_is_empty_not_an_error() {
         let tmp = TempDir::new().unwrap();
-        let report = statuses_at(tmp.path(), 2000).unwrap();
+        let report = statuses_at(tmp.path(), &[], 2000).unwrap();
         assert!(report.files.is_empty() && !report.truncated);
+    }
+
+    fn init_repo_at(dir: &std::path::Path, dirty_file: &str) -> git2::Repository {
+        fs::create_dir_all(dir).unwrap();
+        let repo = git2::Repository::init(dir).unwrap();
+        fs::write(dir.join("seed.txt"), "seed\n").unwrap();
+        commit_all(&repo);
+        fs::write(dir.join(dirty_file), "x\n").unwrap();
+        repo
+    }
+
+    fn to_dirs(paths: &[&std::path::Path]) -> Vec<String> {
+        paths
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn a_workspace_root_finds_sibling_repos_below_it() {
+        let tmp = TempDir::new().unwrap();
+        let repo_a = tmp.path().join("repo-a");
+        let repo_b = tmp.path().join("repo-b");
+        init_repo_at(&repo_a, "a.txt");
+        init_repo_at(&repo_b, "b.txt");
+        let report =
+            statuses_at(tmp.path(), &to_dirs(&[tmp.path(), &repo_a, &repo_b]), 2000).unwrap();
+        assert!(kind_of(&report, "a.txt").is_some());
+        assert!(kind_of(&report, "b.txt").is_some());
+        assert!(!report.truncated);
+    }
+
+    #[test]
+    fn a_root_that_is_itself_a_repo_behaves_as_before() {
+        let (tmp, repo) = repo();
+        fs::write(tmp.path().join("tracked.txt"), "one\n").unwrap();
+        commit_all(&repo);
+        fs::write(tmp.path().join("tracked.txt"), "two\n").unwrap();
+        let report = statuses_at(tmp.path(), &to_dirs(&[tmp.path()]), 2000).unwrap();
+        assert_eq!(
+            kind_of(&report, "tracked.txt"),
+            Some(("modified".into(), false, true))
+        );
+    }
+
+    #[test]
+    fn a_repo_nested_deeper_than_the_passed_dirs_is_not_reported() {
+        let tmp = TempDir::new().unwrap();
+        let level1 = tmp.path().join("level1");
+        let level2 = level1.join("level2");
+        fs::create_dir_all(&level1).unwrap();
+        init_repo_at(&level2, "deep.txt");
+        let report = statuses_at(tmp.path(), &to_dirs(&[tmp.path(), &level1]), 2000).unwrap();
+        assert!(report.files.is_empty());
+    }
+
+    #[test]
+    fn the_cap_applies_across_merged_repos() {
+        let tmp = TempDir::new().unwrap();
+        let repo_a = tmp.path().join("repo-a");
+        let repo_b = tmp.path().join("repo-b");
+        fs::create_dir_all(&repo_a).unwrap();
+        fs::create_dir_all(&repo_b).unwrap();
+        let ra = git2::Repository::init(&repo_a).unwrap();
+        let rb = git2::Repository::init(&repo_b).unwrap();
+        fs::write(repo_a.join("seed.txt"), "seed\n").unwrap();
+        commit_all(&ra);
+        fs::write(repo_b.join("seed.txt"), "seed\n").unwrap();
+        commit_all(&rb);
+        for n in 0..3 {
+            fs::write(repo_a.join(format!("a{n}.txt")), "x\n").unwrap();
+            fs::write(repo_b.join(format!("b{n}.txt")), "x\n").unwrap();
+        }
+        let report = statuses_at(tmp.path(), &to_dirs(&[tmp.path(), &repo_a, &repo_b]), 4).unwrap();
+        assert!(report.truncated);
+        assert!(report.files.len() <= 4);
     }
 }
